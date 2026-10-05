@@ -149,7 +149,8 @@ Report what passed, what failed, and what remains. Never claim completion with
   surface for a use-case the API already owns is not added.
 - The system runs as two processes sharing one PostgreSQL database, neither
   supervising the other: `uvicorn cv_engine.runtime.asgi:app` serves HTTP and creates
-  Operations; `python -m cv_engine.worker` executes them through the Operation runner.
+  Operations; `python -m cv_engine.worker` executes them through the Operation runner,
+  and may queue only the draft an analysis continues into (architecture.md §1).
   The API starts no background work.
 - The project root is fixed at the installed code location. It is not selectable by
   argument, setting, or environment variable. A test needing another root injects

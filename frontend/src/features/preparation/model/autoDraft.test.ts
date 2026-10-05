@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { ApplicationDetail, Operation } from "@/api/contracts";
-import { HASH, detail as baseDetail, settings } from "@/test/fixtures";
+import { detail as baseDetail, settings } from "@/test/fixtures";
 
-import { autoDraftSources } from "./autoDraft";
+import { autoDraftIsAnticipated, continuationAwaitsProjection, continuedDraft } from "./autoDraft";
 
 const queued = (overrides: Partial<Operation> = {}): Operation => ({
   id: "op-1",
@@ -39,37 +39,53 @@ const succeeded = () =>
     outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
   });
 
-describe("autoDraftSources", () => {
-  it("addresses the continuation to the document the analysis created, at its current hash", () => {
-    expect(autoDraftSources(succeeded(), automatic, analyzed())).toEqual({
-      applicationId: "app-1",
-      analysisId: "analysis-1",
-      documentHash: HASH,
-    });
+const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
+
+/* Before the first analysis lands there is no document. */
+const undocumented = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
+  baseDetail({ document_id: null, document_hash: null, document_analysis_id: null, ...overrides });
+
+describe("continuedDraft", () => {
+  it("follows the draft the server queued for the document this analysis created", () => {
+    expect(continuedDraft(succeeded(), analyzed({ active_operation: drafting }))).toEqual(drafting);
   });
 
-  it.each([
-    "blocked",
-    "other-analysis",
-    "no-output",
-    "cancelled",
-    "deleted",
-    "has-content",
-    "opted-out",
-    "no-provider",
-  ])("does not authorize a restored automatic draft with %s", (scenario) => {
-    const operation = succeeded();
-    const projection = analyzed();
-    let current = automatic;
-    if (scenario === "blocked")
-      projection.blocked_actions = [{ action: "create_draft", reasons: ["KNOWLEDGE_QUARANTINED"] }];
-    if (scenario === "other-analysis") projection.document_analysis_id = "analysis-2";
-    if (scenario === "no-output") operation.outputs = [];
-    if (scenario === "cancelled") operation.status = "cancelled";
-    if (scenario === "deleted") projection.application.deleted_at = "2026-09-14T07:00:00Z";
-    if (scenario === "has-content") projection.preparation_state = "draft_in_progress";
-    if (scenario === "opted-out") current = settings({ provider_configured: true });
-    if (scenario === "no-provider") current = settings({ auto_generate_when_review_not_required: true });
-    expect(autoDraftSources(operation, current, projection)).toBeNull();
+  it.each(["other-analysis", "no-output", "cancelled", "other-application", "no-draft", "other-operation"])(
+    "follows nothing with %s",
+    (scenario) => {
+      const operation = succeeded();
+      const projection = analyzed({ active_operation: drafting });
+      if (scenario === "other-analysis") projection.document_analysis_id = "analysis-2";
+      if (scenario === "no-output") operation.outputs = [];
+      if (scenario === "cancelled") operation.status = "cancelled";
+      if (scenario === "other-application") operation.application_id = "app-2";
+      if (scenario === "no-draft") projection.active_operation = null;
+      if (scenario === "other-operation") projection.active_operation = queued({ id: "op-2" });
+      expect(continuedDraft(operation, projection)).toBeNull();
+    },
+  );
+});
+
+describe("continuationAwaitsProjection", () => {
+  it("holds between the analysis succeeding and the projection naming its document", () => {
+    expect(continuationAwaitsProjection(succeeded(), automatic, undocumented())).toBe(true);
+  });
+
+  it("ends once the projection names the document, or when the opt-in is off", () => {
+    expect(continuationAwaitsProjection(succeeded(), automatic, analyzed())).toBe(false);
+    expect(continuationAwaitsProjection(succeeded(), settings({ provider_configured: true }), undocumented())).toBe(
+      false,
+    );
+  });
+});
+
+describe("autoDraftIsAnticipated", () => {
+  it("announces the draft while a first analysis runs with the opt-in on", () => {
+    expect(autoDraftIsAnticipated(automatic, undocumented({ active_operation: queued({ status: "running" }) }))).toBe(
+      true,
+    );
+    expect(autoDraftIsAnticipated(automatic, analyzed({ active_operation: queued({ status: "running" }) }))).toBe(
+      false,
+    );
   });
 });

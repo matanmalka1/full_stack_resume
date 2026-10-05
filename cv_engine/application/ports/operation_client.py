@@ -27,3 +27,20 @@ class OperationClientStore(Protocol):
     def request_cancellation(
         self, tx: WriteTransaction, operation_id: str, *, now: str | None = None
     ) -> PersistedOperation: ...
+
+
+class OperationContinuationStore(Protocol):
+    """Queue the Operation a succeeded one continues into, inside its activation scope.
+
+    The one client capability the runner side holds: it can add queued work that a
+    user's own request asked for, and nothing else the API can do.
+    """
+
+    def enqueue(
+        self,
+        tx: WriteTransaction,
+        request: CreateOperation,
+        *,
+        operation_id: str,
+        created_at: str | None = None,
+    ) -> PersistedOperation: ...

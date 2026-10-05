@@ -120,12 +120,20 @@ class OperationFailureCode(StrEnum):
     RENDER_FAILED = "RENDER_FAILED"
     BROWSER_START_FAILED = "BROWSER_START_FAILED"
     MISSING_FACT_RENDERING = "MISSING_FACT_RENDERING"
+    #: The engine itself failed while executing: an unexpected exception, or no
+    #: handler for the Operation's type. Not a refusal and not a dependency failure.
     VALIDATION_EXECUTION_FAILED = "VALIDATION_EXECUTION_FAILED"
     CANCELLED_BEFORE_ACTIVATION = "CANCELLED_BEFORE_ACTIVATION"
     #: No AI provider was configured for a run that needs one. Distinct from
     #: PROVIDER_REFUSED, which means a provider answered and refused: the fix for
     #: this one is configuration, and nothing was ever sent.
     PROVIDER_NOT_CONFIGURED = "PROVIDER_NOT_CONFIGURED"
+    #: The workflow refused the run: the document, the Application, or Knowledge is
+    #: not in a state the action accepts. Fixed by changing that state, not by waiting.
+    PRECONDITION_FAILED = "PRECONDITION_FAILED"
+    #: Storage the run needed failed: the database, the payload store, or the
+    #: Knowledge files. Nothing was activated; a retry may succeed once it recovers.
+    INFRASTRUCTURE_FAILED = "INFRASTRUCTURE_FAILED"
 
 
 class OperationModel(BaseModel):

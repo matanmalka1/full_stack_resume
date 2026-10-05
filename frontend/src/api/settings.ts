@@ -31,7 +31,7 @@ export const updateSettings = async (body: UpdateSettingsRequest, etag: string):
 
 /* Analysis, drafting and regeneration are AI-only and AI has no switch: without a
    configured provider none of them can run, and the screens offering them say so. */
-export const aiRegenerationAvailable = (settings: Settings | undefined): boolean =>
+const aiRegenerationAvailable = (settings: Settings | undefined): boolean =>
   settings?.provider_configured === true;
 
 /* Whether an AI command can run, with "settings not read yet" kept apart from "no usable

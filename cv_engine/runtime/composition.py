@@ -327,6 +327,8 @@ def build_services(
                 analysis_sources,
                 analysis_activation,
                 resolved_knowledge,
+                documents,
+                continuations=operation_client,
             ),
         },
         transactions=transactions,

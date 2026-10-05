@@ -77,19 +77,12 @@ export const ApplicationPage = () => {
 
   const query = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = query.data;
-  const {
-    awaitingRecord,
-    operation: watched,
-    operationId: watchedId,
-    settled,
-    watch,
-  } = useWatchedOperation(applicationId, detail);
+  const { awaitingRecord, operation: watched, settled, watch } = useWatchedOperation(applicationId, detail);
 
   const { continuation } = useAutomaticDraft({
     applicationId,
     detail,
     operation: watched,
-    operationId: watchedId,
     watch,
   });
 

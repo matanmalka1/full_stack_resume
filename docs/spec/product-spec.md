@@ -348,10 +348,14 @@ Review reasons are reserved for the integrity of the document's own dependencies
 dependent fact that is pending or deleted (state-and-use-cases.md §7). They block
 approve, render, and submit, and are resolved by confirming, editing, or regenerating.
 
-When the user has turned on automatic generation (off by default), the Web client
-queues a draft right after the analysis that created the document activates, provided
-the projection shows no review reason, no live Operation, and `create_draft` available.
-This is a client convenience over the same command; it grants no authority.
+When the user has turned on automatic generation (off by default), the analysis that
+creates the document queues `create_draft` for it in the same commit, addressed to the
+hash the document was created with. Whether to continue is frozen into the analysis
+when it is submitted, with the model and reasoning effort the draft will use, so a
+Settings change while it runs does not change what it does. A later analysis never
+continues: it does not change an existing document. The queued draft is the same
+command a user submits, with the same checks; the Web client follows it and moves to
+the editor, and sends nothing itself.
 
 ## 10. Drafting and editing
 

@@ -71,6 +71,18 @@ class UpdateApplicationNotesCommand(BoundaryDTO):
     client: WriteClient
 
 
+class DraftContinuation(BoundaryDTO):
+    """The `create_draft` an analysis queues when it creates the document (§9).
+
+    Frozen from Settings when the analysis is submitted, exactly as a `create_draft`
+    submitted then would freeze them, so the continuation runs what the user had
+    chosen at the time they asked rather than whatever Settings say when it lands.
+    """
+
+    model: str
+    reasoning_effort: str | None = None
+
+
 class AnalyzeCommand(BoundaryDTO):
     """§13 `analyze_job`, bound to the exact job text the client read, not to a document."""
 
@@ -91,6 +103,9 @@ class AnalyzeCommand(BoundaryDTO):
     provider: Literal["openai"] = "openai"
     model: str | None = None
     reasoning_effort: str | None = None
+    #: Set by submission from Settings, never by a client: present when automatic
+    #: generation was on, and acted on only if this analysis creates the document.
+    draft_continuation: DraftContinuation | None = None
 
 
 class ApplyAnalysisDecisionsCommand(BoundaryDTO):

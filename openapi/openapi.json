@@ -3567,7 +3567,9 @@
           "MISSING_FACT_RENDERING",
           "VALIDATION_EXECUTION_FAILED",
           "CANCELLED_BEFORE_ACTIVATION",
-          "PROVIDER_NOT_CONFIGURED"
+          "PROVIDER_NOT_CONFIGURED",
+          "PRECONDITION_FAILED",
+          "INFRASTRUCTURE_FAILED"
         ],
         "title": "OperationFailureCode",
         "type": "string"

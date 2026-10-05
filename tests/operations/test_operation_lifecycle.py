@@ -28,6 +28,7 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import (
     IDEMPOTENCY_KEY_REUSED,
     InfrastructureFailure,
+    PreconditionFailed,
     StateConflict,
     UnknownRecord,
 )
@@ -155,8 +156,8 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     retried inside `execute`, per call, before it was raised. A failure the
     application raised because a due retry found the Operation cancelled ends the
     Operation as cancelled, not as that failure. An unclassified exception keeps its
-    detail out of the result, and an unclassified infrastructure failure is the
-    default arm, `VALIDATION_EXECUTION_FAILED`.
+    detail out of the result and is `VALIDATION_EXECUTION_FAILED`; a storage failure
+    is `INFRASTRUCTURE_FAILED` and a workflow refusal `PRECONDITION_FAILED`.
     """
     assert tuple(code.value for code in OperationFailureCode) == OPERATION_FAILURE_CODES
 
@@ -241,8 +242,26 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     completed = foreground_executor(services).execute(operation.id)
 
     assert completed.status is OperationStatus.FAILED
-    assert completed.failure_code is OperationFailureCode.VALIDATION_EXECUTION_FAILED
+    assert completed.failure_code is OperationFailureCode.INFRASTRUCTURE_FAILED
     assert attempts == 1
+
+    def prepare_that_is_refused(_command, *, operation_id=None, still_owned=None):
+        raise PreconditionFailed("the document has no content yet")
+
+    monkeypatch.setattr(services.analysis, "prepare", prepare_that_is_refused)
+    refused = services.operation_submissions.submit_analysis(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_text_hash=ingested.job_text_hash,
+            provider="openai",
+            model="gpt-5.6-luna",
+        ),
+        idempotency_key="refused-failure",
+        analysis_service=services.analysis,
+    )
+    refused = foreground_executor(services).execute(refused.id)
+    assert refused.status is OperationStatus.FAILED
+    assert refused.failure_code is OperationFailureCode.PRECONDITION_FAILED
 
 
 def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
