@@ -6,7 +6,6 @@ from ...errors import (
     ApplicationError,
     ClaimReviewUncertain,
     ClaimReviewUnsupported,
-    DependencyUnavailable,
     ExecutionStopped,
     InfrastructureFailure,
     LineageBroken,
@@ -44,12 +43,11 @@ FAILURE_CODE_BY_ERROR: dict[type[ApplicationError], OperationFailureCode] = {
     ProposalRejected: OperationFailureCode.INVALID_OUTPUT,
     ProviderNotConfigured: OperationFailureCode.PROVIDER_NOT_CONFIGURED,
     ExecutionStopped: OperationFailureCode.CANCELLED_BEFORE_ACTIVATION,
-    DependencyUnavailable: OperationFailureCode.PROVIDER_REFUSED,
     StateConflict: OperationFailureCode.SOURCE_CHANGED,
     LineageBroken: OperationFailureCode.SOURCE_CHANGED,
     MissingFactRendering: OperationFailureCode.MISSING_FACT_RENDERING,
-    PreconditionFailed: OperationFailureCode.VALIDATION_EXECUTION_FAILED,
-    InfrastructureFailure: OperationFailureCode.VALIDATION_EXECUTION_FAILED,
+    PreconditionFailed: OperationFailureCode.PRECONDITION_FAILED,
+    InfrastructureFailure: OperationFailureCode.INFRASTRUCTURE_FAILED,
 }
 
 #: What a client is told about each classification. Deliberately free of the
@@ -76,6 +74,10 @@ _FAILURE_DETAIL: dict[OperationFailureCode, str] = {
         "A selected fact has no rendering in the target language."
     ),
     OperationFailureCode.VALIDATION_EXECUTION_FAILED: "Operation execution failed.",
+    OperationFailureCode.PRECONDITION_FAILED: (
+        "The Application is not in a state this action accepts."
+    ),
+    OperationFailureCode.INFRASTRUCTURE_FAILED: "Stored data the run needed could not be read or written.",
 }
 
 
