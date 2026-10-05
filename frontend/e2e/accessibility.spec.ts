@@ -177,7 +177,6 @@ test.describe("accessibility", () => {
       }),
     );
     api.stub(`POST ${documentPath}/check`, json(documentCheck()));
-    api.stub("GET /api/v1/applications/app-1/artifacts", json({ items: [] }));
     api.stub("GET /api/v1/facts", json({ items: [] }));
     api.stub("GET /api/v1/facts/history", json({ events: [] }));
 

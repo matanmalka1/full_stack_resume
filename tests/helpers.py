@@ -17,7 +17,7 @@ from cv_engine.application.services.documents import built_with, compose_content
 from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
-from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
+from cv_engine.domain.drafts import seal_draft
 from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.documents import (
     SqlAlchemyDocumentStore,
@@ -25,23 +25,16 @@ from cv_engine.infrastructure.persistence.documents import (
 )
 from cv_engine.infrastructure.persistence.tables import metadata
 from cv_engine.runtime.composition import Services
-from cv_engine.runtime.paths import AppPaths
 from cv_engine.util import utc_now
 
 
-def artifact_store(root: Path) -> FilesystemArtifactStore:
-    """The real artifact adapter for a test project.
-
-    Tests that need a draft on disk go through the same adapter the product
-    uses, so no test carries its own copy of the storage layout.
-    """
-    return FilesystemArtifactStore(AppPaths.from_root(root))
-
-
 def store_draft(root: Path, draft):
-    """Write a working draft and return its Markdown path and exact text."""
-    stored = artifact_store(root).write_working_draft(draft)
-    return stored.paths.markdown, stored.markdown
+    """Seal a draft, write its Markdown under `root`, and return the path and exact text."""
+    sealed, markdown, _manifest = seal_draft(draft)
+    path = root / "drafts" / sealed.application_id / "resume.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(markdown, encoding="utf-8")
+    return path, markdown
 
 
 def artifact_path(services: Services, stored_path: str) -> Path:
@@ -295,8 +288,8 @@ def persisted_counts(database_engine) -> dict[str, int]:
 
     A rejected command must leave nothing behind anywhere, so this counts the whole
     database instead of a remembered set of tables filtered by application_id. That
-    covers indirect records with no application_id column of their own — artifact
-    versions, selection plans, working drafts — and, more importantly, covers the
+    covers indirect records with no application_id column of their own — Operation
+    outputs, AI calls, fact events — and, more importantly, covers the
     next table automatically: a list would have gone on passing while a new table
     quietly gained a row.
     """

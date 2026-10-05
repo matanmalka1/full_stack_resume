@@ -118,10 +118,6 @@ def read_fact_source(path: Path) -> FactSource:
     return parse_fact_source(path.read_text(encoding="utf-8"), origin=str(path))
 
 
-def _write_fact_source(path: Path, source: FactSource) -> None:
-    path.write_text(render_fact_source(source), encoding="utf-8")
-
-
 def load_fact_store(base_dir: Path) -> FactStore:
     missing = [name for name in FACT_SOURCE_NAMES if not (base_dir / name).is_file()]
     if missing:

@@ -132,7 +132,6 @@ class OperationSubmissionService:
         refuse_deleted(source.document.application_id, source.deleted_at)
         require_hash(source.document, expected_document_hash)
         return OperationSources(
-            job_text_hash=source.job_text_hash,
             job_analysis_id=source.document.analysis_id,
             expected_document_hash=expected_document_hash,
         )

@@ -36,7 +36,6 @@ const detail = {
 test.describe("the Job Detail screen", () => {
   test.beforeEach(({ api }) => {
     api.stub("GET /api/v1/applications/app-1", json(detail));
-    api.stub("GET /api/v1/applications/app-1/artifacts", json({ items: [] }));
   });
 
   test("has no automatically detectable accessibility violations", async ({ page }) => {

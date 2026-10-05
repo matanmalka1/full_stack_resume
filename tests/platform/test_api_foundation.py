@@ -148,7 +148,7 @@ def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api
     """Inventory excludes fresh writes; the removed reclaim route cannot delete evidence.
 
     Ingest stores the job text in the database and writes no payload, and a
-    derived working projection is not a payload, so neither is a candidate.
+    file outside the managed layouts is not a payload, so neither is a candidate.
     """
     from cv_engine.application.commands import IngestCommand
 

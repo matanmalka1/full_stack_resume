@@ -12,7 +12,6 @@ from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationType
 from ..application.ports import (
     AIProvider,
-    ArtifactStore,
     KnowledgeStore,
     Renderer,
 )
@@ -44,7 +43,6 @@ from ..application.services.recruitment.lifecycle import RecruitmentService
 from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
 from ..application.services.settings import SettingsService
-from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.document_files import DocumentFiles
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3ObjectStore
@@ -109,7 +107,6 @@ class Services:
     database_url: str
     schema_version: str
     knowledge: KnowledgeStore
-    artifacts: ArtifactStore
     payloads: PayloadStore
     applications: ApplicationService
     queries: ApplicationQueryService
@@ -167,7 +164,6 @@ def build_services(
     *,
     database_url: str | None = None,
     knowledge: KnowledgeStore | None = None,
-    artifacts: ArtifactStore | None = None,
     payloads: PayloadStore | None = None,
     renderer: Renderer | None = None,
     provider: AIProvider | None = None,
@@ -200,7 +196,6 @@ def build_services(
     committed_knowledge = CommittedKnowledge(
         resolved_knowledge, transactions=transactions, journal=knowledge_lifecycle_store
     )
-    resolved_artifacts = artifacts or FilesystemArtifactStore(paths)
     resolved_payloads = payloads or PayloadStore(paths, build_object_store(paths, resolved_config))
     resolved_renderer = renderer or PlaywrightRenderer(paths.knowledge_root)
     # Built only when a key is configured. Constructing an adapter that refuses
@@ -369,7 +364,6 @@ def build_services(
         database_url=resolved_database_url,
         schema_version=schema_version,
         knowledge=resolved_knowledge,
-        artifacts=resolved_artifacts,
         payloads=resolved_payloads,
         applications=ApplicationService(
             transactions=transactions,

@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from ...util import canonical_json, sha256_text
 from ..commands import ReconciliationResult
 from ..maintenance import ORPHAN_MIN_AGE, OrphanInventory
-from ..ports import RevisionPayloadStore
+from ..ports import PayloadInventory
 from ..ports.maintenance import MaintenanceInspection
 from ..ports.transactions import TransactionManager
 from .knowledge import KnowledgeQueryService
@@ -36,7 +36,7 @@ class MaintenanceService:
     def __init__(
         self,
         *,
-        payloads: RevisionPayloadStore,
+        payloads: PayloadInventory,
         transactions: TransactionManager,
         inspection: MaintenanceInspection,
         knowledge: KnowledgeQueryService,

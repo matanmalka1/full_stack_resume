@@ -66,7 +66,7 @@ class PayloadStore:
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
     def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
-        """List managed immutable references; working projections are excluded.
+        """List managed immutable references; files outside the managed layouts are excluded.
 
         No bytes are fetched and no objects are changed. Without
         `modified_before` this observation can include payloads whose writer

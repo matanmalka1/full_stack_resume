@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fake_provider import FakeOpenAI
+from helpers import store_draft
 from knowledge_seed import V2_IDENTITY_FACT, seed_fact, write_canonical_sources
 
 from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
@@ -13,7 +14,6 @@ from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.domain.drafts import build_draft
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.profiles import ProfileStore
-from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.knowledge import (
     FileKnowledge,
     load_candidate_context,
@@ -160,8 +160,7 @@ def draft_factory(
             presentations=load_presentations(project_root, fact_store),
             chosen=chosen,
         )
-        store = FilesystemArtifactStore(AppPaths.from_root(project_root))
-        markdown = store.write_working_draft(draft).paths.markdown if write else None
+        markdown = store_draft(project_root, draft)[0] if write else None
         return DraftSetup(fact_store, profile, analysis, draft, markdown, candidate_context)
 
     return build

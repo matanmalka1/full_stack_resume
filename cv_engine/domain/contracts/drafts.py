@@ -1,4 +1,4 @@
-"""Resume claim, draft-document, and working-draft contracts."""
+"""Resume claim and draft-document contracts."""
 
 from __future__ import annotations
 

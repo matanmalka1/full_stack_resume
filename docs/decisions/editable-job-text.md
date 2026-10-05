@@ -50,8 +50,8 @@ Specified in `product-spec.md` §8 and §16, `state-and-use-cases.md` §2, §8, 
 - `job_snapshot_id` on analyses, Operations sources, the document content binding
   (`DraftDocument` schema 1.3 carries `job_text_hash`), and Submissions.
 
-Requirement identity is unchanged: it was always the normalized hash of the posting's
-text, and its payload key keeps the name `snapshot` so existing ids stay stable.
+Requirement identity is still the normalized hash of the posting's text; its payload
+keys are now named `job_text` and `identity_version` (no ids needed to stay stable).
 
 ## 4. What was not built
 

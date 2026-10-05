@@ -40,7 +40,6 @@ const detail = {
 test.describe("dialogs", () => {
   test.beforeEach(({ api }) => {
     api.stub("GET /api/v1/applications/app-1", json(detail));
-    api.stub("GET /api/v1/applications/app-1/artifacts", json({ items: [] }));
     /* The search palette opens on the Applications needing attention. */
     api.stub(
       "GET /api/v1/applications?preset=needs_attention&limit=8",

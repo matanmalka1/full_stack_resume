@@ -203,16 +203,6 @@ class SqlAlchemyKnowledgeLifecycleRepository:
         record["fact_json"] = canonical_json(record["fact_json"])
         return record
 
-    def fact_event(self, tx: ReadTransaction, event_id: str) -> dict[str, Any] | None:
-        visible = [column for column in fact_events.c if column.name != "seq"]
-        row = (
-            self._transactions.connection_for(tx)
-            .execute(select(*visible).where(fact_events.c.id == event_id))
-            .mappings()
-            .one_or_none()
-        )
-        return None if row is None else self._event_record(row)
-
     def fact_events(self, tx: ReadTransaction, fact_id: str | None = None) -> list[dict[str, Any]]:
         visible = [column for column in fact_events.c if column.name != "seq"]
         statement = select(*visible)

@@ -33,20 +33,7 @@ from ..knowledge_mutations import (
     KnowledgeMutation,
     StagedKnowledgeFile,
 )
-from .values import (
-    StoredDraft,
-    TaskContracts,
-)
-
-
-class ArtifactStore(Protocol):
-    """Publish mutable working projections after authoritative state changes.
-
-    Immutable payload publication belongs to RevisionPayloadStore, never to
-    this working-projection capability.
-    """
-
-    def write_working_draft(self, draft: Any) -> StoredDraft: ...
+from .values import TaskContracts
 
 
 class PayloadVerifier(Protocol):
@@ -62,7 +49,7 @@ class PayloadVerifier(Protocol):
         ...
 
 
-class RevisionPayloadStore(PayloadVerifier, Protocol):
+class PayloadInventory(PayloadVerifier, Protocol):
     def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
         """Read-only observation of managed immutable payload references.
 

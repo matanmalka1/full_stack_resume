@@ -109,15 +109,13 @@ describe("ApplicationPage", () => {
   });
 
   it("links a Ready application to its ready step and to the draft from the workflow spine", async () => {
-    renderPage((input) =>
+    renderPage(() =>
       Promise.resolve(
-        String(input).endsWith("/artifacts")
-          ? jsonResponse({ items: [] })
-          : jsonResponse({
-              ...detail(),
-              preparation_state: "ready",
-              document_id: "doc-1",
-            }),
+        jsonResponse({
+          ...detail(),
+          preparation_state: "ready",
+          document_id: "doc-1",
+        }),
       ),
     );
 
@@ -154,15 +152,6 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("button", { name: "עדכון סטטוס ומשימות" })).not.toBeInTheDocument();
   });
 
-  it("does not show provider artifacts in the preparation screen", async () => {
-    const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(jsonResponse(detail())));
-    renderPage(fetchMock);
-
-    expect(await screen.findByRole("heading", { name: "ניתוח והתאמה" })).toBeInTheDocument();
-    expect(screen.queryByText("תוצרי המנוע")).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/artifacts"))).toBe(false);
-  });
-
   it("copies the complete stored job text from inside its disclosure", async () => {
     const storedText = "Senior Backend Engineer\n\nResponsibilities:\nBuild reliable services.";
     const writeText = vi.fn(() => Promise.resolve());
@@ -170,14 +159,12 @@ describe("ApplicationPage", () => {
       clipboard: { writeText },
       userAgent: window.navigator.userAgent,
     });
-    renderPage((input) =>
+    renderPage(() =>
       Promise.resolve(
-        String(input).endsWith("/artifacts")
-          ? jsonResponse({ items: [] })
-          : jsonResponse({
-              ...detail(),
-              job_posting: { ...detail().job_posting, job_text: storedText },
-            }),
+        jsonResponse({
+          ...detail(),
+          job_posting: { ...detail().job_posting, job_text: storedText },
+        }),
       ),
     );
 
@@ -201,9 +188,7 @@ describe("ApplicationPage", () => {
           }),
         );
       }
-      return Promise.resolve(
-        String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail()),
-      );
+      return Promise.resolve(jsonResponse(detail()));
     });
     renderPage(fetchMock);
 
@@ -235,9 +220,7 @@ describe("ApplicationPage", () => {
   });
 
   it("blocks a job posting update that changes nothing, without a request", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) =>
-      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail())),
-    );
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse(detail())));
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
@@ -252,9 +235,7 @@ describe("ApplicationPage", () => {
   /* The same budget intake enforces (applicationInput.isJobTextWithinBudget): an oversized
      posting is refused under its field instead of being sent for the server to refuse. */
   it("blocks a job posting update whose text exceeds the byte budget, without a request", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) =>
-      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail())),
-    );
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse(detail())));
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
@@ -269,12 +250,8 @@ describe("ApplicationPage", () => {
   });
 
   it("offers no edit once a submission locked the posting", async () => {
-    renderPage((input) =>
-      Promise.resolve(
-        String(input).endsWith("/artifacts")
-          ? jsonResponse({ items: [] })
-          : jsonResponse({ ...detail(), job_posting: { ...detail().job_posting, locked: true } }),
-      ),
+    renderPage(() =>
+      Promise.resolve(jsonResponse({ ...detail(), job_posting: { ...detail().job_posting, locked: true } })),
     );
 
     expect(
@@ -284,9 +261,7 @@ describe("ApplicationPage", () => {
   });
 
   it("blocks a job posting update with a malformed URL, without a request", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) =>
-      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail())),
-    );
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse(detail())));
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
