@@ -229,12 +229,10 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
   });
 
-  /* The Web automation opt-in, which moved here with the flow: queueing no longer
-     navigates, so the Operation screen that used to run this chain is not on the path.
-     This test proves one dispatch from the exact activated analysis and plan. Reload
-     idempotency and server-backed recovery are covered separately below. */
-  it("auto-generates the draft once per successful analyze when Settings ask for it", async () => {
-    let draftQueued = false;
+  /* §9 automatic generation is the server's: the analysis that creates the document
+     queues `create_draft` in the same commit. The screen follows that run and sends no
+     command of its own. */
+  it("follows the draft the server queued after the analysis, sending nothing itself", async () => {
     const analyzed = queued({
       status: "succeeded",
       is_terminal: true,
@@ -243,44 +241,31 @@ describe("ApplicationPage at the preparation route", () => {
       outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    let projectionReads = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST") {
-        draftQueued = true;
-        return Promise.resolve(acceptedResponse(drafting));
-      }
-      if (url.endsWith("/operations/op-draft")) {
-        return Promise.resolve(jsonResponse(drafting));
-      }
-      /* The opt-in is read from the live Settings query, not only from the seeded cache,
-         so this read has to answer with the setting under test. */
+      if (url.endsWith("/operations/op-draft")) return Promise.resolve(jsonResponse(drafting));
       if (url.includes("/settings")) {
         return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
       }
-      if (url.includes("/operations/")) {
-        return Promise.resolve(jsonResponse(analyzed));
-      }
+      if (url.includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
+      projectionReads += 1;
       return Promise.resolve(
         jsonResponse(
-          analyzed_detail({
-            active_operation: draftQueued ? drafting : null,
-            latest_operation: analyzed,
-          }),
+          projectionReads === 1
+            ? detail({ active_operation: queued({ status: "running" }) })
+            : analyzed_detail({ active_operation: drafting, latest_operation: analyzed }),
         ),
       );
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderPage({
-      ...aiSettings,
-      auto_generate_when_review_not_required: true,
-    });
+    renderPage({ ...aiSettings, auto_generate_when_review_not_required: true });
 
-    await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
-    const posts = fetchMock.mock.calls.filter((call) => call[1]?.method === "POST");
-    expect(posts).toHaveLength(1);
-    expect(String(posts[0]?.[0])).toBe("/api/v1/applications/app-1/document/draft");
-    expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({ expected_document_hash: HASH, provider: "openai" });
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/operations/op-draft"))).toBe(true),
+    );
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
   });
 
   it("moves to the editor after the automatically generated draft succeeds", async () => {
@@ -304,9 +289,8 @@ describe("ApplicationPage at the preparation route", () => {
     let draftActivated = false;
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (init?.method === "POST") return Promise.resolve(acceptedResponse(drafting));
         if (url.endsWith("/operations/op-draft")) {
           draftActivated = true;
           return Promise.resolve(jsonResponse(drafted));
@@ -319,7 +303,10 @@ describe("ApplicationPage at the preparation route", () => {
         return Promise.resolve(
           jsonResponse(
             analyzed_detail({
-              active_operation: projectionReads === 1 ? queued({ status: "running" }) : null,
+              active_operation:
+                projectionReads === 1 ? queued({ status: "running" }) : draftActivated ? null : drafting,
+              /* The newest run the server reports: the analysis, then its draft. */
+              latest_operation: projectionReads === 1 ? null : draftActivated ? drafted : analyzed,
               ...(draftActivated
                 ? {
                     content_check: "outdated",
@@ -334,8 +321,8 @@ describe("ApplicationPage at the preparation route", () => {
 
     const { client } = renderPage({ ...aiSettings, auto_generate_when_review_not_required: true });
 
-    /* The accepted response seeds the queued Operation before it is watched. Drive
-       its next read explicitly rather than spending the test budget on a poll timer. */
+    /* The draft is followed from the projection that names it. Drive its next read
+       explicitly rather than spending the test budget on a poll timer. */
     await waitFor(() => expect(client.getQueryData<Operation>(operationQueryKey("op-draft"))).toBeDefined());
     await act(async () => {
       await client.fetchQuery(operationQueryOptions("op-draft"));
@@ -873,32 +860,25 @@ describe("ApplicationPage at the preparation route", () => {
     expect(await screen.findByRole("button", { name: "יצירת טיוטה" })).toBeInTheDocument();
   });
 
-  it("restores a completed analysis from the server and resends an uncertain continuation with the same idempotency key", async () => {
+  it("restores a completed analysis from the server and sends no draft command of its own", async () => {
     const analyzed = queued({
       status: "succeeded",
       is_terminal: true,
       available_actions: [],
       outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") return Promise.reject(new TypeError("response lost"));
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input).includes("/settings"))
         return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
       if (String(input).includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
       return Promise.resolve(jsonResponse(analyzed_detail({ latest_operation: analyzed })));
     });
     vi.stubGlobal("fetch", fetchMock);
-    const settings = { ...aiSettings, auto_generate_when_review_not_required: true };
-    const first = renderPage(settings);
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1));
-    await waitFor(() => expect(screen.queryByText("הניתוח הושלם. יצירת הטיוטה מתחילה מיד.")).not.toBeInTheDocument());
-    first.unmount();
-    renderPage(settings);
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(2));
-    const keys = fetchMock.mock.calls
-      .filter(([, init]) => init?.method === "POST")
-      .map(([, init]) => (init?.headers as Headers | undefined)?.get("Idempotency-Key"));
-    expect(keys).toEqual([`auto-draft:${HASH}`, `auto-draft:${HASH}`]);
+    renderPage({ ...aiSettings, auto_generate_when_review_not_required: true });
+    /* The projection names no queued draft, so there is nothing to follow: the run settles. */
+    expect(await screen.findByRole("button", { name: "יצירת טיוטה" })).toBeInTheDocument();
+    expect(screen.queryByText("הניתוח הושלם. יצירת הטיוטה מתחילה מיד.")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
   });
 
   it("isolates late watched analysis results across URL changes and Back / Forward", async () => {
@@ -935,40 +915,6 @@ describe("ApplicationPage at the preparation route", () => {
     fireEvent.click(screen.getByRole("button", { name: "Forward" }));
     expect(await screen.findByText("Other — Backend Engineer")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "הרצת ניתוח המשרה" })).not.toBeInTheDocument();
-  });
-
-  it("does not watch or navigate an old application's late automatic acceptance", async () => {
-    let resolveOld: (response: Response) => void = () => {};
-    const analyzed = queued({
-      status: "succeeded",
-      is_terminal: true,
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
-    });
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "POST")
-        return new Promise<Response>((resolve) => {
-          resolveOld = resolve;
-        });
-      if (url.includes("/settings"))
-        return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
-      if (url.includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
-      return Promise.resolve(
-        jsonResponse(
-          url.endsWith("/app-2")
-            ? detail({ application: { ...detail().application, id: "app-2", company: "Other" } })
-            : analyzed_detail({ latest_operation: analyzed }),
-        ),
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    renderPage({ ...aiSettings, auto_generate_when_review_not_required: true });
-    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
-    fireEvent.click(screen.getByRole("button", { name: "Another application" }));
-    expect(await screen.findByText("Other — Backend Engineer")).toBeInTheDocument();
-    await act(async () => resolveOld(acceptedResponse(queued({ id: "op-draft", operation_type: "create_draft" }))));
-    expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "הרצת יצירת טיוטה" })).not.toBeInTheDocument();
   });
 
   it("waits for the document's content on refresh and does not repeat completed navigation on Back", async () => {

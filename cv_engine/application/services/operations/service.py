@@ -18,6 +18,7 @@ from ...ai_configuration import (
 from ...commands import (
     AnalyzeCommand,
     DraftCommand,
+    DraftContinuation,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
@@ -37,6 +38,31 @@ from ..analysis.service import AnalysisService
 from ..documents import DocumentSource, refuse_deleted, require_hash
 from ..drafts import DraftAuthoringService
 from ..rendering import RenderingService
+
+
+def validated_reasoning_effort(value: str | None) -> ReasoningEffort | None:
+    """Keep an absent deterministic effort absent; validate any stored value."""
+    return None if value is None else normalize_reasoning_effort(value)
+
+
+def draft_operation_request(
+    command: DraftCommand, sources: OperationSources, idempotency_key: str
+) -> CreateOperation:
+    """The `create_draft` record, whether a user submitted it or an analysis continued.
+
+    `command` already carries frozen model and effort, and `sources` the exact
+    document hash it is addressed to.
+    """
+    return CreateOperation(
+        application_id=command.application_id,
+        operation_type=OperationType.CREATE_DRAFT,
+        payload=command.model_dump(mode="json"),
+        idempotency_key=idempotency_key,
+        sources=sources,
+        provider="openai",
+        model=command.model,
+        reasoning_effort=validated_reasoning_effort(command.reasoning_effort),
+    )
 
 
 class OperationSubmissionService:
@@ -65,17 +91,22 @@ class OperationSubmissionService:
         self._default_ai_model = normalize_ai_model(default_ai_model)
         self._default_reasoning_effort = normalize_reasoning_effort(default_reasoning_effort)
 
-    def _freeze_ai_execution(self, command):
-        """Copy current safe preferences into the immutable Operation payload."""
+    def _stored_settings(self):
         with self.transactions.read() as tx:
-            stored = self.settings.settings(tx)
-        model = normalize_ai_model(
-            command.model or stored.default_ai_model or self._default_ai_model
+            return self.settings.settings(tx)
+
+    def _ai_execution(self, stored, model: str | None, effort: str | None) -> tuple[str, str]:
+        return (
+            normalize_ai_model(model or stored.default_ai_model or self._default_ai_model),
+            normalize_reasoning_effort(
+                effort or stored.default_reasoning_effort or self._default_reasoning_effort
+            ),
         )
-        effort = normalize_reasoning_effort(
-            command.reasoning_effort
-            or stored.default_reasoning_effort
-            or self._default_reasoning_effort
+
+    def _freeze_ai_execution(self, command, stored=None):
+        """Copy current safe preferences into the immutable Operation payload."""
+        model, effort = self._ai_execution(
+            stored or self._stored_settings(), command.model, command.reasoning_effort
         )
         return command.model_copy(update={"model": model, "reasoning_effort": effort})
 
@@ -96,11 +127,6 @@ class OperationSubmissionService:
             stored = self.operations.enqueue(tx, request, operation_id=operation_id or new_id())
         return as_operation_view(stored)
 
-    @staticmethod
-    def _validated_reasoning_effort(value: str | None) -> ReasoningEffort | None:
-        """Keep an absent deterministic effort absent; validate any stored value."""
-        return None if value is None else normalize_reasoning_effort(value)
-
     def submit_analysis(
         self,
         command: AnalyzeCommand,
@@ -109,7 +135,16 @@ class OperationSubmissionService:
         analysis_service: AnalysisService,
     ) -> OperationView:
         self._load_active_application(command.application_id)
-        command = self._freeze_ai_execution(command)
+        stored = self._stored_settings()
+        command = self._freeze_ai_execution(command, stored)
+        if stored.auto_generate_when_review_not_required:
+            # §9 automatic generation, frozen as a `create_draft` submitted now would be.
+            model, effort = self._ai_execution(stored, None, None)
+            command = command.model_copy(
+                update={
+                    "draft_continuation": DraftContinuation(model=model, reasoning_effort=effort)
+                }
+            )
         snapshot = analysis_service.snapshot_source(command.application_id, command.job_snapshot_id)
         analysis_service.refuse_deleted(snapshot.application_id, snapshot.deleted_at)
         request = CreateOperation(
@@ -124,7 +159,7 @@ class OperationSubmissionService:
             ),
             provider=command.provider,
             model=command.model,
-            reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
+            reasoning_effort=validated_reasoning_effort(command.reasoning_effort),
         )
         return self._enqueue(request)
 
@@ -156,17 +191,10 @@ class OperationSubmissionService:
                 "the document already has content; edit or regenerate it, or build it "
                 "again from its analysis"
             )
-        request = CreateOperation(
-            application_id=command.application_id,
-            operation_type=OperationType.CREATE_DRAFT,
-            payload=command.model_dump(mode="json"),
-            idempotency_key=idempotency_key,
-            sources=sources,
-            provider="openai",
-            model=command.model,
-            reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
+        return self._enqueue(
+            draft_operation_request(command, sources, idempotency_key),
+            operation_id=operation_id,
         )
-        return self._enqueue(request, operation_id=operation_id)
 
     def submit_regeneration(
         self,
@@ -216,7 +244,7 @@ class OperationSubmissionService:
             sources=sources,
             provider="openai",
             model=command.model,
-            reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
+            reasoning_effort=validated_reasoning_effort(command.reasoning_effort),
         )
         return self._enqueue(request)
 

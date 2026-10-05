@@ -18,7 +18,9 @@ import re
 from typing import Any
 
 from ....domain.contracts.validation import ValidationReport
+from ....util import new_id
 from ...commands import (
+    AnalysisResult,
     AnalyzeCommand,
     DraftCommand,
     RegenerateClaimCommand,
@@ -38,6 +40,7 @@ from ...operations import (
     FailureReason,
     OperationFailureCode,
     OperationOutputReference,
+    OperationSources,
     PdfPageLimitReason,
     PersistedOperation,
     RenderCheckCode,
@@ -45,6 +48,7 @@ from ...operations import (
 )
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.documents import DocumentStore, RenderedFiles
+from ...ports.operation_client import OperationContinuationStore
 from ...ports.transactions import ReadTransaction, WriteTransaction
 from ..analysis.activation import AnalysisActivation
 from ..analysis.preparation import PreparedAnalysis
@@ -54,6 +58,7 @@ from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation
 from ..rendering import ExecutedRender, RenderingService
 from .failures import failure_code_for, failure_reason_for, safe_failure_detail_for
+from .service import draft_operation_request
 
 
 def _document_output(document_id: str) -> tuple[OperationOutputReference, ...]:
@@ -166,11 +171,15 @@ class AnalysisOperationHandler(AITaskHandler):
         sources: AnalysisContextSourceReader,
         activation: AnalysisActivation,
         knowledge: AnalysisKnowledgeSource,
+        documents: DocumentStore,
+        continuations: OperationContinuationStore,
     ):
         self.service = service
         self.sources = sources
         self.activation = activation
         self.knowledge = knowledge
+        self.documents = documents
+        self.continuations = continuations
 
     @staticmethod
     def _command(operation: PersistedOperation) -> AnalyzeCommand:
@@ -226,7 +235,43 @@ class AnalysisOperationHandler(AITaskHandler):
         ]
         if result.created_document and result.document_id is not None:
             outputs.extend(_document_output(result.document_id))
+            self._continue_to_draft(tx, operation, result)
         return tuple(outputs)
+
+    def _continue_to_draft(
+        self, tx: WriteTransaction, operation: PersistedOperation, result: AnalysisResult
+    ) -> None:
+        """§9 automatic generation: queue `create_draft` for the document just created.
+
+        In the activation scope, so the analysis and the queued draft commit together
+        or not at all, addressed to the exact hash the new document was created with.
+        A new document has no content, no stamps, and no review reason, and no
+        Operation can name its hash yet, so `create_draft` is available by
+        construction. The key is derived from this Operation: a repeated activation
+        of the same run cannot queue a second draft.
+        """
+        continuation = self._command(operation).draft_continuation
+        if continuation is None:
+            return
+        document = self.documents.document(tx, operation.application_id)
+        if document is None:
+            raise RuntimeError("the analysis created a document that cannot be read back")
+        command = DraftCommand(
+            application_id=operation.application_id,
+            expected_document_hash=document.document_hash,
+            model=continuation.model,
+            reasoning_effort=continuation.reasoning_effort,
+        )
+        sources = OperationSources(
+            job_snapshot_id=result.job_snapshot_id,
+            job_analysis_id=result.analysis_id,
+            expected_document_hash=document.document_hash,
+        )
+        self.continuations.enqueue(
+            tx,
+            draft_operation_request(command, sources, f"draft-continuation:{operation.id}"),
+            operation_id=new_id(),
+        )
 
 
 class DraftTaskHandler(AITaskHandler):
