@@ -11,13 +11,13 @@ from .transactions import ReadTransaction, WriteTransaction
 
 
 @dataclass(frozen=True)
-class AnalysisSnapshotSource:
+class AnalysisJobTextSource:
+    """The Application's current job text, as analysis and drafting read it."""
+
     application_id: str
-    job_snapshot_id: str
-    payload_path: str
-    source_hash: str
+    job_text: str
+    job_text_hash: str
     normalized_hash: str
-    active_snapshot_id: str
     deleted_at: str | None
 
 
@@ -25,17 +25,13 @@ class AnalysisSnapshotSource:
 class AnalysisContextSource:
     application_id: str
     job_analysis_id: str
-    job_snapshot_id: str
+    #: The job text the analysis read.
+    job_text_hash: str
     analysis: JobAnalysis
     active_analysis_id: str | None
-    active_snapshot_id: str
+    #: The Application's job text now.
+    current_job_text_hash: str
     deleted_at: str | None
-
-
-class AnalysisPayloadStore(Protocol):
-    """Only verified JobSnapshot reads."""
-
-    def read_snapshot(self, reference: str, expected_hash: str) -> str: ...
 
 
 class AnalysisKnowledgeSource(Protocol):
@@ -47,9 +43,9 @@ class AnalysisKnowledgeSource(Protocol):
 class AnalysisContextSourceReader(Protocol):
     def knowledge_is_prepared(self, tx: ReadTransaction) -> bool: ...
 
-    def analysis_source(
-        self, tx: ReadTransaction, job_snapshot_id: str
-    ) -> AnalysisSnapshotSource: ...
+    def job_text_source(
+        self, tx: ReadTransaction, application_id: str
+    ) -> AnalysisJobTextSource: ...
 
     def analysis_context_source(
         self, tx: ReadTransaction, job_analysis_id: str
@@ -65,7 +61,7 @@ class AnalysisStore(Protocol):
         self,
         tx: WriteTransaction,
         application_id: str,
-        snapshot_id: str,
+        job_text_hash: str,
         analysis: JobAnalysis,
         *,
         provider: str,

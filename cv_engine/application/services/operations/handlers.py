@@ -164,7 +164,7 @@ class AITaskHandler:
 
 
 class AnalysisOperationHandler(AITaskHandler):
-    """`analyze_job`, bound to its input JobSnapshot rather than to a document."""
+    """`analyze_job`, bound to the exact job text it read rather than to a document."""
 
     def __init__(
         self,
@@ -184,21 +184,16 @@ class AnalysisOperationHandler(AITaskHandler):
 
     def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
         sources = operation.sources
-        if sources.job_snapshot_id is None or sources.job_snapshot_hash is None:
-            raise SourceChanged("Analysis Operation has no frozen job snapshot identity.")
+        if sources.job_text_hash is None:
+            raise SourceChanged("Analysis Operation has no frozen job text identity.")
         try:
-            snapshot = self.sources.analysis_source(tx, sources.job_snapshot_id)
+            source = self.sources.job_text_source(tx, operation.application_id)
         except UnknownRecord as exc:
-            raise SourceChanged("The job snapshot no longer exists.") from exc
-        if (
-            snapshot.application_id != operation.application_id
-            or snapshot.source_hash != sources.job_snapshot_hash
-        ):
-            raise SourceChanged("The job snapshot changed before analysis activation.")
-        if snapshot.deleted_at is not None:
+            raise SourceChanged("The Application no longer exists.") from exc
+        if source.deleted_at is not None:
             raise SourceChanged("The Application was deleted before analysis activation.")
-        if snapshot.active_snapshot_id != sources.job_snapshot_id:
-            raise SourceChanged("A newer job snapshot replaced the analysis source.")
+        if source.job_text_hash != sources.job_text_hash:
+            raise SourceChanged("The job text changed before analysis activation.")
 
         if self.sources.knowledge_is_prepared(tx):
             raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")

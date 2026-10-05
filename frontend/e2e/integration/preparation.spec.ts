@@ -26,7 +26,7 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   test.setTimeout(120_000);
   const applications = "/api/v1/applications";
   await page.goto("/applications/new");
-  await expect(page.getByText("יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח.")).toBeVisible();
+  await expect(page.getByText("יצירת המועמדות תשמור את נוסח המשרה ותתחיל את הניתוח.")).toBeVisible();
   await page.getByLabel("שם החברה", { exact: true }).fill("Browser Preparation Co");
   await page.getByLabel("תפקיד היעד", { exact: true }).fill("Account Manager");
   const jobText = "Experience owning the full sales cycle.\nFluent English.";
@@ -42,7 +42,7 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   await page.getByRole("button", { name: "יצירת מועמדות", exact: true }).click();
   const created = await createdResponse;
   expect(created.status()).toBe(201);
-  const { application_id: id, job_snapshot_id: snapshotId } = await created.json();
+  const { application_id: id, job_text_hash: jobTextHash } = await created.json();
   const applicationPath = `${applications}/${id}`;
   const documentPath = `${applicationPath}/document`;
   const analyzed = await analysisResponse;
@@ -62,8 +62,8 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   expect(analysisDetail.status()).toBe(200);
   expect(await analysisDetail.json()).toMatchObject({
     preparation_state: "ready_to_draft",
-    active_job_snapshot_id: snapshotId,
-    latest_snapshot: { job_text: jobText },
+    job_text_hash: jobTextHash,
+    job_posting: { job_text: jobText, job_text_hash: jobTextHash, locked: false },
   });
 
   const draftedResponse = postResponse(page, `${documentPath}/draft`);
@@ -183,7 +183,7 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   expect(persisted.recruitment_status).toBe("applied");
   expect(persisted.preparation_state).toBe("ready");
   expect(persisted.document_hash).toBe(ready.document_hash);
-  expect(persisted.latest_snapshot).toMatchObject({ job_text: jobText });
+  expect(persisted.job_posting).toMatchObject({ job_text: jobText, locked: true });
   expect(persisted.recruitment_timeline).toEqual(
     expect.arrayContaining([
       expect.objectContaining({

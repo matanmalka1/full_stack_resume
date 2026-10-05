@@ -73,7 +73,6 @@ from ..infrastructure.persistence.initial_recruitment_events import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
 from ..infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
-from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from ..infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
 )
@@ -186,7 +185,6 @@ def build_services(
     schema_version = current_database_revision(engine) or ""
     transactions = SqlAlchemyTransactionManager(engine)
     intake_applications = SqlAlchemyApplicationStore(transactions)
-    intake_snapshots = SqlAlchemyJobSnapshotStore(transactions)
     intake_recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
     intake_audit = SqlAlchemyAuditLog(transactions)
     knowledge_lifecycle_store = SqlAlchemyKnowledgeLifecycleRepository(transactions)
@@ -246,7 +244,6 @@ def build_services(
         documents=documents,
         ai_calls=ai_calls,
         knowledge=committed_knowledge,
-        payloads=resolved_payloads,
         provider=resolved_provider,
     )
     draft_history = DraftHistoryService(
@@ -279,7 +276,6 @@ def build_services(
         knowledge=committed_knowledge,
         provider=resolved_provider,
         ai_calls=ai_calls,
-        snapshot_payloads=resolved_payloads,
     )
     draft_review = DraftReviewService(
         transactions=transactions,
@@ -378,10 +374,8 @@ def build_services(
         applications=ApplicationService(
             transactions=transactions,
             applications=intake_applications,
-            snapshots=intake_snapshots,
             recruitment=intake_recruitment,
             audit=intake_audit,
-            payloads=resolved_payloads,
         ),
         queries=ApplicationQueryService(
             transactions=transactions,
@@ -389,7 +383,6 @@ def build_services(
             documents=documents,
             submissions=document_submissions,
             knowledge=committed_knowledge,
-            payloads=resolved_payloads,
         ),
         analysis=analysis_service,
         drafts=draft_service,

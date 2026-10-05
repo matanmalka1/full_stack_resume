@@ -22,6 +22,10 @@ def _application(application_id: str) -> dict[str, str]:
         "target_role": "Engineer",
         "current_status": "saved",
         "notes": "",
+        "job_text": "Transaction posting",
+        "job_text_hash": "0" * 64,
+        "job_normalized_hash": "0" * 64,
+        "job_text_updated_at": "2026-09-17T00:00:00+00:00",
         "created_at": "2026-09-17T00:00:00+00:00",
         "updated_at": "2026-09-17T00:00:00+00:00",
     }
@@ -110,12 +114,14 @@ def _payloads_refuse(transactions, scope, app_paths, **_fixtures) -> None:
     payloads = PayloadStore(app_paths)
     with getattr(transactions, scope)():
         with pytest.raises(RuntimeError, match="immutable payload write"):
-            payloads.commit_snapshot("application", "snapshot", "job text")
+            payloads.commit_submission_file(
+                "application", "submission", suffix=".pdf", payload=b"%PDF-1.4"
+            )
         with pytest.raises(RuntimeError, match="payload inventory is forbidden"):
             payloads.payload_inventory()
         with pytest.raises(RuntimeError, match="object-store write"):
             assert_external_io_allowed("object-store write")
-    assert not payloads.snapshot_path("application", "snapshot").exists()
+    assert not payloads.submission_path("application", "submission", suffix=".pdf").exists()
     assert_external_io_allowed("object-store write")
 
 

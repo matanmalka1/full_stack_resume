@@ -22,7 +22,7 @@ import {
 import { PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
 import { applicationLabel } from "../model/applicationPresentation";
 import { analysisViewState } from "../model/analysisViewState";
-import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
+import { JobPostingPanel } from "../components/JobPostingPanel";
 
 /* The news that an Application was just created, handed over in route state by the intake
    screen. It is the one thing on this page that is not read from the projection, because
@@ -193,7 +193,7 @@ export const ApplicationPage = () => {
              lists. The block is unconditional and replaces the step entirely rather than
              merely warning above it. */
           <Callout role="alert" title="המועמדות הזו נמחקה" tone="warning">
-            המועמדות הוסרה מלוח המועמדויות ואין לבצע עליה פעולות הכנה נוספות. תצלום המשרה, הניתוח, מסמך קורות החיים
+            המועמדות הוסרה מלוח המועמדויות ואין לבצע עליה פעולות הכנה נוספות. נוסח המשרה, הניתוח, מסמך קורות החיים
             וההגשות שנרשמו נשארים בדיוק כפי שהם.
           </Callout>
         ) : (
@@ -232,7 +232,7 @@ export const ApplicationPage = () => {
                 is how a step turns back into a record with sections. The line says where
                 the step ends and the material about it begins. */}
             {/* A failed analysis can be repaired only from its source context. In
-                particular, updating a malformed posting lives in JobSnapshotPanel, so
+                particular, updating a malformed posting lives in JobPostingPanel, so
                 hiding reference material on failure also hid the way out. */}
             {/* Wrapped in `WideRow` so it lands after `PreparationView`'s own wide row
                 rather than before it: both portal into the same `afterBody` slot, and
@@ -248,11 +248,11 @@ export const ApplicationPage = () => {
                     /* Repair is the task now, not optional reference reading. Keep the
                        posting and its edit action in view instead of nesting them behind a
                        second disclosure the reader has no reason to discover. */
-                    <JobSnapshotPanel detail={detail} operationLive={operationLive} />
+                    <JobPostingPanel detail={detail} operationLive={operationLive} />
                   ) : (
                     <Disclosure flush summary="צפייה בנוסח המשרה שנשמר">
                       <div className="pt-2">
-                        <JobSnapshotPanel detail={detail} operationLive={operationLive} />
+                        <JobPostingPanel detail={detail} operationLive={operationLive} />
                       </div>
                     </Disclosure>
                   )}

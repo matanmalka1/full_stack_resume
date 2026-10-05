@@ -15,9 +15,8 @@ from ...ports import AIProvider, TransactionManager
 from ...ports.analysis_plans import (
     AnalysisContextSource,
     AnalysisContextSourceReader,
+    AnalysisJobTextSource,
     AnalysisKnowledgeSource,
-    AnalysisPayloadStore,
-    AnalysisSnapshotSource,
 )
 from ...ports.documents import DocumentStore
 from ...transactions import assert_external_io_allowed
@@ -40,7 +39,6 @@ class AnalysisService:
         documents: DocumentStore,
         ai_calls: AICallRunner,
         knowledge: AnalysisKnowledgeSource,
-        payloads: AnalysisPayloadStore,
         provider: AIProvider | None,
     ):
         self.transactions = transactions
@@ -49,7 +47,6 @@ class AnalysisService:
         self.documents = documents
         self.ai_calls = ai_calls
         self._knowledge = knowledge
-        self.snapshot_payloads = payloads
         self._provider = provider
 
     @staticmethod
@@ -57,12 +54,14 @@ class AnalysisService:
         if deleted_at is not None:
             raise StateConflict(f"application is deleted: {application_id}")
 
-    def snapshot_source(self, application_id: str, job_snapshot_id: str) -> AnalysisSnapshotSource:
+    def job_text_source(self, application_id: str, job_text_hash: str) -> AnalysisJobTextSource:
+        """The Application's job text, refused unless it is still the text the caller read."""
         with self.transactions.read() as tx:
-            source = self.sources.analysis_source(tx, job_snapshot_id)
-        if source.application_id != application_id:
-            raise LineageBroken(
-                f"job snapshot {job_snapshot_id} does not belong to application {application_id}"
+            source = self.sources.job_text_source(tx, application_id)
+        if source.job_text_hash != job_text_hash:
+            raise StateConflict(
+                "the job text changed since it was read (job_text_hash): "
+                f"expected {job_text_hash}, found {source.job_text_hash}"
             )
         return source
 

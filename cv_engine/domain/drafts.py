@@ -132,7 +132,7 @@ def authorize_reviewed_claim(
 def build_draft(
     *,
     application_id: str,
-    job_snapshot_id: str,
+    job_text_hash: str,
     job_analysis_id: str,
     analysis: JobAnalysis,
     profile: Profile,
@@ -242,7 +242,7 @@ def build_draft(
 
     draft = DraftDocument(
         application_id=application_id,
-        job_snapshot_id=job_snapshot_id,
+        job_text_hash=job_text_hash,
         job_analysis_id=job_analysis_id,
         language=language,
         track=analysis.track,

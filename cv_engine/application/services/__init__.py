@@ -1,7 +1,7 @@
 """Synchronous application services, grouped by cohesive lifecycle.
 
 analysis: analysis preparation, activation, and correction.
-applications: intake, snapshots, notes, and read queries.
+applications: intake, job text, notes, and read queries.
 drafts: authoring, validation, approval, and history.
 knowledge: knowledge queries and fact mutations.
 operations: submission, execution, lifecycle, and replacement.

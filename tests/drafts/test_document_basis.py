@@ -59,7 +59,7 @@ def _claim(
 def _content(*claim_fact_ids: str) -> DraftDocument:
     return DraftDocument(
         application_id="app",
-        job_snapshot_id="snapshot",
+        job_text_hash=_B,
         job_analysis_id="analysis",
         language="en",
         track=Track.DEVELOPMENT,
@@ -228,7 +228,7 @@ def test_the_contract_refuses_unpaired_stamps_and_stamps_on_an_empty_document() 
 
 def test_a_submission_carries_what_was_sent_only_when_internal() -> None:
     sent = {
-        "job_snapshot_id": "snapshot",
+        "job_text_hash": _B,
         "document_hash": _B,
         "content": _content(),
         "html_path": "submissions/1.html",

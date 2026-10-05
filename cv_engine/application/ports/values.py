@@ -32,8 +32,8 @@ class StoredDraft:
 
 
 @dataclass(frozen=True)
-class SnapshotPayload:
-    """Storage-neutral metadata for one immutable JobSnapshot payload."""
+class PayloadReference:
+    """Storage-neutral metadata for one immutable stored payload (a Submission file)."""
 
     reference: str
     sha256: str

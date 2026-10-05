@@ -25,7 +25,7 @@ def serialize_markdown(draft: DraftDocument) -> str:
     front = {
         "schema_version": draft.schema_version,
         "application_id": draft.application_id,
-        "job_snapshot_id": draft.job_snapshot_id,
+        "job_text_hash": draft.job_text_hash,
         "job_analysis_id": draft.job_analysis_id,
         "language": draft.language,
         "track": draft.track.value,

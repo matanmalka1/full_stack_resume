@@ -7,11 +7,11 @@ from fastapi import APIRouter, Query, Response, status
 from ...application.commands import (
     AnalyzeCommand,
     CloseApplicationCommand,
-    CreateJobSnapshotCommand,
     DeleteApplicationCommand,
     DuplicateCheckCommand,
     IngestCommand,
     UpdateApplicationNotesCommand,
+    UpdateJobTextCommand,
 )
 from ...application.queries import (
     ActivityFilter,
@@ -31,15 +31,14 @@ from ..schemas.applications import (
     CloseApplicationResponse,
     CreateApplicationRequest,
     CreateApplicationResponse,
-    CreateJobSnapshotRequest,
-    CreateJobSnapshotResponse,
     DeleteApplicationResponse,
     DuplicateCheckRequest,
     DuplicateCheckResponse,
-    JobSnapshotHistoryResponse,
     PreparationState,
     UpdateApplicationNotesRequest,
     UpdateApplicationNotesResponse,
+    UpdateJobTextRequest,
+    UpdateJobTextResponse,
 )
 from ..schemas.operations import OperationResponse
 
@@ -62,7 +61,7 @@ def duplicate_check(request: DuplicateCheckRequest, services: Services) -> Dupli
     "",
     response_model=CreateApplicationResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create an application and its first immutable job snapshot",
+    summary="Create an application with its job text",
 )
 def create_application(
     request: CreateApplicationRequest, services: Services
@@ -149,43 +148,32 @@ def update_application_notes(
     return UpdateApplicationNotesResponse.model_validate(result.model_dump(mode="json"))
 
 
-@router.get(
-    "/{application_id}/job-snapshots",
-    response_model=JobSnapshotHistoryResponse,
-    summary="Read immutable job snapshot history",
+@router.patch(
+    "/{application_id}/job-text",
+    response_model=UpdateJobTextResponse,
+    summary="Replace the job text; refused once the application has a submission",
 )
-def job_snapshot_history(application_id: str, services: Services) -> JobSnapshotHistoryResponse:
-    result = services.queries.job_snapshot_history(application_id)
-    return JobSnapshotHistoryResponse.model_validate(result.model_dump(mode="json"))
-
-
-@router.post(
-    "/{application_id}/job-snapshots",
-    response_model=CreateJobSnapshotResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a new immutable job snapshot",
-)
-def create_job_snapshot(
+def update_job_text(
     application_id: str,
-    request: CreateJobSnapshotRequest,
+    request: UpdateJobTextRequest,
     services: Services,
-) -> CreateJobSnapshotResponse:
-    result = services.applications.create_job_snapshot(
-        CreateJobSnapshotCommand(
+) -> UpdateJobTextResponse:
+    result = services.applications.update_job_text(
+        UpdateJobTextCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
             actor_type="user",
             client="web",
         )
     )
-    return CreateJobSnapshotResponse.model_validate(result.model_dump(mode="json"))
+    return UpdateJobTextResponse.model_validate(result.model_dump(mode="json"))
 
 
 @router.post(
     "/{application_id}/analyses",
     response_model=OperationResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Analyze one exact job snapshot",
+    summary="Analyze the exact job text the client read",
 )
 def create_analysis(
     application_id: str,
@@ -243,8 +231,8 @@ def delete_application(application_id: str, services: Services) -> DeleteApplica
     """No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).
 
     Callable from any current status, including `closed`. Every immutable
-    JobSnapshot, JobAnalysis, Artifact, Submission, and Operation the
-    application produced is untouched;
+    JobAnalysis, Artifact, Submission, and Operation the application produced is
+    untouched;
     only default list/Dashboard projections and duplicate detection stop
     surfacing it. The detail endpoint still returns it by ID.
     """

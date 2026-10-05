@@ -110,16 +110,15 @@ class OperationSubmissionService:
     ) -> OperationView:
         self._load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
-        snapshot = analysis_service.snapshot_source(command.application_id, command.job_snapshot_id)
-        analysis_service.refuse_deleted(snapshot.application_id, snapshot.deleted_at)
+        source = analysis_service.job_text_source(command.application_id, command.job_text_hash)
+        analysis_service.refuse_deleted(source.application_id, source.deleted_at)
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.ANALYZE_JOB,
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
             sources=OperationSources(
-                job_snapshot_id=command.job_snapshot_id,
-                job_snapshot_hash=snapshot.source_hash,
+                job_text_hash=source.job_text_hash,
                 knowledge_context_hash=analysis_service.load_knowledge().context_hash(),
             ),
             provider=command.provider,
@@ -133,7 +132,7 @@ class OperationSubmissionService:
         refuse_deleted(source.document.application_id, source.deleted_at)
         require_hash(source.document, expected_document_hash)
         return OperationSources(
-            job_snapshot_id=source.job_snapshot_id,
+            job_text_hash=source.job_text_hash,
             job_analysis_id=source.document.analysis_id,
             expected_document_hash=expected_document_hash,
         )

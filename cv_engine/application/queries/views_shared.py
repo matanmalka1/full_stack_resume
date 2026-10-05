@@ -18,7 +18,7 @@ from ...domain.contracts.recruitment import ApplicationStatus
 from ...domain.document import ContentCheck, PreparationState
 from ..commands import BoundaryDTO
 from ..operations import OperationView
-from .views_prep import JobAnalysisView, JobSnapshotView
+from .views_prep import JobAnalysisView, JobPostingView
 from .views_tracking import RecruitmentTimelineItemView
 
 
@@ -79,7 +79,8 @@ class ApplicationStateView(BoundaryDTO):
     warnings: list[WarningView] = []
     active_operation: OperationView | None = None
     latest_operation: OperationView | None = None
-    active_job_snapshot_id: str
+    #: The Application's current job text.
+    job_text_hash: str
     latest_analysis_id: str | None = None
     document_id: str | None = None
     document_hash: str | None = None
@@ -93,7 +94,7 @@ class ApplicationStateView(BoundaryDTO):
 
 class ApplicationDetailView(ApplicationStateView):
     application: ApplicationView
-    latest_snapshot: JobSnapshotView
+    job_posting: JobPostingView
     latest_analysis: JobAnalysisView | None = None
     allowed_recruitment_transitions: list[ApplicationStatus] = []
     recruitment_timeline: list[RecruitmentTimelineItemView] = []

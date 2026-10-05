@@ -92,7 +92,7 @@ export const autoDraftIsContinuing = (
     detail.blocked_actions.some(({ action }) => action === "create_draft")
   )
     return false;
-  const capturedTime = Date.parse(detail.latest_snapshot.captured_at);
+  const capturedTime = Date.parse(detail.job_posting.job_text_updated_at);
   const finishedTime = operation.finished_at == null ? NaN : Date.parse(operation.finished_at);
   return !(capturedTime > finishedTime) && operation.outputs.some((output) => output.output_type === "job_analysis");
 };

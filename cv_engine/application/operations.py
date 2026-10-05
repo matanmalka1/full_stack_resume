@@ -137,11 +137,10 @@ class OperationSources(OperationModel):
 
     An Operation that mutates the document carries `expected_document_hash`; at
     activation it locks the document row and a mismatch discards the result
-    (state-and-use-cases.md §11). Analysis is bound to its input JobSnapshot instead.
+    (state-and-use-cases.md §11). Analysis is bound to the exact job text instead.
     """
 
-    job_snapshot_id: str | None = None
-    job_snapshot_hash: str | None = None
+    job_text_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     job_analysis_id: str | None = None
     expected_document_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     knowledge_context_hash: str | None = None

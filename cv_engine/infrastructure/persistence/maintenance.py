@@ -17,7 +17,7 @@ from sqlalchemy import (
 
 from ...application.ports.transactions import ReadTransaction
 from .connection import SqlAlchemyTransactionManager
-from .tables import ai_calls, job_snapshots, submissions
+from .tables import ai_calls, submissions
 
 
 def _integrity_problems(connection) -> list[str]:
@@ -61,21 +61,10 @@ class SqlAlchemyMaintenanceInspection:
     def registered_payloads(self, tx: ReadTransaction) -> list[dict[str, Any]]:
         """Every registered immutable file and the hash it was registered with.
 
-        JobSnapshot payloads and every Submission file (§19b). The document's rendered files are mutable working outputs and are
-        not listed.
+        Every Submission file (§19b). The document's rendered files are mutable
+        working outputs and are not listed.
         """
         connection = self._transactions.connection_for(tx)
-        snapshots = (
-            connection.execute(
-                select(
-                    job_snapshots.c.id,
-                    job_snapshots.c.payload_path.label("path"),
-                    job_snapshots.c.source_hash.label("content_hash"),
-                ).order_by(job_snapshots.c.captured_at, job_snapshots.c.id)
-            )
-            .mappings()
-            .all()
-        )
         submitted = (
             connection.execute(
                 union(
@@ -98,14 +87,13 @@ class SqlAlchemyMaintenanceInspection:
             .mappings()
             .all()
         )
-        return [dict(row) for row in snapshots] + [
+        return [
             {"id": row["id"], "path": row["path"], "content_hash": row["content_hash"]}
             for row in submitted
         ]
 
     def registered_payload_references(self, tx: ReadTransaction) -> set[str]:
         statement = union(
-            select(job_snapshots.c.payload_path),
             select(submissions.c.html_path).where(submissions.c.html_path.is_not(None)),
             select(submissions.c.pdf_path).where(submissions.c.pdf_path.is_not(None)),
         )

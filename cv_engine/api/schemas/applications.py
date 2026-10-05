@@ -39,20 +39,23 @@ class DuplicateCheckResponse(HttpSchema):
 
 class CreateApplicationResponse(HttpSchema):
     application_id: str
-    job_snapshot_id: str
+    job_text_hash: str
     warnings: list[str]
     duplicate_matches: list[DuplicateMatchResponse]
 
 
-class CreateJobSnapshotRequest(HttpSchema):
+class UpdateJobTextRequest(HttpSchema):
+    """Replace the job text the client last read; refused once a Submission locked it."""
+
     job_text: str = Field(min_length=1)
     source_url: str | None = Field(default=None, max_length=SOURCE_URL_MAX_CHARACTERS)
-    source_metadata: dict[str, Any] = {}
+    expected_job_text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class CreateJobSnapshotResponse(HttpSchema):
+class UpdateJobTextResponse(HttpSchema):
     application_id: str
-    job_snapshot_id: str
+    job_text_hash: str
+    job_text_updated_at: str
 
 
 class UpdateApplicationNotesRequest(HttpSchema):
@@ -131,7 +134,7 @@ class ApplicationStateResponse(HttpSchema):
     warnings: list[WarningResponse]
     active_operation: OperationResponse | None = None
     latest_operation: OperationResponse | None = None
-    active_job_snapshot_id: str
+    job_text_hash: str
     latest_analysis_id: str | None = None
     document_id: str | None = None
     document_hash: str | None = None
@@ -143,15 +146,14 @@ class ApplicationStateResponse(HttpSchema):
     recommended_action: str | None = None
 
 
-class JobSnapshotResponse(HttpSchema):
-    id: str
-    application_id: str
-    version_number: int
+class JobPostingResponse(HttpSchema):
+    """The Application's job text. `locked` once the Application has a Submission."""
+
     job_text: str
     source_url: str | None = None
-    captured_at: str
-    source_metadata: dict[str, Any]
-    source_hash: str
+    job_text_hash: str
+    job_text_updated_at: str
+    locked: bool
 
 
 class GapResponse(HttpSchema):
@@ -172,7 +174,7 @@ class JobAnalysisResponse(HttpSchema):
 
     id: str
     application_id: str
-    job_snapshot_id: str
+    job_text_hash: str
     version_number: int
     analysis: dict[str, Any]
     fit_level: str
@@ -185,7 +187,7 @@ class JobAnalysisResponse(HttpSchema):
 
 class ApplicationDetailResponse(ApplicationStateResponse):
     application: ApplicationResponse
-    latest_snapshot: JobSnapshotResponse
+    job_posting: JobPostingResponse
     latest_analysis: JobAnalysisResponse | None = None
     allowed_recruitment_transitions: list[TransitionableStatus]
     recruitment_timeline: list[RecruitmentTimelineItemResponse]
@@ -244,16 +246,3 @@ class DeleteApplicationResponse(HttpSchema):
     next_action: str | None = None
     next_action_date: str | None = None
     event_id: str | None = None
-
-
-class JobSnapshotHistoryItemResponse(HttpSchema):
-    id: str
-    version_number: int
-    captured_at: str
-    source_url: str | None
-    job_text: str | None
-
-
-class JobSnapshotHistoryResponse(HttpSchema):
-    active_job_snapshot_id: str
-    items: list[JobSnapshotHistoryItemResponse]

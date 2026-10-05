@@ -68,10 +68,10 @@ The acceptance rule is §10.1; the reasoning and rejected alternatives are in
 Creating a JobAnalysis requires the configured AI provider. The provider proposes
 requirement extraction and interpretation, importance, evidence-linked coverage,
 shortfall severity, and the Track/Profile/Emphasis/language classification, from the
-exact JobSnapshot and the supplied canonical candidate facts.
+exact job text (named by its hash) and the supplied canonical candidate facts.
 
 Deterministic policy stays authoritative over everything it can check itself: locating
-each quoted requirement in the signed snapshot, canonical-fact eligibility, requirement
+each quoted requirement in the exact job text, canonical-fact eligibility, requirement
 identity, structural completeness, numeric and compositional consistency, boundary-fact
 applicability, Profile legality, Fit, review routing, provenance, activation, and every
 later validation and approval boundary. A check may narrow a proposal; it never widens
@@ -145,8 +145,8 @@ The product includes:
   copy of the unsent form.
 - Duplicate warnings from identical URL, identical normalized text, and a company/title
   heuristic, with an explicit acknowledgement step (§8).
-- Immutable, versioned JobSnapshots; a snapshot history view with text comparison; new
-  snapshots when the posting changes.
+- The job text as an editable field of the Application, edited in place when the
+  posting changes and locked by the first Submission (§8).
 - Provider-backed JobAnalysis with requirements, coverage, gaps, Fit, and analysis
   issues shown as diagnostics; a matching-configuration form for Track, Profile,
   language, and Emphasis.
@@ -219,9 +219,10 @@ decision.
    Application rows carry no owner.
 3. `CVDocument` is the only mutable resume document. Exactly one exists per Application
    once its first analysis activates.
-4. JobSnapshot, JobAnalysis, provider-response Artifact, Submission, recruitment/audit/
-   fact events, and terminal Operation records are immutable. Database triggers enforce
-   it, not convention.
+4. JobAnalysis, provider-response Artifact, Submission, recruitment/audit/
+   fact events, and terminal Operation records are immutable, and an Application's job
+   text is locked once it has a Submission. Database triggers enforce it, not
+   convention.
 5. Editing an approved or Ready document is always allowed. It changes the basis, so the
    document reads as a draft again; no command reopens it and no history record is
    created.
@@ -280,7 +281,7 @@ receive CandidateContext explicitly and contain no candidate literal.
 Knowledge, artifacts, temporary files, and logs live at fixed directories below the
 installed project root (once accounts ship, only policy files remain there; §22). The root is not selectable (architecture.md §4).
 
-## 8. Job intake and snapshots
+## 8. Job intake and job text
 
 The intake form requires company, target role, and the full job text; the source URL is
 optional. Notes belong to Application Detail, not to the intake form.
@@ -288,12 +289,13 @@ optional. Notes belong to Application Detail, not to the intake form.
 The Web form keeps an exact browser-local recovery copy that survives a reload or a
 later session. Duplicate prompts, network failures, and refusals never discard entered
 values. A storage failure is visible and never blocks editing or submission. A
-successful creation clears only the copy it created from. The copy is not a JobSnapshot
-and carries no authority.
+successful creation clears only the copy it created from. The copy is not the
+Application's job text and carries no authority.
 
 `create_application` is synchronous and deterministic and never calls AI. It stores the
-exact text received, without line-ending normalization, with a source hash over that
-representation and a separate normalized hash for deduplication. A browser-read `.txt`
+exact text received on the Application, without line-ending normalization, with a hash
+over that representation (`job_text_hash`) and a separate normalized hash for
+deduplication. A browser-read `.txt`
 file only fills the text area; nothing is uploaded. The URL is provenance only, is never
 fetched, must be `http(s)`, and is bounded in length and control characters.
 
@@ -303,13 +305,21 @@ Applications are not matched. Unacknowledged matches refuse the first attempt
 Application. A duplicate is never a dead end: the user may open the existing Application
 instead.
 
-After a successful Web creation the client queues `analyze_job` for the new snapshot. If
+After a successful Web creation the client queues `analyze_job` for the new job text. If
 queueing fails, the created Application is still the destination and Analyze stays
 available; creation is never retried.
 
-A changed posting creates a new immutable JobSnapshot and makes it active. Older
-snapshots and their analyses stay valid in their own context, and the document does not
-change until the user runs `build_from_analysis` against a newer analysis.
+A changed posting is an edit of the job text in place (`update_job_text`); there is no
+version history and no comparison view (`docs/decisions/editable-job-text.md`). The
+edit names the text it replaces by hash. Analyses of the earlier text stay on record
+but are no longer of the Application's text: Analyze becomes available, the document
+reads `DOCUMENT_ON_OLDER_ANALYSIS`, and nothing changes the document until the user
+runs `build_from_analysis` against a newer analysis. A document whose analysis read the
+earlier text cannot be drafted, since that text is gone.
+
+The first Submission, internal or external, locks the job text: the edit is refused
+from then on, so a Submission's `job_text_hash` always names text the Application still
+holds.
 
 ## 9. Analysis and review
 
@@ -514,7 +524,7 @@ The analysis task never decides Fit, review routing, approval, or activation (§
 
 **Tolerant reading.** A flawed part of a reading narrows that part and is recorded as an
 analysis issue; the rest stands. Only an unparseable response fails the Operation. The
-engine locates each quotation in the snapshot itself; a requirement it cannot locate is
+engine locates each quotation in the job text itself; a requirement it cannot locate is
 kept and marked unverified, an ambiguous quotation falls to `unknown`, and positive
 coverage resting on an unresolved citation falls to `unknown`. Uncertainty is recorded as
 `unknown`, never as absence of experience.
@@ -536,8 +546,8 @@ writer's self-assessment as evidence. Separate calls do not guarantee independen
 judgment. Application policy, not the provider, decides whether evidence satisfies
 §10.1.
 
-**Context.** Calls are stateless. Each task receives only what it needs: the relevant
-JobSnapshot, the canonical facts for evidence matching or the facts permitted per
+**Context.** Calls are stateless. Each task receives only what it needs: the
+job text, the canonical facts for evidence matching or the facts permitted per
 section, the Profile catalogue, and task policy. Historical artifacts are not sent. The
 UI states that job text and canonical facts are sent when AI is used; there is no
 per-call consent dialog.
@@ -656,9 +666,11 @@ Storage layout is architecture.md §6. Storage keys and local paths are never AP
 Downloads are addressed by ID, verify the registered hash, and use a friendly filename.
 
 **What a Submission records.** An internal Submission stores the document's exact
-`content`, `document_hash`, the `job_snapshot_id` of the document's analysis, the copied
+`content`, `document_hash`, the `job_text_hash` of the Application's job text when it was
+sent (which the Submission locks), the copied
 HTML and PDF with their SHA-256, `submitted_at`, and user metadata. The content itself
-carries its binding (Application, snapshot, analysis), Track/Profile/Emphasis, language,
+carries its binding (Application, the job text hash its analysis read, analysis),
+Track/Profile/Emphasis, language,
 each claim's fact links and evidence, and the coarse fact-store
 version. The Submission does **not** store `facts_hash`, the CandidateContext version,
 or policy versions; those are not recoverable for it later, and no field may claim them.
@@ -669,8 +681,8 @@ validate against current Knowledge rather than trusting `built_with`. `facts_has
 only the facts the document depends on, so an unrelated fact change does not move its
 basis.
 
-**Retention.** Nothing deletes an immutable record: snapshots, Submission files, and the
-AI call log stay forever. Replaced document content is not archived —
+**Retention.** Nothing deletes an immutable record: Submission files, the job text a
+Submission locked, and the AI call log stay forever. Replaced document content is not archived —
 `build_from_analysis` and editing overwrite it — and superseded rendered files are
 working outputs deleted best-effort. Only a Submission keeps what was sent.
 
@@ -826,7 +838,7 @@ idempotency never see across users.
 
 **Ownership.** A user owns their Applications, their Knowledge (facts, fact events,
 CandidateContext, Profile binding), their settings, and their sessions and account
-events. Everything else — JobSnapshots, analyses, the CVDocument, Operations,
+events. Everything else — job text, analyses, the CVDocument, Operations,
 artifacts, Submissions, recruitment and audit events — belongs to an Application and
 through it to its user. A canonical fact belongs to a user, not to an Application;
 Applications reference facts. The worker runs every Operation as the owner of its
@@ -852,7 +864,7 @@ the operator's.
 
 **Account deactivation** is the only way an account ends: deactivate, revoke every
 session, and anonymize the personal data held in mutable fields — the exact list is
-state-and-use-cases.md §23. There is no account deletion. Immutable records — Submissions, JobSnapshots, the AI call log, audit and fact events
+state-and-use-cases.md §23. There is no account deletion. Immutable records — Submissions, the job text they locked, the AI call log, audit and fact events
 — stay, owned by a user row that no longer identifies anyone and that nobody can sign
 in to. A hard delete is not a product capability.
 

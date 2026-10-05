@@ -82,7 +82,8 @@ class DocumentSubmission(StrictModel):
     id: str
     application_id: str
     submission_type: Literal["internal", "external"]
-    job_snapshot_id: str | None = None
+    #: The Application's job text when this was sent; it locks from then on.
+    job_text_hash: Sha256 | None = None
     document_hash: Sha256 | None = None
     content: DraftDocument | None = None
     html_path: str | None = None
@@ -95,7 +96,7 @@ class DocumentSubmission(StrictModel):
     @model_validator(mode="after")
     def references_match_type(self) -> DocumentSubmission:
         references = (
-            self.job_snapshot_id,
+            self.job_text_hash,
             self.document_hash,
             self.content,
             self.html_path,

@@ -26,12 +26,12 @@ import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operationId: string) => void) => {
   const queryClient = useQueryClient();
   const { settings } = useSettings();
-  const snapshotId = detail.active_job_snapshot_id;
-  /* One key per snapshot and the single analysis lane. */
-  const analyzeKey = `analyze:${detail.application.id}:${snapshotId}:openai`;
+  const jobTextHash = detail.job_text_hash;
+  /* One key per job text and the single analysis lane. */
+  const analyzeKey = `analyze:${detail.application.id}:${jobTextHash}:openai`;
 
   const analyze = useMutation({
-    mutationFn: () => startAnalysis(detail.application.id, snapshotId, analyzeKey),
+    mutationFn: () => startAnalysis(detail.application.id, jobTextHash, analyzeKey),
     /* Queueing does not navigate. The projection carries `active_operation` in full and
        starts polling the moment it appears, so the screen reports the work in place;
        what the accepted `202` buys is the first state, a poll earlier than the

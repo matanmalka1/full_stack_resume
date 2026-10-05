@@ -159,7 +159,7 @@ def test_document_journey_from_analysis_to_submission(
     for submission in sent:
         assert submission.document_hash == document_hash
         assert submission.content == document.content
-        assert submission.job_snapshot_id == ingested.job_snapshot_id
+        assert submission.job_text_hash == ingested.job_text_hash
         assert submission.pdf_path is not None and submission.pdf_sha256 is not None
         assert submission.html_path is not None and submission.html_sha256 is not None
         assert submission.pdf_sha256 == sha256_file(pdf)
@@ -173,13 +173,13 @@ def test_document_journey_from_analysis_to_submission(
 
     reconciled = services.maintenance.reconcile()
     assert reconciled.problems == []
-    # Snapshot payloads plus each immutable Submission file; AI calls are counted apart.
+    # Each immutable Submission file; AI calls are counted apart.
     # Mutable document render attempts are not part of this inventory.
     counts = persisted_counts(database_engine)
     submission_files = sum(
         path is not None for item in sent for path in (item.html_path, item.pdf_path)
     )
-    assert reconciled.payloads_checked == counts["job_snapshots"] + submission_files
+    assert reconciled.payloads_checked == submission_files
     assert reconciled.ai_calls_checked == counts["ai_calls"]
 
 
@@ -333,10 +333,10 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     """
     application_id, document_hash = _ready(services, "Newer Co")
     ready = stored_document(services, application_id)
-    snapshot_id = services.analysis.document_source(application_id).job_snapshot_id
+    job_text_hash = services.analysis.document_source(application_id).job_text_hash
     newer = seed_existing_analysis(
         services,
-        IngestedApplication(application_id=application_id, job_snapshot_id=snapshot_id),
+        IngestedApplication(application_id=application_id, job_text_hash=job_text_hash),
     )
     assert not newer.created_document and newer.document_id == ready.id
 

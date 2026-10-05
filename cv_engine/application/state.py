@@ -1,7 +1,7 @@
 """Pure Application state and action-policy projection (state-and-use-cases.md §4–§9).
 
-The query service captures one consistent read - the Application, its snapshots and
-analyses, the CV document, the Operations, and the Knowledge the basis is computed
+The query service captures one consistent read - the Application with its job text,
+its analyses, the CV document, the Operations, and the Knowledge the basis is computed
 from. This module interprets it once: the basis feeds the states, the states and the
 review reasons feed the actions, and nothing here writes.
 
@@ -84,7 +84,8 @@ _TERMINAL_RECRUITMENT = frozenset({"accepted", "rejected", "withdrawn", "closed"
 @dataclass(frozen=True)
 class ProjectionContext:
     application: dict[str, Any]
-    active_job_snapshot_id: str
+    #: The Application's current job text.
+    job_text_hash: str
     #: Every analysis of the Application, oldest first.
     analyses: tuple[dict[str, Any], ...]
     document: CVDocument | None
@@ -164,9 +165,9 @@ def current_render_error(document: CVDocument | None) -> dict[str, Any] | None:
     return error
 
 
-def _analysis_snapshot(context: ProjectionContext, analysis_id: str) -> str | None:
+def _analysis_job_text(context: ProjectionContext, analysis_id: str) -> str | None:
     return next(
-        (row["job_snapshot_id"] for row in context.analyses if row["id"] == analysis_id), None
+        (row["job_text_hash"] for row in context.analyses if row["id"] == analysis_id), None
     )
 
 
@@ -177,13 +178,13 @@ def derive_warnings(context: ProjectionContext) -> list[WarningView]:
     latest = context.analyses[-1] if context.analyses else None
     if document is not None:
         on_older = (latest is not None and latest["id"] != document.analysis_id) or (
-            _analysis_snapshot(context, document.analysis_id) != context.active_job_snapshot_id
+            _analysis_job_text(context, document.analysis_id) != context.job_text_hash
         )
         if on_older:
             warnings.append(
                 WarningView(
                     code="DOCUMENT_ON_OLDER_ANALYSIS",
-                    message="The document was built on an older analysis or job snapshot.",
+                    message="The document was built on an older analysis or job text.",
                     entity_references={
                         "document_id": document.id,
                         "job_analysis_id": document.analysis_id,
@@ -247,12 +248,12 @@ def derive_actions(
     document_operation_active = (
         active is not None and active.operation_type in DOCUMENT_OPERATION_TYPES
     )
-    active_snapshot_analysed = any(
-        row["job_snapshot_id"] == context.active_job_snapshot_id for row in context.analyses
+    job_text_analysed = any(
+        row["job_text_hash"] == context.job_text_hash for row in context.analyses
     )
 
     allowed: set[str] = set()
-    if not active_snapshot_analysed:
+    if not job_text_analysed:
         allowed.add("analyze")
     if context.analyses:
         allowed.add("edit_matching_configuration")
@@ -295,6 +296,12 @@ def derive_actions(
         block(["edit_matching_configuration"], "MATCHING_CONTEXT_OPERATION_IN_PROGRESS")
     if document_operation_active:
         block(DOCUMENT_MUTATING_ACTIONS, "DOCUMENT_OPERATION_IN_PROGRESS")
+    if (
+        document is not None
+        and _analysis_job_text(context, document.analysis_id) != context.job_text_hash
+    ):
+        # Drafting reads the job text the analysis read, and an edit replaced it.
+        block(["create_draft"], "JOB_TEXT_CHANGED")
     for reason in review:
         block(["approve", "render", "submit"], reason.code)
     if check is ContentCheck.FAILED:
@@ -312,7 +319,7 @@ def derive_actions(
     if document is None:
         recommended = "analyze"
     elif document.content is None:
-        recommended = "create_draft"
+        recommended = "create_draft" if job_text_analysed else "analyze"
     elif check in {ContentCheck.NONE, ContentCheck.OUTDATED}:
         recommended = "check"
     else:
@@ -341,7 +348,7 @@ def project_application_state(context: ProjectionContext) -> ApplicationStateVie
         warnings=derive_warnings(context),
         active_operation=context.active_operation,
         latest_operation=context.latest_operation,
-        active_job_snapshot_id=context.active_job_snapshot_id,
+        job_text_hash=context.job_text_hash,
         latest_analysis_id=latest["id"] if latest is not None else None,
         document_id=document.id if document is not None else None,
         document_hash=document.document_hash if document is not None else None,

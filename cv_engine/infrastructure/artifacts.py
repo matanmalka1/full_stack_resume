@@ -23,7 +23,7 @@ class ArtifactPaths(Protocol):
 class FilesystemArtifactStore:
     """The application's artifact layout, in one place.
 
-    Owns mutable working-draft projections. Immutable snapshot, revision, and
+    Owns mutable working-draft projections. Immutable revision and
     rendered-output writes go through PayloadStore's approved layouts.
     """
 

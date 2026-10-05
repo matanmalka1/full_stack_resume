@@ -59,7 +59,7 @@ export interface paths {
          */
         get: operations["list_applications_api_v1_applications_get"];
         put?: never;
-        /** Create an application and its first immutable job snapshot */
+        /** Create an application with its job text */
         post: operations["create_application_api_v1_applications_post"];
         delete?: never;
         options?: never;
@@ -111,7 +111,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Analyze one exact job snapshot
+         * Analyze the exact job text the client read
          * @description `202` and a `Location`: analysis is a durable Operation (§13).
          *
          *     NeedsReview is not an error here or anywhere else. An analysis that needs a
@@ -163,8 +163,8 @@ export interface paths {
          * @description No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).
          *
          *     Callable from any current status, including `closed`. Every immutable
-         *     JobSnapshot, JobAnalysis, Artifact, Submission, and Operation the
-         *     application produced is untouched;
+         *     JobAnalysis, Artifact, Submission, and Operation the application produced is
+         *     untouched;
          *     only default list/Dashboard projections and duplicate detection stop
          *     surfacing it. The detail endpoint still returns it by ID.
          */
@@ -442,22 +442,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/applications/{application_id}/job-snapshots": {
+    "/api/v1/applications/{application_id}/job-text": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Read immutable job snapshot history */
-        get: operations["job_snapshot_history_api_v1_applications__application_id__job_snapshots_get"];
+        get?: never;
         put?: never;
-        /** Create a new immutable job snapshot */
-        post: operations["create_job_snapshot_api_v1_applications__application_id__job_snapshots_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Replace the job text; refused once the application has a submission */
+        patch: operations["update_job_text_api_v1_applications__application_id__job_text_patch"];
         trace?: never;
     };
     "/api/v1/applications/{application_id}/next-action": {
@@ -980,8 +979,6 @@ export interface components {
         };
         /** ApplicationDetailResponse */
         ApplicationDetailResponse: {
-            /** Active Job Snapshot Id */
-            active_job_snapshot_id: string;
             active_operation?: components["schemas"]["OperationResponse"] | null;
             /** Allowed Recruitment Transitions */
             allowed_recruitment_transitions: ("saved" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed")[];
@@ -999,6 +996,9 @@ export interface components {
             document_hash?: string | null;
             /** Document Id */
             document_id?: string | null;
+            job_posting: components["schemas"]["JobPostingResponse"];
+            /** Job Text Hash */
+            job_text_hash: string;
             /** Last Render Error */
             last_render_error?: {
                 [key: string]: unknown;
@@ -1007,7 +1007,6 @@ export interface components {
             /** Latest Analysis Id */
             latest_analysis_id?: string | null;
             latest_operation?: components["schemas"]["OperationResponse"] | null;
-            latest_snapshot: components["schemas"]["JobSnapshotResponse"];
             preparation_state: components["schemas"]["PreparationState"];
             /** Recommended Action */
             recommended_action?: string | null;
@@ -1024,8 +1023,6 @@ export interface components {
         };
         /** ApplicationListItemResponse */
         ApplicationListItemResponse: {
-            /** Active Job Snapshot Id */
-            active_job_snapshot_id: string;
             active_operation?: components["schemas"]["OperationResponse"] | null;
             /** Approved At */
             approved_at?: string | null;
@@ -1058,6 +1055,8 @@ export interface components {
             id: string;
             /** Is Closed */
             is_closed: boolean;
+            /** Job Text Hash */
+            job_text_hash: string;
             /** Language */
             language?: string | null;
             /** Last Render Error */
@@ -1241,8 +1240,6 @@ export interface components {
          *     presentation rather than a failure.
          */
         ApplicationStateResponse: {
-            /** Active Job Snapshot Id */
-            active_job_snapshot_id: string;
             active_operation?: components["schemas"]["OperationResponse"] | null;
             /** Approved At */
             approved_at?: string | null;
@@ -1257,6 +1254,8 @@ export interface components {
             document_hash?: string | null;
             /** Document Id */
             document_id?: string | null;
+            /** Job Text Hash */
+            job_text_hash: string;
             /** Last Render Error */
             last_render_error?: {
                 [key: string]: unknown;
@@ -1539,13 +1538,13 @@ export interface components {
          * CreateAnalysisRequest
          * @description What `POST /applications/{id}/analyses` accepts.
          *
-         *     `job_snapshot_id` is explicit: an analyze command that picked its own source
-         *     could classify something other than what the user was looking at.
+         *     `job_text_hash` is explicit: an analyze command that picked up whatever text is
+         *     current could classify something other than what the user was looking at.
          */
         CreateAnalysisRequest: {
             emphasis_override?: components["schemas"]["Emphasis"] | null;
-            /** Job Snapshot Id */
-            job_snapshot_id: string;
+            /** Job Text Hash */
+            job_text_hash: string;
             /** Language Override */
             language_override?: ("en" | "he") | null;
             profile_override?: components["schemas"]["ProfileName"] | null;
@@ -1579,8 +1578,8 @@ export interface components {
             application_id: string;
             /** Duplicate Matches */
             duplicate_matches: components["schemas"]["DuplicateMatchResponse"][];
-            /** Job Snapshot Id */
-            job_snapshot_id: string;
+            /** Job Text Hash */
+            job_text_hash: string;
             /** Warnings */
             warnings: string[];
         };
@@ -1594,27 +1593,6 @@ export interface components {
              * @constant
              */
             provider: "openai";
-        };
-        /** CreateJobSnapshotRequest */
-        CreateJobSnapshotRequest: {
-            /** Job Text */
-            job_text: string;
-            /**
-             * Source Metadata
-             * @default {}
-             */
-            source_metadata: {
-                [key: string]: unknown;
-            };
-            /** Source Url */
-            source_url?: string | null;
-        };
-        /** CreateJobSnapshotResponse */
-        CreateJobSnapshotResponse: {
-            /** Application Id */
-            application_id: string;
-            /** Job Snapshot Id */
-            job_snapshot_id: string;
         };
         /** DecisionExportResponse */
         DecisionExportResponse: {
@@ -2165,8 +2143,8 @@ export interface components {
             gaps: components["schemas"]["GapResponse"][];
             /** Id */
             id: string;
-            /** Job Snapshot Id */
-            job_snapshot_id: string;
+            /** Job Text Hash */
+            job_text_hash: string;
             /** Model */
             model: string;
             /** Provider */
@@ -2174,46 +2152,21 @@ export interface components {
             /** Version Number */
             version_number: number;
         };
-        /** JobSnapshotHistoryItemResponse */
-        JobSnapshotHistoryItemResponse: {
-            /** Captured At */
-            captured_at: string;
-            /** Id */
-            id: string;
-            /** Job Text */
-            job_text: string | null;
-            /** Source Url */
-            source_url: string | null;
-            /** Version Number */
-            version_number: number;
-        };
-        /** JobSnapshotHistoryResponse */
-        JobSnapshotHistoryResponse: {
-            /** Active Job Snapshot Id */
-            active_job_snapshot_id: string;
-            /** Items */
-            items: components["schemas"]["JobSnapshotHistoryItemResponse"][];
-        };
-        /** JobSnapshotResponse */
-        JobSnapshotResponse: {
-            /** Application Id */
-            application_id: string;
-            /** Captured At */
-            captured_at: string;
-            /** Id */
-            id: string;
+        /**
+         * JobPostingResponse
+         * @description The Application's job text. `locked` once the Application has a Submission.
+         */
+        JobPostingResponse: {
             /** Job Text */
             job_text: string;
-            /** Source Hash */
-            source_hash: string;
-            /** Source Metadata */
-            source_metadata: {
-                [key: string]: unknown;
-            };
+            /** Job Text Hash */
+            job_text_hash: string;
+            /** Job Text Updated At */
+            job_text_updated_at: string;
+            /** Locked */
+            locked: boolean;
             /** Source Url */
             source_url?: string | null;
-            /** Version Number */
-            version_number: number;
         };
         /** KnowledgeVersions */
         KnowledgeVersions: {
@@ -2608,7 +2561,7 @@ export interface components {
          * SubmissionResponse
          * @description A recorded submission, with any warning the caller should see.
          *
-         *     `warnings` carries `DOCUMENT_ON_OLDER_ANALYSIS` when the active snapshot or
+         *     `warnings` carries `DOCUMENT_ON_OLDER_ANALYSIS` when the job text or the
          *     analysis has moved on from the document's (§18). It is reported, not raised.
          */
         SubmissionResponse: {
@@ -2725,6 +2678,27 @@ export interface components {
              * @default []
              */
             claim_removals: string[];
+        };
+        /**
+         * UpdateJobTextRequest
+         * @description Replace the job text the client last read; refused once a Submission locked it.
+         */
+        UpdateJobTextRequest: {
+            /** Expected Job Text Hash */
+            expected_job_text_hash: string;
+            /** Job Text */
+            job_text: string;
+            /** Source Url */
+            source_url?: string | null;
+        };
+        /** UpdateJobTextResponse */
+        UpdateJobTextResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Job Text Hash */
+            job_text_hash: string;
+            /** Job Text Updated At */
+            job_text_updated_at: string;
         };
         /** UpdateSettingsRequest */
         UpdateSettingsRequest: {
@@ -3559,38 +3533,7 @@ export interface operations {
             };
         };
     };
-    job_snapshot_history_api_v1_applications__application_id__job_snapshots_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobSnapshotHistoryResponse"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    create_job_snapshot_api_v1_applications__application_id__job_snapshots_post: {
+    update_job_text_api_v1_applications__application_id__job_text_patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -3601,17 +3544,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateJobSnapshotRequest"];
+                "application/json": components["schemas"]["UpdateJobTextRequest"];
             };
         };
         responses: {
             /** @description Successful Response */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreateJobSnapshotResponse"];
+                    "application/json": components["schemas"]["UpdateJobTextResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

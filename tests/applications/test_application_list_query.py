@@ -49,7 +49,7 @@ def item(
         is_closed=is_closed,
         preparation_state=preparation_state,
         content_check=ContentCheck.NONE,
-        active_job_snapshot_id="snap-1",
+        job_text_hash="1" * 64,
         created_at=created_at,
         updated_at=updated_at,
     )

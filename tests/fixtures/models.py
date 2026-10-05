@@ -13,7 +13,7 @@ from cv_engine.runtime.composition import Services
 class WorkflowSetup:
     services: Services
     application_id: str
-    snapshot_id: str
+    job_text_hash: str
     analysis_id: str | None = None
     document_hash: str | None = None
     draft_report: Any = None

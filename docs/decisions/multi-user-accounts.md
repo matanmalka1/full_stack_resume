@@ -63,8 +63,8 @@ isolation.
    stays a non-goal.
 9. **An account ends by deactivation, never deletion.** The contract is deactivate,
    revoke every session, and anonymize the PII in a named list of mutable fields
-   (state-and-use-cases §23). Immutable triggers are not bypassed for a user lifecycle, and immutable records (Submissions, JobSnapshots,
-   the AI call log, audit, fact events) stay, owned by a user row that no longer
+   (state-and-use-cases §23). Immutable triggers are not bypassed for a user lifecycle, and immutable records (Submissions and the job text they
+   locked, the AI call log, audit, fact events) stay, owned by a user row that no longer
    identifies anyone. A hard delete is only ever an explicit, separately approved
    operator procedure, never part of the API.
 10. **Rate limiting and AI quota live in PostgreSQL.** There is no Redis (architecture
@@ -181,8 +181,8 @@ avoid.
 
 ## 6. Open items
 
-1. **PII retained in immutable records after deactivation.** JobSnapshots,
-   Submissions, the AI call log (`ai_calls`), and `fact_events.fact_json` keep the candidate's name
+1. **PII retained in immutable records after deactivation.** Job text locked by a
+   Submission, Submissions, the AI call log (`ai_calls`), and `fact_events.fact_json` keep the candidate's name
    and contacts. Anonymization makes them unreachable and unlinked to an identity; it
    does not erase them. Whether that is acceptable matters once there is a second user;
    it is a legal decision, not a technical one.

@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 
-from cv_engine.application.commands import IngestCommand
 from cv_engine.application.maintenance import ORPHAN_MIN_AGE
 from cv_engine.infrastructure.object_store import LocalObjectStore, S3ObjectStore
 from cv_engine.infrastructure.payloads import PayloadStore
@@ -21,28 +20,29 @@ def _age(path) -> None:
 
 
 def _store(services, application_id: str, *, old: bool) -> str:
-    destination = services.payloads.snapshot_path(application_id, "snapshot")
+    destination = services.payloads.submission_path(application_id, "submission", suffix=".pdf")
     stored = services.payloads.commit(
-        destination, payload=b"job text", validate=lambda _payload: True
+        destination, payload=b"%PDF-1.4", validate=lambda _payload: True
     )
     if old:
         _age(destination)
     return stored.project_relative
 
 
-def test_inspection_lists_old_unregistered_payloads_and_deletes_nothing(services) -> None:
+def test_inspection_lists_old_unregistered_payloads_and_deletes_nothing(
+    submitted_application,
+) -> None:
     """A fresh write may still be on its way to registration; a registered one is evidence."""
-    services.applications.ingest(
-        IngestCommand(company="Kept Co", target_role="Developer", job_text="Python", client="web")
-    )
+    services, _application_id = submitted_application("Kept Co")
     registered = services.payloads.payload_inventory()
-    assert len(registered) == 1
-    _age(services.paths.root / registered[0])
+    assert len(registered) == 2  # the Submission's HTML and PDF copies
+    for reference in registered:
+        _age(services.paths.root / reference)
     orphan = _store(services, "abandoned", old=True)
     fresh = _store(services, "in-flight", old=False)
 
     assert services.maintenance.inspect_orphans().candidates == [orphan]
-    assert set(services.payloads.payload_inventory()) == {registered[0], orphan, fresh}
+    assert set(services.payloads.payload_inventory()) == {*registered, orphan, fresh}
 
 
 def test_no_store_can_delete_an_immutable_payload() -> None:

@@ -14,7 +14,6 @@ from ...errors import (
 from ...ports.analysis_plans import AnalysisKnowledgeSource
 from ...ports.application_projections import ApplicationProjectionReader
 from ...ports.documents import DocumentStore, DocumentSubmissionStore
-from ...ports.outbound import SnapshotPayloadStore
 from ...ports.transactions import ReadTransaction, TransactionManager
 from ...queries import (
     ApplicationDetailView,
@@ -26,12 +25,11 @@ from ...queries import (
     application_list_item_view,
     application_view,
     document_view,
+    job_posting_view,
     narrow_application_list,
     recruitment_timeline_view,
-    snapshot_view,
     submission_view,
 )
-from ...queries.views_prep import JobSnapshotHistoryItem, JobSnapshotHistoryView
 from ...state import ProjectionContext, project_application_state
 from ..documents import load_knowledge
 
@@ -52,50 +50,22 @@ class ApplicationQueryService:
         documents: DocumentStore,
         submissions: DocumentSubmissionStore,
         knowledge: AnalysisKnowledgeSource,
-        payloads: SnapshotPayloadStore,
     ):
         self._transactions = transactions
         self._projections = projections
         self._documents = documents
         self._submissions = submissions
         self._knowledge = knowledge
-        self.snapshot_payloads = payloads
 
     def load_knowledge(self):
         return load_knowledge(self._knowledge)
 
-    def job_snapshot_history(self, application_id: str) -> JobSnapshotHistoryView:
-        with self._transactions.read() as transaction:
-            self._projections.application(transaction, application_id)
-            active = self._projections.latest_snapshot(transaction, application_id)
-            records = self._projections.snapshots(transaction, application_id)
-        items = []
-        for record in records:
-            try:
-                text = self.snapshot_payloads.read_snapshot(
-                    record["payload_path"], record["source_hash"]
-                )
-            except (OSError, ValueError):
-                # Missing, unreadable or unverified content is never reconstructed.
-                text = None
-            items.append(
-                JobSnapshotHistoryItem(
-                    id=record["id"],
-                    version_number=record["version_number"],
-                    captured_at=record["captured_at"],
-                    source_url=record.get("source_url"),
-                    job_text=text,
-                )
-            )
-        return JobSnapshotHistoryView(active_job_snapshot_id=active["id"], items=items)
-
     def _state_inputs(self, transaction: ReadTransaction, application_record, knowledge):
         application_id = application_record["id"]
-        snapshot_record = self._projections.latest_snapshot(transaction, application_id)
         analyses = self._projections.analyses(transaction, application_id)
         context = ProjectionContext(
             application=application_record,
-            active_job_snapshot_id=snapshot_record["id"],
+            job_text_hash=application_record["job_text_hash"],
             analyses=tuple(analyses),
             document=self._documents.document(transaction, application_id),
             knowledge=knowledge,
@@ -106,7 +76,7 @@ class ApplicationQueryService:
                 self._projections.has_active_matching_context_operation(transaction, application_id)
             ),
         )
-        return context, snapshot_record, analyses
+        return context, analyses
 
     def list_applications(self, query: ApplicationListQuery | None = None) -> ApplicationListView:
         """One page of the Application list, narrowed and ordered by `query`.
@@ -120,7 +90,7 @@ class ApplicationQueryService:
             with self._transactions.read() as transaction:
                 captured = []
                 for row in self._projections.applications(transaction):
-                    context, _snapshot, analyses = self._state_inputs(transaction, row, knowledge)
+                    context, analyses = self._state_inputs(transaction, row, knowledge)
                     captured.append((row, context, analyses))
             items = []
             for row, context, analyses in captured:
@@ -136,8 +106,10 @@ class ApplicationQueryService:
         try:
             with self._transactions.read() as transaction:
                 application_record = self._projections.application(transaction, application_id)
-                context, snapshot_record, analyses = self._state_inputs(
-                    transaction, application_record, knowledge
+                context, analyses = self._state_inputs(transaction, application_record, knowledge)
+                posting = job_posting_view(
+                    application_record,
+                    locked=self._projections.has_submission(transaction, application_id),
                 )
                 application = application_view(
                     application_record, analyses[-1]["analysis"] if analyses else None
@@ -149,12 +121,6 @@ class ApplicationQueryService:
                     self._projections.audit_records(transaction, application_id),
                 )
             state = project_application_state(context)
-            snapshot = snapshot_view(
-                snapshot_record,
-                self.snapshot_payloads.read_snapshot(
-                    snapshot_record["payload_path"], snapshot_record["source_hash"]
-                ),
-            )
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
         except (TypeError, ValueError) as exc:
@@ -162,7 +128,7 @@ class ApplicationQueryService:
         return ApplicationDetailView(
             **state.model_dump(mode="python"),
             application=application,
-            latest_snapshot=snapshot,
+            job_posting=posting,
             latest_analysis=latest,
             allowed_recruitment_transitions=list(
                 user_transition_targets(ApplicationStatus(application.current_status))

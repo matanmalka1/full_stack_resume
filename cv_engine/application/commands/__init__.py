@@ -34,8 +34,6 @@ from .prep import (
     CheckDocumentCommand,
     ClaimAddition,
     ClaimPatch,
-    CreatedJobSnapshot,
-    CreateJobSnapshotCommand,
     DecisionMarkdownExport,
     DocumentCheckResult,
     DocumentMutationResult,
@@ -53,7 +51,9 @@ from .prep import (
     RenderResult,
     UpdateApplicationNotesCommand,
     UpdatedApplicationNotes,
+    UpdatedJobText,
     UpdateDocumentCommand,
+    UpdateJobTextCommand,
 )
 from .shared import ReconciliationResult
 from .tracking import (
@@ -74,7 +74,7 @@ __all__ = [
     "DuplicateMatchReason",
     "IngestCommand",
     "DuplicateCheckCommand",
-    "CreateJobSnapshotCommand",
+    "UpdateJobTextCommand",
     "UpdateApplicationNotesCommand",
     "CloseApplicationCommand",
     "DeleteApplicationCommand",
@@ -100,7 +100,7 @@ __all__ = [
     "DuplicateMatch",
     "IngestedApplication",
     "DuplicateCheckResult",
-    "CreatedJobSnapshot",
+    "UpdatedJobText",
     "AnalysisResult",
     "AnalysisDecisionsResult",
     "DraftResult",

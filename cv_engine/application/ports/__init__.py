@@ -7,7 +7,6 @@ from .application_intake import (
     AuditLogWriter,
     InitialRecruitmentEventWriter,
     IntakeApplicationStore,
-    JobSnapshotStore,
 )
 from .application_projections import ApplicationProjectionReader
 from .knowledge_lifecycle import KnowledgeLifecycleStore
@@ -21,18 +20,18 @@ from .outbound import (
     AssessClaimSupportContext,
     DraftResumeContext,
     KnowledgeStore,
+    PayloadVerifier,
     RegenerateClaimContext,
     RegenerateSectionContext,
     Renderer,
     RevisionPayloadStore,
-    SnapshotPayloadStore,
 )
 from .settings import SettingsRepository, SettingsStore
 from .transactions import ReadTransaction, TransactionManager, WriteTransaction
 from .values import (
     ArtifactStream,
     DraftPaths,
-    SnapshotPayload,
+    PayloadReference,
     StoredDraft,
     TaskContract,
     TaskContracts,
@@ -53,9 +52,10 @@ __all__ = [
     "KnowledgeStore",
     "InitialRecruitmentEventWriter",
     "IntakeApplicationStore",
-    "JobSnapshotStore",
     "OperationClientStore",
     "OperationExecutionStore",
+    "PayloadReference",
+    "PayloadVerifier",
     "RegenerateClaimContext",
     "RegenerateSectionContext",
     "Renderer",
@@ -63,8 +63,6 @@ __all__ = [
     "RevisionPayloadStore",
     "SettingsRepository",
     "SettingsStore",
-    "SnapshotPayload",
-    "SnapshotPayloadStore",
     "StoredDraft",
     "TaskContract",
     "TaskContracts",

@@ -147,7 +147,7 @@ def test_logs_summarise_requests_keep_tracebacks_in_file_and_redact_secrets(
 def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api, services) -> None:
     """Inventory excludes fresh writes; the removed reclaim route cannot delete evidence.
 
-    Ingest registers the snapshot without registering an artifact version, and a
+    Ingest stores the job text in the database and writes no payload, and a
     derived working projection is not a payload, so neither is a candidate.
     """
     from cv_engine.application.commands import IngestCommand
@@ -157,7 +157,9 @@ def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api
             company="Inventory Co", target_role="Engineer", job_text="Stored posting", client="web"
         )
     )
-    orphan = services.payloads.commit_snapshot("unregistered", "snapshot", "pending payload")
+    orphan = services.payloads.commit_submission_file(
+        "unregistered", "submission", suffix=".pdf", payload=b"pending payload"
+    )
     response = api.get(f"{API_PREFIX}/maintenance/orphans")
     assert response.status_code == 200, response.text
     assert response.json() == {"candidates": []}
@@ -169,14 +171,16 @@ def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api
     for reference in services.payloads.payload_inventory():
         os.utime(services.paths.root / reference, (stamp, stamp))
     os.utime(projection, (stamp, stamp))
-    fresh = services.payloads.commit_snapshot("fresh", "snapshot", "in-flight payload")
+    fresh = services.payloads.commit_submission_file(
+        "fresh", "submission", suffix=".pdf", payload=b"in-flight payload"
+    )
     before = services.payloads.payload_inventory()
     response = api.get(f"{API_PREFIX}/maintenance/orphans")
     assert response.status_code == 200, response.text
     assert response.json() == {"candidates": [orphan.reference]}
     assert services.payloads.payload_inventory() == before
-    assert services.payloads.read_snapshot(orphan.reference, orphan.sha256) == "pending payload"
-    assert ingested.job_snapshot_id
+    assert services.payloads.verify_payload(orphan.reference, orphan.sha256) == "ok"
+    assert ingested.job_text_hash
 
     response = api.post(
         f"{API_PREFIX}/maintenance/orphans/reclaim",
@@ -185,8 +189,8 @@ def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api
     assert response.status_code == 404, response.text
     assert services.maintenance.inspect_orphans().candidates == [orphan.reference]
     assert services.payloads.payload_inventory() == before
-    assert services.payloads.read_snapshot(orphan.reference, orphan.sha256) == "pending payload"
-    assert services.payloads.read_snapshot(fresh.reference, fresh.sha256) == "in-flight payload"
+    assert services.payloads.verify_payload(orphan.reference, orphan.sha256) == "ok"
+    assert services.payloads.verify_payload(fresh.reference, fresh.sha256) == "ok"
     assert projection.read_text() == "derived"
 
 

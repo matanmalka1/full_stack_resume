@@ -94,8 +94,9 @@ Evidence: `tests/drafts/` (`test_document_basis.py`, `test_state_projection.py`,
   Application is enforced by the database.
 - A running context Operation blocks voluntary editing; a document that moved while AI
   ran is not replaced.
-- Snapshot writes are exact, atomic, and refuse repeats; duplicate intake requires
-  acknowledgement.
+- Job text is stored exactly; an edit names the text it replaces, is atomic with its
+  audit record, and is refused once a Submission locked the text (by the store and by
+  the database trigger); duplicate intake requires acknowledgement.
 
 Outcomes are exact Conflict/Precondition results with no overwrite or partial state.
 
@@ -241,7 +242,7 @@ Every new screen must include an axe accessibility scan.
 
 `frontend/e2e/integration/intake.spec.ts` covers browser-to-API intake, persisted
 detail after reload, list navigation, duplicate detection and explicit acknowledgement,
-and preservation of the original snapshot. It runs without a provider; no analysis
+and preservation of the original job text. It runs without a provider; no analysis
 or asynchronous Operation is requested, so this journey needs no worker.
 
 `frontend/e2e/integration/preparation.spec.ts` covers the successful analysis →
@@ -426,7 +427,7 @@ Postings live in `tests/fixtures/` and are replaceable; no specification names o
 ### Semantic-analysis acceptance
 
 - AI analysis is primary; legacy keyword/concept gaps cannot re-enter or veto it.
-- Quotes are attested against the snapshot, and an exact quote does not authorize an
+- Quotes are attested against the exact job text the analysis read, and an exact quote does not authorize an
   incorrect interpretation.
 - A fact the store lacks, or a non-canonical fact, is dropped and disclosed, and
   positive coverage becomes unknown. A canonical boundary still caps a match.

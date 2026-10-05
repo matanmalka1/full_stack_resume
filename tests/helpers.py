@@ -84,7 +84,7 @@ def seed_existing_analysis(
         activation_command
         or AnalyzeCommand(
             application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
+            job_text_hash=ingested.job_text_hash,
         ),
         PreparedAnalysis(
             result=analysis,
@@ -98,7 +98,7 @@ def seed_existing_analysis(
 
 def seed_analysis_for_command(services: Services, command: AnalyzeCommand, **analysis_values):
     """Seed an existing analysis explicitly for a downstream test scenario."""
-    services.analysis.snapshot_source(command.application_id, command.job_snapshot_id)
+    services.analysis.job_text_source(command.application_id, command.job_text_hash)
     return seed_existing_analysis(
         services,
         command,
@@ -222,7 +222,7 @@ def composed_content(services: Services, application_id: str, chosen=None):
     return compose_content(
         application_id,
         document.analysis_id,
-        source.job_snapshot_id,
+        source.job_text_hash,
         source.analysis,
         services.drafts.load_knowledge(),
         chosen,

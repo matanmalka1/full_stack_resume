@@ -30,7 +30,8 @@ def requirement_id(
 
     The payload key remains `extractor` so the identity algorithm's first version
     keeps its existing ids; the value is the identity-algorithm version, not the
-    prompt or task version.
+    prompt or task version. `snapshot` stays for the same reason: its value is the
+    normalized hash of the job text the requirement was read from.
     """
     payload: dict[str, object] = {
         "snapshot": normalized_hash,

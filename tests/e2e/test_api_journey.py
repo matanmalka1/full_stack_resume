@@ -145,7 +145,7 @@ def test_the_full_api_journey_reaches_ready_offline(
     )
     assert created.status_code == 201, created.text
     application_id = created.json()["application_id"]
-    job_snapshot_id = created.json()["job_snapshot_id"]
+    job_text_hash = created.json()["job_text_hash"]
     document_path = f"/applications/{application_id}/document"
 
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
@@ -158,7 +158,7 @@ def test_the_full_api_journey_reaches_ready_offline(
         _post(
             ai_api_worker,
             f"/applications/{application_id}/analyses",
-            {"job_snapshot_id": job_snapshot_id},
+            {"job_text_hash": job_text_hash},
         ),
     )
     sources = _outputs(analyzed)
@@ -307,7 +307,7 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
         _post(
             ai_api_worker,
             f"/applications/{application_id}/analyses",
-            {"job_snapshot_id": created.json()["job_snapshot_id"]},
+            {"job_text_hash": created.json()["job_text_hash"]},
         ),
     )
     original = _outputs(analyzed)

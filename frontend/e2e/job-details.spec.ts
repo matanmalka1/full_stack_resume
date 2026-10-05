@@ -9,7 +9,7 @@ const detail = {
   content_check: "none",
   review_reasons: [],
   warnings: [],
-  active_job_snapshot_id: "snap-1",
+  job_text_hash: "c".repeat(64),
   available_actions: ["analyze"],
   blocked_actions: [],
   recommended_action: "analyze",
@@ -24,15 +24,12 @@ const detail = {
     created_at: "2026-08-24T07:00:00Z",
     updated_at: "2026-08-25T08:00:00Z",
   },
-  latest_snapshot: {
-    id: "snap-1",
-    application_id: "app-1",
-    version_number: 1,
+  job_posting: {
     job_text: "Senior Backend Engineer",
     source_url: "https://example.com/jobs/1",
-    captured_at: "2026-08-24T07:00:00Z",
-    source_metadata: {},
-    source_hash: "hash-1",
+    job_text_hash: "c".repeat(64),
+    job_text_updated_at: "2026-08-24T07:00:00Z",
+    locked: false,
   },
 };
 
@@ -51,7 +48,7 @@ test.describe("the Job Detail screen", () => {
 
     await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
     await page.getByRole("button", { name: "עדכון נוסח המשרה" }).click();
-    const updateDialog = page.getByRole("dialog", { name: "יצירת תצלום משרה חדש" });
+    const updateDialog = page.getByRole("dialog", { name: "עריכת נוסח המשרה" });
     await expect(updateDialog).toBeVisible();
     await expect(updateDialog).toHaveCSS("opacity", "1");
     const dialogResults = await new AxeBuilder({ page })

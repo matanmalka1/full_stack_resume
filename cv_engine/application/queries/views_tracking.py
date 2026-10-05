@@ -44,7 +44,7 @@ class SubmissionView(BoundaryDTO):
     application_id: str
     submission_type: str
     submitted_at: str
-    job_snapshot_id: str | None = None
+    job_text_hash: str | None = None
     document_hash: str | None = None
     content: DraftDocument | None = None
     html_sha256: str | None = None

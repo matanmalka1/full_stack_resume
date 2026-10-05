@@ -17,7 +17,7 @@ interface BannerContent {
 const bannerContent = (classification: Classification | null, supersededAnalysis: boolean): BannerContent => {
   if (supersededAnalysis) {
     return {
-      body: "הניתוח האחרון שנשמר נעשה מול תצלום משרה קודם, ולכן אינו מוצג כאן. ניתוח חדש מול התצלום הפעיל הוא מה שיציג את הסיווג העדכני.",
+      body: "הניתוח האחרון שנשמר נעשה מול נוסח משרה קודם, ולכן אינו מוצג כאן. ניתוח חדש מול הנוסח הנוכחי הוא מה שיציג את הסיווג העדכני.",
       title: "הניתוח שעל המסך אינו הניתוח הפעיל",
       tone: "warning",
     };

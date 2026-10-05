@@ -25,7 +25,7 @@ from .views_prep import (
     DraftOutlineView,
     DraftSectionView,
     JobAnalysisView,
-    JobSnapshotView,
+    JobPostingView,
 )
 from .views_shared import ApplicationListItemView, ApplicationStateView, ApplicationView
 from .views_tracking import RecruitmentTimelineItemView, SubmissionView
@@ -41,10 +41,23 @@ def _fit_projection(analysis: JobAnalysis | None) -> dict[str, Any]:
     }
 
 
+#: The job posting's own columns: detail reads them as `JobPostingView`, and the
+#: state projection carries `job_text_hash`, so the Application view leaves them out.
+_JOB_POSTING_COLUMNS = frozenset(
+    {"job_text", "job_text_hash", "job_normalized_hash", "job_text_updated_at"}
+)
+
+
+def _application_fields(record: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in record.items() if key not in _JOB_POSTING_COLUMNS}
+
+
 def application_view(
     record: dict[str, Any], analysis: JobAnalysis | None = None
 ) -> ApplicationView:
-    return ApplicationView.model_validate({**record, **_fit_projection(analysis)})
+    return ApplicationView.model_validate(
+        {**_application_fields(record), **_fit_projection(analysis)}
+    )
 
 
 def _claim_view(claim: Any) -> DraftClaimView:
@@ -156,7 +169,7 @@ def submission_view(submission: DocumentSubmission) -> SubmissionView:
         application_id=submission.application_id,
         submission_type=submission.submission_type,
         submitted_at=submission.submitted_at,
-        job_snapshot_id=submission.job_snapshot_id,
+        job_text_hash=submission.job_text_hash,
         document_hash=submission.document_hash,
         content=submission.content,
         html_sha256=submission.html_sha256,
@@ -170,7 +183,7 @@ def application_list_item_view(
 ) -> ApplicationListItemView:
     return ApplicationListItemView.model_validate(
         {
-            **record,
+            **_application_fields(record),
             **state.model_dump(mode="python"),
             **_fit_projection(analysis),
             "is_closed": application_is_closed(state.terminal_outcome, state.recruitment_status),
@@ -231,18 +244,13 @@ def recruitment_timeline_view(
     )
 
 
-def snapshot_view(record: dict[str, Any], job_text: str) -> JobSnapshotView:
-    return JobSnapshotView.model_validate(
-        {
-            **{
-                key: record.get(key)
-                for key in JobSnapshotView.model_fields
-                if key not in {"source_metadata", "job_text"}
-            },
-            "job_text": job_text,
-            "source_metadata": json.loads(record.get("source_metadata_json") or "{}"),
-            "source_hash": record["source_hash"],
-        }
+def job_posting_view(record: dict[str, Any], *, locked: bool) -> JobPostingView:
+    return JobPostingView(
+        job_text=record["job_text"],
+        source_url=record.get("source_url"),
+        job_text_hash=record["job_text_hash"],
+        job_text_updated_at=record["job_text_updated_at"],
+        locked=locked,
     )
 
 

@@ -56,20 +56,22 @@ class DocumentSource:
 
     document: CVDocument
     analysis: JobAnalysis
-    #: The JobSnapshot the document's analysis was made of.
-    job_snapshot_id: str
-    #: The newest analysis of the Application and the active JobSnapshot.
+    #: The exact job text the document's analysis read.
+    job_text_hash: str
+    #: The newest analysis of the Application, and the Application's job text now.
     latest_analysis_id: str | None
-    active_snapshot_id: str
+    current_job_text_hash: str
     deleted_at: str | None
+
+    @property
+    def job_text_changed(self) -> bool:
+        """The job text was edited after the document's analysis read it."""
+        return self.job_text_hash != self.current_job_text_hash
 
     @property
     def on_older_analysis(self) -> bool:
         """§8 `DOCUMENT_ON_OLDER_ANALYSIS`."""
-        return (
-            self.latest_analysis_id != self.document.analysis_id
-            or self.job_snapshot_id != self.active_snapshot_id
-        )
+        return self.latest_analysis_id != self.document.analysis_id or self.job_text_changed
 
 
 def _source(
@@ -84,9 +86,9 @@ def _source(
     return DocumentSource(
         document=document,
         analysis=context.analysis,
-        job_snapshot_id=context.job_snapshot_id,
+        job_text_hash=context.job_text_hash,
         latest_analysis_id=context.active_analysis_id,
-        active_snapshot_id=context.active_snapshot_id,
+        current_job_text_hash=context.current_job_text_hash,
         deleted_at=context.deleted_at,
     )
 
@@ -145,7 +147,7 @@ def refuse_review_reasons(document: CVDocument, knowledge: Knowledge) -> None:
 def compose_content(
     application_id: str,
     analysis_id: str,
-    job_snapshot_id: str,
+    job_text_hash: str,
     analysis: JobAnalysis,
     knowledge: Knowledge,
     chosen: Mapping[str, Iterable[str]] | None = None,
@@ -158,7 +160,7 @@ def compose_content(
     try:
         return build_draft(
             application_id=application_id,
-            job_snapshot_id=job_snapshot_id,
+            job_text_hash=job_text_hash,
             job_analysis_id=analysis_id,
             analysis=analysis,
             profile=knowledge.profiles.get(analysis.profile),
@@ -177,7 +179,7 @@ def validate_document(source: DocumentSource, knowledge: Knowledge) -> Validatio
     """§15: the validation contract against the current content and current Knowledge.
 
     The content's own binding is checked first: content that names another
-    Application, analysis or snapshot than the document it sits in is not evidence of
+    Application, analysis or job text than the document it sits in is not evidence of
     anything, and fails as a hard content finding rather than being validated.
     """
     document = source.document
@@ -189,7 +191,7 @@ def validate_document(source: DocumentSource, knowledge: Knowledge) -> Validatio
         for name, actual, expected in (
             ("application", content.application_id, document.application_id),
             ("job analysis", content.job_analysis_id, document.analysis_id),
-            ("job snapshot", content.job_snapshot_id, source.job_snapshot_id),
+            ("job text", content.job_text_hash, source.job_text_hash),
         )
         if actual != expected
     ]

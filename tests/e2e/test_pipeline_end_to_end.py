@@ -85,12 +85,12 @@ def test_pipeline_reaches_ready_and_reconciles(
     )
     (sent,) = stored_submissions(services, app_id)
     assert sent.content == stored_document(services, app_id).content
-    assert sent.job_snapshot_id == ingested.job_snapshot_id
+    assert sent.job_text_hash == ingested.job_text_hash
     report = services.maintenance.reconcile()
     assert report.passed, report.problems
     counts = persisted_counts(database_engine)
     submission_files = sum(path is not None for path in (sent.html_path, sent.pdf_path))
-    assert report.payloads_checked == counts["job_snapshots"] + submission_files
+    assert report.payloads_checked == submission_files
     assert report.ai_calls_checked == counts["ai_calls"]
     assert services.maintenance.inspect_orphans().candidates == []
     assert services.queries.application_detail(app_id).application.current_status == "applied"
@@ -128,14 +128,3 @@ def test_reconcile_reports_tampered_submission_without_repair(submitted_applicat
     assert any("hash mismatch" in problem for problem in report.problems)
     assert path.read_bytes() == tampered
     assert stored_submissions(services, app_id) == [sent]
-
-
-def test_reconcile_verifies_job_snapshot_payloads(services):
-    """§19b requires JobSnapshot verification, including without any Submission."""
-    ingested, _ = seed_document(services, "Snapshot Integrity")
-    reference = services.payloads.snapshot_path(ingested.application_id, ingested.job_snapshot_id)
-    reference.write_bytes(b"posting changed after capture")
-    report = services.maintenance.reconcile()
-    assert not report.passed
-    assert report.problems
-    assert reference.read_bytes() == b"posting changed after capture"

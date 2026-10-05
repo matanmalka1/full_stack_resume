@@ -29,11 +29,11 @@ export const analysisViewState = ({
     return "processing";
   }
 
-  /* A terminal run cannot hide a posting captured after it finished. That Operation is
+  /* A terminal run cannot hide a posting edited after it finished. That Operation is
      history for an older context; the current projection owns the screen. */
-  const snapshotTime = detail.latest_snapshot == null ? NaN : Date.parse(detail.latest_snapshot.captured_at);
+  const editedTime = detail.job_posting == null ? NaN : Date.parse(detail.job_posting.job_text_updated_at);
   const finishedTime = operation.finished_at == null ? NaN : Date.parse(operation.finished_at);
-  if (Number.isFinite(snapshotTime) && Number.isFinite(finishedTime) && snapshotTime > finishedTime) {
+  if (Number.isFinite(editedTime) && Number.isFinite(finishedTime) && editedTime > finishedTime) {
     return "content";
   }
 

@@ -67,12 +67,9 @@ def _stored_request(application_id: str, key: str = "request-1") -> CreateOperat
     return CreateOperation(
         application_id=application_id,
         operation_type=OperationType.ANALYZE_JOB,
-        payload={"job_snapshot_id": "snapshot-id", "provider": "openai"},
+        payload={"job_text_hash": "a" * 64, "provider": "openai"},
         idempotency_key=key,
-        sources=OperationSources(
-            job_snapshot_id="snapshot-id",
-            job_snapshot_hash="a" * 64,
-        ),
+        sources=OperationSources(job_text_hash="a" * 64),
         provider="openai",
         model="gpt-5.6-terra",
     )

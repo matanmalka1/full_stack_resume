@@ -119,7 +119,7 @@ def locate(quote: str, source_text: str) -> RequirementSource:
         # quote that repeats is ambiguous whichever spelling it repeats in, and
         # a containment test would have called the second occurrence a clean
         # single match. No offsets either way, because they would point into a
-        # string the snapshot does not hold.
+        # string the job text does not hold.
         occurrences = collapsed_source.count(collapsed)
         if occurrences == 1:
             return RequirementSource(quote=quote, match="normalized")

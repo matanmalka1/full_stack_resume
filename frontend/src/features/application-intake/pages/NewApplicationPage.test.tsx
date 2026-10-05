@@ -33,7 +33,7 @@ interface Call {
 }
 
 /* One stub for the intake and analysis endpoints, recording what each one was actually
-   sent: the acknowledgement, exact job text, and analyzed snapshot are the contracts
+   sent: the acknowledgement, exact job text, and analyzed job text hash are the contracts
    this screen has to keep. */
 const stubFetch = (responses: Record<string, Response[]>) => {
   const calls: Call[] = [];
@@ -194,7 +194,7 @@ describe("NewApplicationPage", () => {
     cleanup();
 
     renderPage("/", true);
-    expect(screen.getByText("יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח.")).toBeInTheDocument();
+    expect(screen.getByText("יצירת המועמדות תשמור את נוסח המשרה ותתחיל את הניתוח.")).toBeInTheDocument();
     expect(screen.queryByText(/ניתוח המשרה דורש ספק AI/)).not.toBeInTheDocument();
   });
 
@@ -280,7 +280,7 @@ describe("NewApplicationPage", () => {
         jsonResponse(
           {
             application_id: "app-new",
-            job_snapshot_id: "snap-1",
+            job_text_hash: "c".repeat(64),
             warnings: [],
             duplicate_matches: [],
           },
@@ -324,7 +324,7 @@ describe("NewApplicationPage", () => {
       {
         path: ANALYSES_PATH,
         /* Analysis is AI-only, so the command names its provider unconditionally. */
-        body: { job_snapshot_id: "snap-1", provider: "openai" },
+        body: { job_text_hash: "c".repeat(64), provider: "openai" },
       },
     ]);
   });
@@ -390,7 +390,7 @@ describe("NewApplicationPage", () => {
       [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
       [CREATE_PATH]: [
         jsonResponse(
-          { application_id: "app-new", job_snapshot_id: "snap-1", warnings: [], duplicate_matches: [] },
+          { application_id: "app-new", job_text_hash: "c".repeat(64), warnings: [], duplicate_matches: [] },
           201,
         ),
       ],
@@ -412,7 +412,7 @@ describe("NewApplicationPage", () => {
         jsonResponse(
           {
             application_id: "app-new",
-            job_snapshot_id: "snap-1",
+            job_text_hash: "c".repeat(64),
             warnings: ["DUPLICATE_COMPANY_TITLE"],
             duplicate_matches: [match()],
           },
@@ -440,7 +440,7 @@ describe("NewApplicationPage", () => {
         jsonResponse(
           {
             application_id: "app-new",
-            job_snapshot_id: "snap-1",
+            job_text_hash: "c".repeat(64),
             warnings: [],
             duplicate_matches: [],
           },
@@ -689,7 +689,7 @@ describe("NewApplicationPage", () => {
         jsonResponse(
           {
             application_id: "app-new",
-            job_snapshot_id: "snap-1",
+            job_text_hash: "c".repeat(64),
             warnings: [],
             duplicate_matches: [],
           },
@@ -731,7 +731,7 @@ describe("NewApplicationPage", () => {
       jsonResponse(
         {
           application_id: "app-new",
-          job_snapshot_id: "snap-1",
+          job_text_hash: "c".repeat(64),
           warnings: ["DUPLICATE_COMPANY_TITLE"],
           duplicate_matches: [match()],
         },
@@ -765,7 +765,7 @@ describe("NewApplicationPage", () => {
 
     fillIntake(overBudgetText);
 
-    expect(screen.getByText("— חורג מגודל התצלום המותר")).toBeInTheDocument();
+    expect(screen.getByText("— חורג מהגודל המותר")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "יצירת מועמדות" })).toBeDisabled();
     expect(calls).toEqual([]);
   });

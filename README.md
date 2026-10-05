@@ -65,8 +65,8 @@ browser again without replacing the environment:
 - PostgreSQL stores mutable application state and immutable history, through
   SQLAlchemy Core and numbered Alembic revisions.
 - The CV document's content lives in PostgreSQL; its rendered HTML/PDF are mutable
-  working outputs under `artifacts/documents/`. Immutable payloads live under fixed key
-  prefixes — `snapshots/`, `provider/`, `submissions/` — whose layout is frozen in
+  working outputs under `artifacts/documents/`. Immutable payloads — the files a
+  Submission sent — live under the fixed `submissions/` key prefix, whose layout is frozen in
   `docs/spec/architecture.md` section 6.2 so a
   row reads the same under local storage and under an S3-compatible bucket.
 - `base/` and `profiles/` hold the canonical source facts used directly by the
@@ -107,7 +107,8 @@ are defined in [`docs/spec/product-spec.md`](docs/spec/product-spec.md) and
 the same application services the API exposes.
 
 **Create → analyze → draft → review → approve → render → Ready.** A job posting is
-captured once as an immutable snapshot and never re-fetched. Drafting stops for review
+stored as text on the Application and never fetched; it can be edited until the first
+Submission locks it. Drafting stops for review
 and never renders by default; unsupported wording is retained as `pending` rather than
 discarded, and cannot be approved. Approval stamps the current document basis after its
 content check passes, and rendering then runs the same content, claim, PDF, ATS, link,

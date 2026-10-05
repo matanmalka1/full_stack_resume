@@ -20,13 +20,10 @@ def payload_store(tmp_path: Path) -> PayloadStore:
     return PayloadStore(AppPaths.from_root(root))
 
 
-def test_immutable_payload_families_include_submissions(payload_store: PayloadStore):
+def test_the_immutable_payload_family_is_submission_files(payload_store: PayloadStore):
     destinations = [
-        payload_store.snapshot_path("app", "snapshot"),
-        *(
-            payload_store.submission_path("app", "submission", suffix=suffix)
-            for suffix in ("html", "pdf")
-        ),
+        payload_store.submission_path("app", "submission", suffix=suffix)
+        for suffix in ("html", "pdf")
     ]
     for index, destination in enumerate(destinations):
         payload = f"payload-{index}".encode()
@@ -43,8 +40,8 @@ def test_immutable_payload_families_include_submissions(payload_store: PayloadSt
 def test_commit_validates_before_storing_and_keys_each_attempt_immutably(
     payload_store: PayloadStore,
 ) -> None:
-    content = b"exact snapshot text\n"
-    destination = payload_store.snapshot_path("app", "snapshot")
+    content = b"%PDF-1.4 exact bytes\n"
+    destination = payload_store.submission_path("app", "submission", suffix="pdf")
     observed: list[bytes] = []
 
     def validate(payload: bytes) -> None:
@@ -57,7 +54,7 @@ def test_commit_validates_before_storing_and_keys_each_attempt_immutably(
     stored = payload_store.commit(destination, payload=content, validate=validate)
 
     assert observed == [content]
-    assert stored.project_relative == "artifacts/snapshots/app/snapshot.txt"
+    assert stored.project_relative == "artifacts/submissions/app/submission/resume.pdf"
     assert stored.sha256 == hashlib.sha256(content).hexdigest()
     assert stored.size == len(content)
     assert destination.read_bytes() == content
@@ -83,10 +80,10 @@ def test_traversal_symlink_and_unapproved_destinations_are_refused(
         == "unresolvable"
     )
     with pytest.raises(ValueError, match="invalid application_id path component"):
-        payload_store.snapshot_path("../outside", "snapshot")
+        payload_store.submission_path("../outside", "submission", suffix="pdf")
     with pytest.raises(ValueError, match="contains traversal"):
         payload_store.commit(
-            "snapshots/app/../outside/snapshot.txt",
+            "submissions/app/../outside/submission/resume.pdf",
             payload=b"no",
             validate=lambda _payload: True,
         )
@@ -95,11 +92,12 @@ def test_traversal_symlink_and_unapproved_destinations_are_refused(
             tmp_path
             / "project"
             / "artifacts"
-            / "snapshots"
+            / "submissions"
             / "app"
             / ".."
             / "outside"
-            / "snapshot.txt",
+            / "submission"
+            / "resume.pdf",
             payload=b"no",
             validate=lambda _payload: True,
         )
@@ -109,9 +107,9 @@ def test_traversal_symlink_and_unapproved_destinations_are_refused(
             payload=b"no",
             validate=lambda _payload: True,
         )
-    # Retired layouts stay refused: architecture §6.2 approves only JobSnapshots
-    # and Submission files.
+    # Retired layouts stay refused: architecture §6.2 approves only Submission files.
     for retired in (
+        "snapshots/app/snapshot.txt",
         "revisions/app/rev/attempt/resume.json",
         "outputs/app/rev/id.pdf",
         "drafts/app/draft-v1.json",
@@ -124,10 +122,10 @@ def test_traversal_symlink_and_unapproved_destinations_are_refused(
     outside = tmp_path / "outside"
     outside.mkdir()
     artifacts.mkdir(parents=True, exist_ok=True)
-    (artifacts / "snapshots").symlink_to(outside, target_is_directory=True)
+    (artifacts / "submissions").symlink_to(outside, target_is_directory=True)
 
     with pytest.raises(ValueError, match="path escapes configured root"):
-        payload_store.snapshot_path("app", "snapshot")
+        payload_store.submission_path("app", "submission", suffix="pdf")
 
     assert list(outside.iterdir()) == []
 
@@ -144,7 +142,7 @@ def test_failed_validation_never_claims_the_destination_key(
     is the one that always mattered - a rejected payload is not stored - not
     the leftover file that the old mechanism happened to produce.
     """
-    destination = payload_store.snapshot_path("app", "snapshot")
+    destination = payload_store.submission_path("app", "submission", suffix="pdf")
 
     with pytest.raises(ValueError, match="payload validation failed"):
         payload_store.commit(
@@ -161,7 +159,7 @@ def test_failed_validation_never_claims_the_destination_key(
         validate=lambda _payload: True,
     )
     assert destination.read_bytes() == b"valid"
-    assert stored.project_relative == "artifacts/snapshots/app/snapshot.txt"
+    assert stored.project_relative == "artifacts/submissions/app/submission/resume.pdf"
 
 
 def test_document_attempts_are_unique_and_submission_copies_are_managed(tmp_path):

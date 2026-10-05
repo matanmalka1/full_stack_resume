@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from ._metadata import metadata
 from .knowledge import fact_events, knowledge_mutation_journal
-from .prep import cv_documents, job_analyses, job_snapshots
+from .prep import cv_documents, job_analyses
 from .shared import (
     OPERATION_FAILURE_CODES,
     ai_calls,
@@ -28,7 +28,6 @@ __all__ = [
     "TABLES",
     "OPERATION_FAILURE_CODES",
     "applications",
-    "job_snapshots",
     "job_analyses",
     "cv_documents",
     "recruitment_events",

@@ -11,6 +11,11 @@ architecture.md §11), and `operation_resource_leases` by partial unique indexes
 `operations` (architecture.md §10). `payload_write_leases` no longer exists either. The mapping table in §4 records the state at
 2026-09-28 and is left as it was.
 
+Superseded in part (2026-10-05). JobSnapshots are gone: the job text is an editable
+field of the Application, locked by its first Submission
+([`editable-job-text.md`](editable-job-text.md)). Where this record says "the posting as
+captured", read "the posting a CV was sent for".
+
 ## 1. Why
 
 Approval currently freezes the draft into an immutable ApprovedRevision and closes the

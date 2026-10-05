@@ -9,11 +9,7 @@ from ....domain.analysis.normalize import normalize_analysis_proposal
 from ....domain.contracts.analysis import JobAnalysis, OverrideKey
 from ....domain.contracts.document import BuiltWith
 from ...commands import AnalyzeCommand
-from ...errors import (
-    InfrastructureFailure,
-    PreconditionFailed,
-    ProviderInvalidOutput,
-)
+from ...errors import PreconditionFailed, ProviderInvalidOutput
 from ...ports import AnalysisContext
 from ..proposals import analysis_fact_context
 from .classification import analysis_profile
@@ -50,14 +46,9 @@ class AnalysisPreparation:
         Operation, not the analysis. `still_owned` is what the runner checks before
         any retry; a caller outside the runner has no lease to lose.
         """
-        snapshot = service.snapshot_source(command.application_id, command.job_snapshot_id)
-        service.refuse_deleted(snapshot.application_id, snapshot.deleted_at)
-        try:
-            job_text = service.snapshot_payloads.read_snapshot(
-                snapshot.payload_path, snapshot.source_hash
-            )
-        except (OSError, ValueError) as exc:
-            raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
+        source = service.job_text_source(command.application_id, command.job_text_hash)
+        service.refuse_deleted(source.application_id, source.deleted_at)
+        job_text = source.job_text
         knowledge = service.load_knowledge()
         profiles = knowledge.profiles
         if command.provider != "openai" or operation_id is None:
@@ -96,7 +87,7 @@ class AnalysisPreparation:
                 facts=knowledge.facts,
                 profiles=profiles,
                 concepts=knowledge.requirement_concepts,
-                normalized_hash=snapshot.normalized_hash,
+                normalized_hash=source.normalized_hash,
                 overrides=overrides,
             )
         except ValueError as exc:

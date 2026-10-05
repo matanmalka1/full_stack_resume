@@ -27,6 +27,19 @@ class SqlAlchemyRecruitmentRepository:
             raise UnknownRecord(application_id)
         return dict(row)
 
+    def lock_application(self, tx: WriteTransaction, application_id: str) -> dict[str, Any]:
+        row = (
+            self._transactions.connection_for(tx, access="write")
+            .execute(
+                select(applications).where(applications.c.id == application_id).with_for_update()
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            raise UnknownRecord(application_id)
+        return dict(row)
+
     def set_deleted(self, tx: WriteTransaction, application_id: str, deleted_at: str) -> None:
         result = self._transactions.connection_for(tx, access="write").execute(
             update(applications)

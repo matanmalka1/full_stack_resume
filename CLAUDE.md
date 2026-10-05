@@ -22,11 +22,12 @@ renders, projections. Getting one wrong costs a re-run. Calibrate effort to that
 One thing is not regenerable, and that is where care belongs:
 
 **Immutable records already written** — what left the system: a Submission (the CV
-content that was sent, its HTML and PDF copies and their checksums), the job snapshot
-it references, the AI call log (every provider call attempt, in `ai_calls`), and past
-application history. A job snapshot
-preserves a posting that later vanishes from the web. The CV document itself is
-mutable until it is submitted: approval and Ready are stamps derived against its
+content that was sent, its HTML and PDF copies and their checksums), the job text it
+was sent for, the AI call log (every provider call attempt, in `ai_calls`), and past
+application history. The job text is an ordinary editable field on the Application
+until the first Submission, which locks it (`docs/decisions/editable-job-text.md`); from
+then on it preserves the posting that was applied to, even after it vanishes from the
+web. The CV document itself is mutable until it is submitted: approval and Ready are stamps derived against its
 current basis, not frozen revisions. Never overwrite or relocate one; overwriting destroys evidence
 nothing else can reproduce. Never invent a value a record never carried — a field that
 cannot be derived stays NULL. This does not freeze an application's current status: a
@@ -124,7 +125,7 @@ Report what passed, what failed, and what remains. Never claim completion with
   canonical fact; it is not required to demand verbatim copying, and a check that does
   so is enforcing more than this rule requires.
 - Deterministic policy keeps every check it can run itself: source attestation against
-  the signed snapshot, canonical-fact eligibility, requirement identity, structural
+  the exact job text the analysis read, canonical-fact eligibility, requirement identity, structural
   completeness, numeric and compositional consistency, boundary-fact applicability, Fit
   calculation, review routing, and every approval boundary. A proposal may be narrowed
   by those checks; it may never be widened by them. The closed concept vocabulary in

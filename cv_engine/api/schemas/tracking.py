@@ -84,7 +84,7 @@ class ApplicationMutationResponse(HttpSchema):
 class SubmissionResponse(ApplicationMutationResponse):
     """A recorded submission, with any warning the caller should see.
 
-    `warnings` carries `DOCUMENT_ON_OLDER_ANALYSIS` when the active snapshot or
+    `warnings` carries `DOCUMENT_ON_OLDER_ANALYSIS` when the job text or the
     analysis has moved on from the document's (§18). It is reported, not raised.
     """
 

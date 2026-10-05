@@ -21,6 +21,7 @@ import type {
 /* A document hash has the shape the contract requires: 64 lowercase hex characters. */
 export const HASH = "a".repeat(64);
 export const OTHER_HASH = "b".repeat(64);
+const JOB_TEXT_HASH = "c".repeat(64);
 
 export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail => ({
   recruitment_status: "saved",
@@ -31,7 +32,7 @@ export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationD
   review_reasons: [],
   warnings: [],
   blocked_actions: [],
-  active_job_snapshot_id: "snapshot-1",
+  job_text_hash: JOB_TEXT_HASH,
   latest_analysis_id: "analysis-1",
   document_id: "doc-1",
   document_hash: HASH,
@@ -49,14 +50,11 @@ export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationD
     created_at: "2026-08-24T00:00:00Z",
     updated_at: "2026-08-24T00:00:00Z",
   },
-  latest_snapshot: {
-    id: "snapshot-1",
-    application_id: "app-1",
-    version_number: 1,
+  job_posting: {
     job_text: "Engineer",
-    captured_at: "2026-08-24T00:00:00Z",
-    source_metadata: {},
-    source_hash: "snapshot-hash",
+    job_text_hash: JOB_TEXT_HASH,
+    job_text_updated_at: "2026-08-24T00:00:00Z",
+    locked: false,
   },
   ...overrides,
 });

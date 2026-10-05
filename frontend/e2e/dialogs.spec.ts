@@ -13,7 +13,7 @@ const detail = {
   content_check: "none",
   review_reasons: [],
   warnings: [],
-  active_job_snapshot_id: "snap-1",
+  job_text_hash: "c".repeat(64),
   available_actions: ["analyze"],
   blocked_actions: [],
   recommended_action: "analyze",
@@ -28,15 +28,12 @@ const detail = {
     created_at: "2026-08-24T07:00:00Z",
     updated_at: "2026-08-25T08:00:00Z",
   },
-  latest_snapshot: {
-    id: "snap-1",
-    application_id: "app-1",
-    version_number: 1,
+  job_posting: {
     job_text: "Senior Backend Engineer",
     source_url: "https://example.com/jobs/1",
-    captured_at: "2026-08-24T07:00:00Z",
-    source_metadata: {},
-    source_hash: "hash-1",
+    job_text_hash: "c".repeat(64),
+    job_text_updated_at: "2026-08-24T07:00:00Z",
+    locked: false,
   },
 };
 
@@ -56,7 +53,7 @@ test.describe("dialogs", () => {
     await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
     const invoker = page.getByRole("button", { name: "עדכון נוסח המשרה" });
     await invoker.click();
-    const dialog = page.getByRole("dialog", { name: "יצירת תצלום משרה חדש" });
+    const dialog = page.getByRole("dialog", { name: "עריכת נוסח המשרה" });
     await expect(dialog).toBeVisible();
     return { dialog, invoker };
   };
@@ -64,7 +61,7 @@ test.describe("dialogs", () => {
   test("opens on its heading, keeps Tab inside, and hands focus back on Escape", async ({ page }) => {
     const { dialog, invoker } = await openJobPostingDialog(page);
 
-    await expect(dialog.getByRole("heading", { name: "יצירת תצלום משרה חדש" })).toBeFocused();
+    await expect(dialog.getByRole("heading", { name: "עריכת נוסח המשרה" })).toBeFocused();
 
     await expect(dialog.locator("div").first()).toHaveAttribute("dir", "rtl");
 
@@ -194,11 +191,11 @@ test.describe("dialogs", () => {
     await expect(chip).toContainText("מנסחת ובודקת את הטענות");
 
     /* The form opens - reading and drafting a new posting is harmless - but the command
-       that would replace the snapshot the run is working from waits for it. */
+       that would replace the job text the run is working from waits for it. */
     await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
     await page.getByRole("button", { name: "עדכון נוסח המשרה" }).click();
-    const postingForm = page.getByRole("dialog", { name: "יצירת תצלום משרה חדש" });
-    await expect(postingForm.getByRole("button", { name: "יצירת התצלום החדש" })).toBeDisabled();
+    const postingForm = page.getByRole("dialog", { name: "עריכת נוסח המשרה" });
+    await expect(postingForm.getByRole("button", { name: "שמירת הנוסח" })).toBeDisabled();
     await expect(postingForm.getByText(/פעולה מתבצעת כעת על המועמדות/)).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(postingForm).toBeHidden();

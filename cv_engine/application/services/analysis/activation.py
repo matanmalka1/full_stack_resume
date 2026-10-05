@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from ....util import utc_now
 from ...commands import AnalysisResult, AnalyzeCommand
-from ...errors import LineageBroken, PreconditionFailed
+from ...errors import PreconditionFailed, StateConflict
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisStore
 from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.transactions import WriteTransaction
@@ -41,10 +41,10 @@ class AnalysisActivation:
         # The runner takes this lock as its first statement; direct callers get the
         # same ordering here before reading any source or allocating any version.
         self.analyses.lock_application(tx, command.application_id)
-        source = self.sources.analysis_source(tx, command.job_snapshot_id)
-        if source.application_id != command.application_id:
-            raise LineageBroken("job snapshot does not belong to the named Application")
+        source = self.sources.job_text_source(tx, command.application_id)
         refuse_deleted(command.application_id, source.deleted_at)
+        if source.job_text_hash != command.job_text_hash:
+            raise StateConflict("the job text changed before the analysis activated")
         document = self.documents.lock_document(tx, command.application_id)
         if document is not None and command.expected_analysis_id is not None:
             # A decision against an existing context names the document it was made
@@ -57,7 +57,7 @@ class AnalysisActivation:
         analysis_id = self.analyses.save_analysis(
             tx,
             command.application_id,
-            command.job_snapshot_id,
+            command.job_text_hash,
             prepared.result,
             provider=prepared.provider,
             model=prepared.model,
@@ -77,7 +77,7 @@ class AnalysisActivation:
             created = True
         return AnalysisResult(
             application_id=command.application_id,
-            job_snapshot_id=command.job_snapshot_id,
+            job_text_hash=command.job_text_hash,
             analysis_id=analysis_id,
             document_id=document.id,
             created_document=created,

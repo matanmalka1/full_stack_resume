@@ -20,7 +20,7 @@ from ..application.errors import (
     InfrastructureFailure,
 )
 from ..application.ports.documents import RenderedFiles, SubmittedFiles
-from ..application.ports.values import ArtifactStream, SnapshotPayload
+from ..application.ports.values import ArtifactStream, PayloadReference
 from ..application.transactions import assert_external_io_allowed
 from .paths import is_regular_file_within, relative_within, resolve_within
 
@@ -40,7 +40,7 @@ class SubmissionPayloads(Protocol):
 
     def commit_submission_file(
         self, application_id: str, submission_id: str, *, suffix: str, payload: bytes
-    ) -> SnapshotPayload: ...
+    ) -> PayloadReference: ...
 
 
 _STREAM_CHUNK_BYTES = 64 * 1024

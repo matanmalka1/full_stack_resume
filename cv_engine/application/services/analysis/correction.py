@@ -117,7 +117,7 @@ class AnalysisCorrection:
         return service.activate(
             AnalyzeCommand(
                 application_id=command.application_id,
-                job_snapshot_id=record.job_snapshot_id,
+                job_text_hash=record.job_text_hash,
                 expected_analysis_id=command.expected_analysis_id,
                 expected_document_hash=command.expected_document_hash,
                 refuse_matching_context_operation=True,
