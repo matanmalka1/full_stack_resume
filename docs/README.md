@@ -12,6 +12,7 @@ Where the authoritative answer lives. One concept, one home; everything else lin
 | Why there is one mutable CV document per Application | [`decisions/single-document-model.md`](decisions/single-document-model.md) |
 | Why AI chooses a CV's facts and the engine only guards them | [`decisions/ai-owned-selection.md`](decisions/ai-owned-selection.md) |
 | Why user accounts and per-user isolation, how an existing installation migrates, and the delivery order | [`decisions/multi-user-accounts.md`](decisions/multi-user-accounts.md) |
+| Proposed (not approved): moving Knowledge to PostgreSQL ahead of accounts | [`decisions/knowledge-in-postgresql.md`](decisions/knowledge-in-postgresql.md) |
 | Open frontend UX work | [`frontend-ux.md`](frontend-ux.md) |
 | How to split implementation across parallel agents | [`execution-protocol.md`](execution-protocol.md) |
 | How to run, build, and test the system | [`../README.md`](../README.md) |
