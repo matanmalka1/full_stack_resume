@@ -1,8 +1,10 @@
-"""§14 autosave: the user's own edits to the CV document, applied as one patch.
+"""§14: the user's own changes to the CV document, with no provider involved.
 
-Kept apart from authoring because nothing here reaches a provider: a manual edit is a
-deterministic patch against one exact hash, while authoring is the AI's generation and
-regeneration. Free text the facts do not support is saved `pending`; reviewing it is the
+`update_document` is the autosave, one structured patch against one exact hash.
+`build_from_analysis` re-pins the document to another analysis, the only command that
+changes its `analysis_id`; it drops the content and clears every stamp in the same
+write. Kept apart from authoring because nothing here reaches a provider, while
+authoring is the AI's generation and regeneration. Free text the facts do not support is saved `pending`; reviewing it is the
 `regenerate_claim` Operation with `keep_text`, never part of the save.
 """
 
@@ -11,12 +13,13 @@ from __future__ import annotations
 from ....domain.document import content_check, preparation_state
 from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....util import utc_now
-from ...commands import DocumentMutationResult, UpdateDocumentCommand
-from ...errors import PreconditionFailed, UnknownRecord
+from ...commands import BuildFromAnalysisCommand, DocumentMutationResult, UpdateDocumentCommand
+from ...errors import LineageBroken, PreconditionFailed, UnknownRecord
 from ...ports import TransactionManager
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
-from ...ports.documents import DocumentBody, DocumentStore
+from ...ports.documents import DocumentBody, DocumentFileStore, DocumentStore
 from ..documents import (
+    built_with,
     current_basis,
     load_knowledge,
     read_document_source,
@@ -32,11 +35,13 @@ class DraftEditingService:
         transactions: TransactionManager,
         documents: DocumentStore,
         sources: AnalysisContextSourceReader,
+        files: DocumentFileStore,
         knowledge: AnalysisKnowledgeSource,
     ):
         self.transactions = transactions
         self.documents = documents
         self.sources = sources
+        self.files = files
         self._knowledge = knowledge
 
     def update_document(self, command: UpdateDocumentCommand) -> DocumentMutationResult:
@@ -116,4 +121,43 @@ class DraftEditingService:
                 for claim in draft_claims(patched)
                 if claim.claim_type == "pending" and claim.claim_id in edited
             ),
+        )
+
+    def build_from_analysis(self, command: BuildFromAnalysisCommand) -> DocumentMutationResult:
+        """§14 `build_from_analysis`: re-pin the document to a named analysis.
+
+        The previous rendered files are released by the same write and deleted
+        best-effort after commit: nothing references them any more.
+        """
+        with self.transactions.read() as tx:
+            source = read_document_source(tx, self.documents, self.sources, command.application_id)
+            target = self.sources.analysis_context_source(tx, command.analysis_id)
+        refuse_deleted(command.application_id, source.deleted_at)
+        require_hash(source.document, command.expected_document_hash)
+        if target.application_id != command.application_id:
+            raise LineageBroken(
+                f"job analysis {command.analysis_id} does not belong to application "
+                f"{command.application_id}"
+            )
+        if target.job_analysis_id == source.document.analysis_id:
+            raise PreconditionFailed("the document is already built on this analysis")
+        knowledge = load_knowledge(self._knowledge)
+        with self.transactions.write() as tx:
+            updated, released = self.documents.repin(
+                tx,
+                command.application_id,
+                command.expected_document_hash,
+                DocumentBody(analysis_id=command.analysis_id, content=None),
+                built_with(knowledge),
+                updated_at=utc_now(),
+            )
+        if released is not None:
+            self.files.discard(released)
+        new_basis = current_basis(updated, knowledge)
+        return DocumentMutationResult(
+            application_id=command.application_id,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
+            preparation_state=preparation_state(updated, new_basis),
+            content_check=content_check(updated, new_basis),
         )

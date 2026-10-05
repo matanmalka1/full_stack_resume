@@ -729,7 +729,7 @@ def test_create_draft_activates_only_against_the_hash_it_froze(
 
     def move_document():
         newer = seed_existing_analysis(services, ingested)
-        services.repin.build_from_analysis(
+        services.draft_editing.build_from_analysis(
             BuildFromAnalysisCommand(
                 application_id=application_id,
                 analysis_id=newer.analysis_id,
@@ -784,7 +784,7 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
     ingested, _analysis = seed_document(services, "Render Co")
     application_id = ingested.application_id
     document_hash = seed_draft(services, application_id).document_hash
-    assert services.draft_approval.approve_document(
+    assert services.draft_review.approve_document(
         ApproveDocumentCommand(
             application_id=application_id, expected_document_hash=document_hash, client="web"
         )
@@ -827,7 +827,7 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
             claim_orders={section.name: [c.claim_id for c in reversed(section.claims)]},
         )
     )
-    assert services.draft_approval.approve_document(
+    assert services.draft_review.approve_document(
         ApproveDocumentCommand(
             application_id=application_id,
             expected_document_hash=changed.document_hash,
@@ -913,7 +913,7 @@ def test_successful_rerender_discards_superseded_files(ready_application):
             claim_orders={section.name: [c.claim_id for c in reversed(section.claims)]},
         )
     )
-    assert services.draft_approval.approve_document(
+    assert services.draft_review.approve_document(
         ApproveDocumentCommand(
             application_id=app_id, expected_document_hash=edited.document_hash, client="web"
         )

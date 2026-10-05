@@ -62,11 +62,11 @@ def test_pipeline_reaches_ready_and_reconciles(
         )
     )
     token = edited.document_hash
-    checked = services.draft_validation.check_document(
+    checked = services.draft_review.check_document(
         CheckDocumentCommand(application_id=app_id, expected_document_hash=token)
     )
     assert checked.passed, checked.report
-    approved = services.draft_approval.approve_document(
+    approved = services.draft_review.approve_document(
         ApproveDocumentCommand(application_id=app_id, expected_document_hash=token, client="web")
     )
     assert approved.passed, approved.report

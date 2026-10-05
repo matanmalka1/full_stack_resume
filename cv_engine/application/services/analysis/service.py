@@ -18,7 +18,6 @@ from ...ports.analysis_plans import (
     AnalysisKnowledgeSource,
     AnalysisPayloadStore,
     AnalysisSnapshotSource,
-    AnalysisStore,
 )
 from ...ports.documents import DocumentStore
 from ...transactions import assert_external_io_allowed
@@ -36,7 +35,7 @@ class AnalysisService:
         self,
         *,
         transactions: TransactionManager,
-        analyses: AnalysisStore,
+        activation: AnalysisActivation,
         sources: AnalysisContextSourceReader,
         documents: DocumentStore,
         ai_calls: AICallRunner,
@@ -45,14 +44,13 @@ class AnalysisService:
         provider: AIProvider | None,
     ):
         self.transactions = transactions
-        self.analyses = analyses
+        self.activation = activation
         self.sources = sources
         self.documents = documents
         self.ai_calls = ai_calls
         self._knowledge = knowledge
         self.snapshot_payloads = payloads
         self._provider = provider
-        self.activation = AnalysisActivation(analyses, sources, documents)
 
     @staticmethod
     def refuse_deleted(application_id: str, deleted_at: str | None) -> None:

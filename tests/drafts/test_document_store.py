@@ -155,7 +155,7 @@ def test_application_commands_refuse_stale_hash_before_work(ready_application):
                 claim_removals=[claim.claim_id],
             )
         ),
-        lambda: services.repin.build_from_analysis(
+        lambda: services.draft_editing.build_from_analysis(
             BuildFromAnalysisCommand(
                 application_id=application_id,
                 expected_document_hash=MOVED,
@@ -170,10 +170,10 @@ def test_application_commands_refuse_stale_hash_before_work(ready_application):
                 expected_analysis_id=document.analysis_id,
             )
         ),
-        lambda: services.draft_validation.check_document(
+        lambda: services.draft_review.check_document(
             CheckDocumentCommand(application_id=application_id, expected_document_hash=MOVED)
         ),
-        lambda: services.draft_approval.approve_document(
+        lambda: services.draft_review.approve_document(
             ApproveDocumentCommand(
                 application_id=application_id, expected_document_hash=MOVED, client="web"
             )

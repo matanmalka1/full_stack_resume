@@ -177,7 +177,7 @@ def build_from_analysis(
     response: Response,
 ) -> DocumentMutationResponse:
     """`200` with a document pinned to the named analysis and no content."""
-    result = services.repin.build_from_analysis(
+    result = services.draft_editing.build_from_analysis(
         BuildFromAnalysisCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
@@ -263,7 +263,7 @@ def check_document(
     application_id: str, request: DocumentActionRequest, services: Services, response: Response
 ) -> DocumentCheckResponse:
     """`200` whether or not the check passed; the report is data (§22)."""
-    result = services.draft_validation.check_document(
+    result = services.draft_review.check_document(
         CheckDocumentCommand(application_id=application_id, **request.model_dump(mode="python"))
     )
     return _check(response, result)
@@ -274,7 +274,7 @@ def approve_document(
     application_id: str, request: DocumentActionRequest, services: Services, response: Response
 ) -> DocumentCheckResponse:
     """`200` with the report; approved only when it passed. `412` names a blocker."""
-    result = services.draft_approval.approve_document(
+    result = services.draft_review.approve_document(
         ApproveDocumentCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
