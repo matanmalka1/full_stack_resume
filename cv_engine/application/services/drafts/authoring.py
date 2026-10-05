@@ -30,7 +30,6 @@ from ...commands import (
     DraftCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
-    RegenerationResult,
 )
 from ...errors import (
     InfrastructureFailure,
@@ -70,7 +69,6 @@ from ..proposals import (
     review_semantically,
     withheld_reason,
 )
-from .activation import DraftActivation
 from .inputs import PreparedDraft, PreparedRegeneration
 
 ProposalT = TypeVar("ProposalT", bound=StrictModel)
@@ -144,7 +142,6 @@ class DraftAuthoringService:
         self._provider = provider
         self.ai_calls = ai_calls
         self.snapshot_payloads = snapshot_payloads
-        self.activation = DraftActivation(documents)
 
     @property
     def provider(self) -> AIProvider:
@@ -192,10 +189,6 @@ class DraftAuthoringService:
             knowledge_context_hash=knowledge.context_hash(),
             still_owned=still_owned,
         )
-
-    def activate_regeneration(self, prepared: PreparedRegeneration) -> RegenerationResult:
-        with self.transactions.write() as tx:
-            return self.activation.activate_regeneration(tx, prepared)
 
     def prepare(
         self,

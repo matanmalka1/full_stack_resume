@@ -103,8 +103,10 @@ The application layer owns commands, queries, services, ports, transaction bound
 action policy, state projections, optimistic commit checks, and conversion of validated
 Proposals into domain state. Services are synchronous, have no dependency on FastAPI or
 an event loop, and follow consumer and lifecycle boundaries (intake and queries,
-analysis, document authoring/validation/approval/history, rendering,
-recruitment and submission, knowledge, Operations, maintenance, settings).
+analysis, document AI authoring, document editing and re-pinning, document check and
+approval, document history export, rendering, recruitment and submission, knowledge,
+Operations, maintenance, settings). A boundary is a kind of work, not one command:
+check and approval share one service because approval is the check plus a stamp.
 
 Services return Pydantic boundary DTOs, never database rows or filesystem paths.
 

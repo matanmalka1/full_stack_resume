@@ -642,7 +642,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
             job_snapshot_id=setup.snapshot_id,
         ),
     )
-    services.repin.build_from_analysis(
+    services.draft_editing.build_from_analysis(
         BuildFromAnalysisCommand(
             application_id=app_id,
             analysis_id=refreshed.analysis_id,

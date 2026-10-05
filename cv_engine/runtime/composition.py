@@ -17,14 +17,14 @@ from ..application.ports import (
     Renderer,
 )
 from ..application.services.ai_calls import AICallRunner
+from ..application.services.analysis.activation import AnalysisActivation
 from ..application.services.analysis.service import AnalysisService
 from ..application.services.applications.intake import ApplicationService
 from ..application.services.applications.queries import ApplicationQueryService
 from ..application.services.drafts import DraftAuthoringService, DraftEditingService
-from ..application.services.drafts.approval import DraftApprovalService
+from ..application.services.drafts.activation import DraftActivation
 from ..application.services.drafts.history import DraftHistoryService
-from ..application.services.drafts.repin import RepinService
-from ..application.services.drafts.validation import DraftValidationService
+from ..application.services.drafts.review import DraftReviewService
 from ..application.services.knowledge import (
     CommittedKnowledge,
     FactLifecycleService,
@@ -115,12 +115,10 @@ class Services:
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
-    repin: RepinService
     drafts: DraftAuthoringService
     draft_editing: DraftEditingService
-    draft_validation: DraftValidationService
     draft_history: DraftHistoryService
-    draft_approval: DraftApprovalService
+    draft_review: DraftReviewService
     rendering: RenderingService
     recruitment: RecruitmentService
     submission: SubmissionService
@@ -237,9 +235,13 @@ def build_services(
     documents = SqlAlchemyDocumentStore(transactions)
     document_submissions = SqlAlchemyDocumentSubmissionStore(transactions)
     document_files = DocumentFiles(paths, resolved_payloads)
+    # One activation per use-case, shared by the service's synchronous path and the
+    # Operation handler that activates the same result inside the runner's scope.
+    analysis_activation = AnalysisActivation(analysis_plans, analysis_sources, documents)
+    draft_activation = DraftActivation(documents)
     analysis_service = AnalysisService(
         transactions=transactions,
-        analyses=analysis_plans,
+        activation=analysis_activation,
         sources=analysis_sources,
         documents=documents,
         ai_calls=ai_calls,
@@ -263,7 +265,7 @@ def build_services(
     operation_lifecycle = OperationLifecycleService(
         transactions, operation_client, documents=documents
     )
-    repin_service = RepinService(
+    draft_editing = DraftEditingService(
         transactions=transactions,
         documents=documents,
         sources=analysis_sources,
@@ -279,13 +281,7 @@ def build_services(
         ai_calls=ai_calls,
         snapshot_payloads=resolved_payloads,
     )
-    draft_validation = DraftValidationService(
-        transactions=transactions,
-        documents=documents,
-        sources=analysis_sources,
-        knowledge=committed_knowledge,
-    )
-    draft_approval = DraftApprovalService(
+    draft_review = DraftReviewService(
         transactions=transactions,
         documents=documents,
         sources=analysis_sources,
@@ -321,24 +317,24 @@ def build_services(
                 rendering_service, documents, analysis_sources, resolved_knowledge
             ),
             OperationType.CREATE_DRAFT: DraftOperationHandler(
-                draft_service, documents, draft_service.activation
+                draft_service, documents, draft_activation
             ),
             OperationType.REGENERATE_SECTION: RegenerationOperationHandler(
                 draft_service,
                 documents,
-                draft_service.activation,
+                draft_activation,
                 command_type=RegenerateSectionCommand,
             ),
             OperationType.REGENERATE_CLAIM: RegenerationOperationHandler(
                 draft_service,
                 documents,
-                draft_service.activation,
+                draft_activation,
                 command_type=RegenerateClaimCommand,
             ),
             OperationType.ANALYZE_JOB: AnalysisOperationHandler(
                 analysis_service,
                 analysis_sources,
-                analysis_service.activation,
+                analysis_activation,
                 resolved_knowledge,
             ),
         },
@@ -396,17 +392,10 @@ def build_services(
             payloads=resolved_payloads,
         ),
         analysis=analysis_service,
-        repin=repin_service,
         drafts=draft_service,
-        draft_editing=DraftEditingService(
-            transactions=transactions,
-            documents=documents,
-            sources=analysis_sources,
-            knowledge=committed_knowledge,
-        ),
-        draft_validation=draft_validation,
+        draft_editing=draft_editing,
         draft_history=draft_history,
-        draft_approval=draft_approval,
+        draft_review=draft_review,
         rendering=rendering_service,
         recruitment=recruitment_service,
         submission=submission_service,
@@ -445,12 +434,10 @@ def build_api_services(
         applications=services.applications,
         queries=services.queries,
         analysis=services.analysis,
-        repin=services.repin,
         drafts=services.drafts,
         draft_editing=services.draft_editing,
-        draft_validation=services.draft_validation,
         draft_history=services.draft_history,
-        draft_approval=services.draft_approval,
+        draft_review=services.draft_review,
         rendering=services.rendering,
         recruitment=services.recruitment,
         submission=services.submission,

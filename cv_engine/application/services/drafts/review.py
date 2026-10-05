@@ -1,4 +1,8 @@
-"""§15 `approve_document`: check and approve in one synchronous action."""
+"""§15 `check_document` and `approve_document`: validate, then stamp.
+
+Approval is the check plus a stamp, so both commands share one service: the same
+inputs, the same validation, and the same result.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,7 @@ from ....domain.contracts.validation import ValidationReport
 from ....domain.document import content_check, preparation_state
 from ....domain.knowledge import Knowledge
 from ....util import new_id, utc_now
-from ...commands import ApproveDocumentCommand, DocumentCheckResult
+from ...commands import ApproveDocumentCommand, CheckDocumentCommand, DocumentCheckResult
 from ...errors import KNOWLEDGE_RECONCILIATION_REQUIRED, PreconditionFailed
 from ...ports import TransactionManager
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
@@ -26,8 +30,13 @@ from ..documents import (
 )
 
 
-class DraftApprovalService:
-    """The approval boundary: the report, then the stamp, under the document row lock."""
+class DraftReviewService:
+    """§15: the content check, and approval on top of it.
+
+    `check_document` runs the validation contract and stores its report whether or
+    not it passed. `approve_document` runs the same validation and, when it passes,
+    stamps the approval in the same write, under the document row lock.
+    """
 
     def __init__(
         self,
@@ -91,6 +100,34 @@ class DraftApprovalService:
                 f"approval blocked by quarantined Knowledge mutation {quarantined[0].id}",
                 code=KNOWLEDGE_RECONCILIATION_REQUIRED,
             )
+
+    def check_document(self, command: CheckDocumentCommand) -> DocumentCheckResult:
+        """§15: run the validation contract and store `content_report`, `passed`, basis.
+
+        `passed=false` is an outcome, not an error: the report is stored either way,
+        because a failed check is exactly the evidence the user needs. A validator
+        that could not execute is an application/infrastructure error and stores
+        nothing. No provider is called.
+        """
+        with self.transactions.read() as tx:
+            source = read_document_source(tx, self.documents, self.sources, command.application_id)
+        refuse_deleted(command.application_id, source.deleted_at)
+        require_hash(source.document, command.expected_document_hash)
+        if source.document.content is None:
+            raise PreconditionFailed("the document has no content to check yet")
+        knowledge = load_knowledge(self.knowledge)
+        report = validate_document(source, knowledge)
+        checked = current_basis(source.document, knowledge)
+        with self.transactions.write() as tx:
+            updated = self.documents.stamp_check(
+                tx,
+                command.application_id,
+                command.expected_document_hash,
+                report,
+                checked,
+                updated_at=utc_now(),
+            )
+        return self._result(updated, checked, report)
 
     def approve_document(self, command: ApproveDocumentCommand) -> DocumentCheckResult:
         """§15: run `check_document`'s validation and approve in one action.

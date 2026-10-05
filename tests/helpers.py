@@ -251,7 +251,7 @@ def seed_draft(services: Services, application_id: str, chosen=None):
 
 def validate_active_draft(services: Services, application_id: str):
     document = stored_document(services, application_id)
-    return services.draft_validation.check_document(
+    return services.draft_review.check_document(
         CheckDocumentCommand(
             application_id=application_id,
             expected_document_hash=document.document_hash,
@@ -261,7 +261,7 @@ def validate_active_draft(services: Services, application_id: str):
 
 def approve_active_draft(services: Services, application_id: str):
     document = stored_document(services, application_id)
-    return services.draft_approval.approve_document(
+    return services.draft_review.approve_document(
         ApproveDocumentCommand(
             application_id=application_id,
             expected_document_hash=document.document_hash,

@@ -48,7 +48,7 @@ def _draft(services: Services, application_id: str) -> str:
 
 
 def _approve(services: Services, application_id: str, document_hash: str):
-    return services.draft_approval.approve_document(
+    return services.draft_review.approve_document(
         ApproveDocumentCommand(
             application_id=application_id, expected_document_hash=document_hash, client="web"
         )
@@ -117,7 +117,7 @@ def test_document_journey_from_analysis_to_submission(
     assert services.rendering.preview_document_pdf(application_id).pdf.startswith(b"%PDF")
     assert persisted_counts(database_engine) == before
 
-    checked = services.draft_validation.check_document(
+    checked = services.draft_review.check_document(
         CheckDocumentCommand(application_id=application_id, expected_document_hash=document_hash)
     )
     assert checked.passed and checked.content_check is ContentCheck.PASSED
@@ -351,7 +351,7 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     submitted = _submit(services, application_id, document_hash)
     assert submitted.warnings == ["DOCUMENT_ON_OLDER_ANALYSIS"]
 
-    rebuilt = services.repin.build_from_analysis(
+    rebuilt = services.draft_editing.build_from_analysis(
         BuildFromAnalysisCommand(
             application_id=application_id,
             analysis_id=newer.analysis_id,
