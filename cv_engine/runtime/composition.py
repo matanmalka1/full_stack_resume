@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 
 from .. import __version__
 from ..api import ApiLimits, ApiServices, InstanceIdentity
@@ -16,9 +15,8 @@ from ..application.ports import (
     ArtifactStore,
     KnowledgeStore,
     Renderer,
-    RevisionPayloadStore,
 )
-from ..application.ports.analysis_plans import AnalysisKnowledgeSource, AnalysisPayloadStore
+from ..application.ports.analysis_plans import AnalysisKnowledgeSource
 from ..application.services.ai_calls import AICallRunner
 from ..application.services.analysis.service import AnalysisService
 from ..application.services.applications.intake import ApplicationService
@@ -47,7 +45,7 @@ from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
 from ..application.services.settings import SettingsService
 from ..infrastructure.artifacts import FilesystemArtifactStore
-from ..infrastructure.document_files import DocumentFiles, SubmissionPayloads
+from ..infrastructure.document_files import DocumentFiles
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3ObjectStore
 from ..infrastructure.operation_logging import OperationFailureLogger
@@ -112,10 +110,6 @@ def _has_prepared_knowledge_mutation(
         return bool(store.prepared_mutations(tx))
 
 
-class RuntimePayloadStore(RevisionPayloadStore, AnalysisPayloadStore, SubmissionPayloads, Protocol):
-    """The complete payload capability set required by runtime composition."""
-
-
 @dataclass(frozen=True)
 class Services:
     """Everything a client needs, wired to one fixed application root."""
@@ -125,7 +119,7 @@ class Services:
     schema_version: str
     knowledge: KnowledgeStore
     artifacts: ArtifactStore
-    payloads: RuntimePayloadStore
+    payloads: PayloadStore
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
@@ -186,7 +180,7 @@ def build_services(
     knowledge: KnowledgeStore | None = None,
     activation_knowledge: AnalysisKnowledgeSource | None = None,
     artifacts: ArtifactStore | None = None,
-    payloads: RuntimePayloadStore | None = None,
+    payloads: PayloadStore | None = None,
     renderer: Renderer | None = None,
     provider: AIProvider | None = None,
     config: RuntimeConfig | None = None,

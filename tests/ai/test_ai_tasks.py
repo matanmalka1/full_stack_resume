@@ -1506,7 +1506,7 @@ def test_analysis_activation_shares_one_token_and_has_no_external_io(
     import urllib.request
 
     from cv_engine.application.transactions import (
-        active_transaction_for_tests,
+        _active_transaction,
         transaction_is_active,
     )
     from cv_engine.infrastructure.object_store import LocalObjectStore
@@ -1538,7 +1538,7 @@ def test_analysis_activation_shares_one_token_and_has_no_external_io(
 
     def tracked(original):
         def call(self, tx, *args, **kwargs):
-            assert active_transaction_for_tests() is tx
+            assert _active_transaction.get() is tx
             tokens.append(tx)
             return original(self, tx, *args, **kwargs)
 
