@@ -27,14 +27,8 @@ from ...commands import (
 )
 from ...errors import (
     ApplicationError,
-    DependencyUnavailable,
-    ExecutionStopped,
     InfrastructureFailure,
     KnowledgeRejected,
-    LineageBroken,
-    MissingFactRendering,
-    PreconditionFailed,
-    ProposalRejected,
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
@@ -217,13 +211,7 @@ class AnalysisOperationHandler(AITaskHandler):
                     self._command(operation), operation_id=operation.id, still_owned=still_owned
                 )
             )
-        except (
-            DependencyUnavailable,
-            ExecutionStopped,
-            InfrastructureFailure,
-            MissingFactRendering,
-            ProposalRejected,
-        ) as exc:
+        except ApplicationError as exc:
             raise self._classified(operation, exc) from exc
 
     def activate(self, tx: WriteTransaction, operation, prepared):
@@ -275,15 +263,7 @@ class DraftOperationHandler(DraftTaskHandler):
                     self._command(operation), operation_id=operation.id, still_owned=still_owned
                 )
             )
-        except (
-            DependencyUnavailable,
-            ExecutionStopped,
-            InfrastructureFailure,
-            MissingFactRendering,
-            ProposalRejected,
-            # The document moved between the source check and execution.
-            StateConflict,
-        ) as exc:
+        except ApplicationError as exc:
             raise self._classified(operation, exc) from exc
 
     def activate(self, tx: WriteTransaction, operation, prepared):
@@ -336,16 +316,7 @@ class RegenerationOperationHandler(DraftTaskHandler):
             else:
                 raise TypeError("regeneration handler parsed an invalid command")
             return self.prepared(result)
-        except (
-            DependencyUnavailable,
-            ExecutionStopped,
-            InfrastructureFailure,
-            ProposalRejected,
-            StateConflict,
-            KnowledgeRejected,
-            LineageBroken,
-            UnknownRecord,
-        ) as exc:
+        except ApplicationError as exc:
             raise self._classified(operation, exc) from exc
 
     def activate(self, tx: WriteTransaction, operation, prepared):
@@ -424,7 +395,7 @@ class RenderOperationHandler:
                 "The document no longer passes its content check.",
                 RenderCheckReason(code="render_validation"),
             ) from exc
-        except (MissingFactRendering, StateConflict, PreconditionFailed) as exc:
+        except ApplicationError as exc:
             raise OperationExecutionError(
                 failure_code_for(exc),
                 safe_failure_detail_for(exc),
