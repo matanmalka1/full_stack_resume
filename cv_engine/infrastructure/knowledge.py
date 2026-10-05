@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -200,12 +199,10 @@ class FileKnowledge:
         *,
         project_root: Path | None = None,
         temp_root: Path | None = None,
-        has_prepared_mutation: Callable[[], bool] | None = None,
     ):
         self.knowledge_root = Path(knowledge_root).resolve()
         self.project_root = Path(project_root or knowledge_root).resolve()
         self.temp_root = Path(temp_root or (self.project_root / "tmp")).resolve()
-        self._has_prepared_mutation = has_prepared_mutation
         resolve_within(self.project_root, self.knowledge_root)
         resolve_within(self.project_root, self.temp_root)
 
@@ -214,8 +211,6 @@ class FileKnowledge:
         return self.knowledge_root / "base"
 
     def facts(self) -> FactStore:
-        if self._has_prepared_mutation is not None and self._has_prepared_mutation():
-            raise FactStoreError("Knowledge has an uncommitted prepared mutation")
         return load_fact_store(self.base_dir)
 
     def task_contracts(self) -> TaskContracts:

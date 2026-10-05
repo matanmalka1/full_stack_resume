@@ -380,6 +380,13 @@ Recovery runs during composition and decides from durable hashes and identities 
 to finish or restore each `PREPARED` entry. It never guesses; an unrecoverable entry is
 `QUARANTINED`. What quarantine blocks is state-and-use-cases.md §17.
 
+While an entry is `PREPARED` the files may already hold content the database has not
+committed, so Knowledge is not read and no further mutation starts. The application
+layer checks the journal, not the file adapter: a read outside a transaction goes through
+`CommittedKnowledge`, which checks it in its own read scope; an Operation handler reading
+inside the runner's scope checks it through that token. Reconciliation reads the files
+regardless, because reporting a `PREPARED` entry is its job.
+
 *Designed, not built (§18):* once facts live in PostgreSQL a fact mutation is one write
 scope, so this journal, its recovery at composition, and quarantine are retired. Existing
 journal rows stay as read-only history.

@@ -236,6 +236,12 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
     with pytest.raises(KnowledgeRejected, match="uncommitted prepared mutation"):
         services.knowledge_queries.list_facts()
     assert services.knowledge_queries.fact_history().events == []
+    # Reconciliation is the diagnostic for exactly this state: it reports the
+    # PREPARED entry rather than refusing to look.
+    reconciliation = services.knowledge_queries.reconcile_facts()
+    assert not reconciliation.passed
+    assert reconciliation.journal_prepared == 1
+    assert f"Knowledge mutation still requires recovery: {mutation.id}" in reconciliation.problems
 
     monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", original_complete)
     recovered = build_services(services.paths)

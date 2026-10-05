@@ -38,6 +38,7 @@ from ...ports.documents import DocumentStore
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.outbound import KnowledgeStore
 from ...ports.transactions import TransactionManager, WriteTransaction
+from .committed import refuse_prepared_knowledge
 
 
 class KnowledgeMutationEngine:
@@ -57,6 +58,7 @@ class KnowledgeMutationEngine:
         self.documents = documents
 
     def load_knowledge(self) -> Knowledge:
+        refuse_prepared_knowledge(self.transactions, self.store)
         try:
             return self._knowledge.load()
         except OSError as exc:
@@ -69,6 +71,7 @@ class KnowledgeMutationEngine:
         return loaded.facts, loaded.profiles, loaded.policies
 
     def fact_store(self) -> FactStore:
+        refuse_prepared_knowledge(self.transactions, self.store)
         try:
             return self._knowledge.facts()
         except OSError as exc:
@@ -77,6 +80,8 @@ class KnowledgeMutationEngine:
             raise KnowledgeRejected(str(exc)) from exc
 
     def _ensure_mutations_allowed(self) -> None:
+        """One mutation at a time, and none while Knowledge is quarantined."""
+        refuse_prepared_knowledge(self.transactions, self.store)
         with self.transactions.read() as tx:
             quarantined = self.store.quarantined_mutations(tx)
         if quarantined:
