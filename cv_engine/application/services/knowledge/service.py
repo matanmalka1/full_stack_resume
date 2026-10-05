@@ -44,6 +44,7 @@ from ...knowledge_mutations import PrepareKnowledgeMutation
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.outbound import KnowledgeStore
 from ...ports.transactions import TransactionManager
+from .committed import refuse_prepared_knowledge
 from .mutations import KnowledgeMutationEngine
 
 
@@ -487,6 +488,7 @@ class KnowledgeQueryService:
         self._knowledge = knowledge
 
     def load_knowledge(self) -> Knowledge:
+        refuse_prepared_knowledge(self.transactions, self.store)
         try:
             return self._knowledge.load()
         except OSError as exc:
@@ -499,6 +501,10 @@ class KnowledgeQueryService:
         return loaded.facts, loaded.profiles, loaded.policies
 
     def fact_store(self) -> FactStore:
+        refuse_prepared_knowledge(self.transactions, self.store)
+        return self._file_facts()
+
+    def _file_facts(self) -> FactStore:
         try:
             return self._knowledge.facts()
         except OSError as exc:
@@ -584,7 +590,8 @@ class KnowledgeQueryService:
         that contradicts the last recorded one. Each means a status was changed
         outside the lifecycle, which is exactly what the trail exists to catch.
         """
-        facts = self.fact_store()
+        # Reads the files as they are: a PREPARED entry is reported below, not refused.
+        facts = self._file_facts()
         with self.transactions.read() as tx:
             recorded = self.store.latest_fact_statuses(tx)
         problems: list[str] = []

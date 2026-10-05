@@ -16,7 +16,6 @@ from ..application.ports import (
     KnowledgeStore,
     Renderer,
 )
-from ..application.ports.analysis_plans import AnalysisKnowledgeSource
 from ..application.services.ai_calls import AICallRunner
 from ..application.services.analysis.service import AnalysisService
 from ..application.services.applications.intake import ApplicationService
@@ -27,6 +26,7 @@ from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.repin import RepinService
 from ..application.services.drafts.validation import DraftValidationService
 from ..application.services.knowledge import (
+    CommittedKnowledge,
     FactLifecycleService,
     KnowledgeQueryService,
     KnowledgeRecoveryService,
@@ -102,14 +102,6 @@ def _config_for(root: Path) -> RuntimeConfig:
     return resolve_config(env=os.environ, project_root=root)
 
 
-def _has_prepared_knowledge_mutation(
-    transactions: SqlAlchemyTransactionManager,
-    store: SqlAlchemyKnowledgeLifecycleRepository,
-) -> bool:
-    with transactions.read() as tx:
-        return bool(store.prepared_mutations(tx))
-
-
 @dataclass(frozen=True)
 class Services:
     """Everything a client needs, wired to one fixed application root."""
@@ -178,7 +170,6 @@ def build_services(
     *,
     database_url: str | None = None,
     knowledge: KnowledgeStore | None = None,
-    activation_knowledge: AnalysisKnowledgeSource | None = None,
     artifacts: ArtifactStore | None = None,
     payloads: PayloadStore | None = None,
     renderer: Renderer | None = None,
@@ -205,9 +196,13 @@ def build_services(
         paths.knowledge_root,
         project_root=paths.root,
         temp_root=paths.temp_root,
-        has_prepared_mutation=lambda: _has_prepared_knowledge_mutation(
-            transactions, knowledge_lifecycle_store
-        ),
+    )
+    # Services that read Knowledge outside a transaction read it as committed.
+    # The Operation handlers read inside the runner's scope and check the journal
+    # through its token, and the Knowledge services hold the journal themselves;
+    # both take the files.
+    committed_knowledge = CommittedKnowledge(
+        resolved_knowledge, transactions=transactions, journal=knowledge_lifecycle_store
     )
     resolved_artifacts = artifacts or FilesystemArtifactStore(paths)
     resolved_payloads = payloads or PayloadStore(paths, build_object_store(paths, resolved_config))
@@ -239,17 +234,6 @@ def build_services(
         inspection=SqlAlchemyMaintenanceInspection(transactions),
         knowledge=knowledge_queries,
     )
-    # Activation probes recovery state through the runner token. This file-only
-    # reader must not invoke startup recovery and open another DB scope.
-    resolved_activation_knowledge = (
-        activation_knowledge
-        or knowledge
-        or FileKnowledge(
-            paths.knowledge_root,
-            project_root=paths.root,
-            temp_root=paths.temp_root,
-        )
-    )
     documents = SqlAlchemyDocumentStore(transactions)
     document_submissions = SqlAlchemyDocumentSubmissionStore(transactions)
     document_files = DocumentFiles(paths, resolved_payloads)
@@ -259,7 +243,7 @@ def build_services(
         sources=analysis_sources,
         documents=documents,
         ai_calls=ai_calls,
-        knowledge=resolved_knowledge,
+        knowledge=committed_knowledge,
         payloads=resolved_payloads,
         provider=resolved_provider,
     )
@@ -268,7 +252,7 @@ def build_services(
         documents=documents,
         sources=analysis_sources,
         applications=SqlAlchemyDraftHistoryApplicationReader(transactions),
-        knowledge=resolved_knowledge,
+        knowledge=committed_knowledge,
     )
     operation_submissions = OperationSubmissionService(
         transactions=transactions,
@@ -284,13 +268,13 @@ def build_services(
         documents=documents,
         sources=analysis_sources,
         files=document_files,
-        knowledge=resolved_knowledge,
+        knowledge=committed_knowledge,
     )
     draft_service = DraftAuthoringService(
         transactions=transactions,
         documents=documents,
         sources=analysis_sources,
-        knowledge=resolved_knowledge,
+        knowledge=committed_knowledge,
         provider=resolved_provider,
         ai_calls=ai_calls,
         snapshot_payloads=resolved_payloads,
@@ -299,13 +283,13 @@ def build_services(
         transactions=transactions,
         documents=documents,
         sources=analysis_sources,
-        knowledge=resolved_knowledge,
+        knowledge=committed_knowledge,
     )
     draft_approval = DraftApprovalService(
         transactions=transactions,
         documents=documents,
         sources=analysis_sources,
-        knowledge=resolved_knowledge,
+        knowledge=committed_knowledge,
         journal=knowledge_lifecycle_store,
         audit=intake_audit,
     )
@@ -314,7 +298,7 @@ def build_services(
         documents=documents,
         sources=analysis_sources,
         files=document_files,
-        knowledge=resolved_knowledge,
+        knowledge=committed_knowledge,
         renderer=resolved_renderer,
         payloads=resolved_payloads,
     )
@@ -328,13 +312,13 @@ def build_services(
         files=document_files,
         recruitment=recruitment_store,
         audit=intake_audit,
-        knowledge=resolved_knowledge,
+        knowledge=committed_knowledge,
     )
     failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
     runner = OperationRunner(
         {
             OperationType.RENDER_DOCUMENT: RenderOperationHandler(
-                rendering_service, documents, analysis_sources, resolved_activation_knowledge
+                rendering_service, documents, analysis_sources, resolved_knowledge
             ),
             OperationType.CREATE_DRAFT: DraftOperationHandler(
                 draft_service, documents, draft_service.activation
@@ -355,7 +339,7 @@ def build_services(
                 analysis_service,
                 analysis_sources,
                 analysis_service.activation,
-                resolved_activation_knowledge,
+                resolved_knowledge,
             ),
         },
         transactions=transactions,
@@ -408,7 +392,7 @@ def build_services(
             projections=application_projections,
             documents=documents,
             submissions=document_submissions,
-            knowledge=resolved_knowledge,
+            knowledge=committed_knowledge,
             payloads=resolved_payloads,
         ),
         analysis=analysis_service,
@@ -418,7 +402,7 @@ def build_services(
             transactions=transactions,
             documents=documents,
             sources=analysis_sources,
-            knowledge=resolved_knowledge,
+            knowledge=committed_knowledge,
         ),
         draft_validation=draft_validation,
         draft_history=draft_history,

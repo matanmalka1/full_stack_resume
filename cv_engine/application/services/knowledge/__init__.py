@@ -6,10 +6,12 @@ The public surfaces are split by query, lifecycle, and recovery responsibility.
 
 from __future__ import annotations
 
+from .committed import CommittedKnowledge
 from .mutations import KnowledgeRecoveryService
 from .service import FactLifecycleService, KnowledgeQueryService
 
 __all__ = [
+    "CommittedKnowledge",
     "FactLifecycleService",
     "KnowledgeQueryService",
     "KnowledgeRecoveryService",

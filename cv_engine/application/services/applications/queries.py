@@ -9,12 +9,12 @@ from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     InfrastructureFailure,
-    KnowledgeRejected,
     UnknownRecord,
 )
+from ...ports.analysis_plans import AnalysisKnowledgeSource
 from ...ports.application_projections import ApplicationProjectionReader
 from ...ports.documents import DocumentStore, DocumentSubmissionStore
-from ...ports.outbound import KnowledgeStore, SnapshotPayloadStore
+from ...ports.outbound import SnapshotPayloadStore
 from ...ports.transactions import ReadTransaction, TransactionManager
 from ...queries import (
     ApplicationDetailView,
@@ -33,6 +33,7 @@ from ...queries import (
 )
 from ...queries.views_prep import JobSnapshotHistoryItem, JobSnapshotHistoryView
 from ...state import ProjectionContext, project_application_state
+from ..documents import load_knowledge
 
 
 class ApplicationQueryService:
@@ -50,7 +51,7 @@ class ApplicationQueryService:
         projections: ApplicationProjectionReader,
         documents: DocumentStore,
         submissions: DocumentSubmissionStore,
-        knowledge: KnowledgeStore,
+        knowledge: AnalysisKnowledgeSource,
         payloads: SnapshotPayloadStore,
     ):
         self._transactions = transactions
@@ -61,20 +62,7 @@ class ApplicationQueryService:
         self.snapshot_payloads = payloads
 
     def load_knowledge(self):
-        try:
-            return self._knowledge.load()
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
-        except ValueError as exc:
-            raise KnowledgeRejected(str(exc)) from exc
-
-    def fact_store(self):
-        try:
-            return self._knowledge.facts()
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not read facts: {exc}") from exc
-        except ValueError as exc:
-            raise KnowledgeRejected(str(exc)) from exc
+        return load_knowledge(self._knowledge)
 
     def job_snapshot_history(self, application_id: str) -> JobSnapshotHistoryView:
         with self._transactions.read() as transaction:
