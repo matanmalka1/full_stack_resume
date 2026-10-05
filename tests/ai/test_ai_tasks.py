@@ -45,6 +45,8 @@ from cv_engine.application.operations import (
     ClaimReviewReason,
     OperationAction,
     OperationFailureCode,
+    OperationStatus,
+    OperationType,
     available_operation_actions,
 )
 from cv_engine.application.settings import UpdateSettings
@@ -198,7 +200,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
     ai_services.settings.update(
         0,
         UpdateSettings(
-            auto_generate_when_review_not_required=False,
+            auto_generate_when_review_not_required=True,
             default_ai_model="gpt-5.6-luna",
             default_reasoning_effort="high",
             ui_density="comfortable",
@@ -236,6 +238,28 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
     assert completed.output_tokens == 22
     assert completed.total_tokens == 33
     assert completed.cost_usd == "0.00002806"
+
+    # §9 automatic generation was on when the analysis was submitted: its activation
+    # queued `create_draft` for the document it created, in the same commit, with the
+    # preferences of that moment rather than the ones Settings hold now.
+    detail = ai_services.queries.application_detail(ingested.application_id)
+    continued = detail.active_operation
+    assert continued is not None
+    assert continued.operation_type is OperationType.CREATE_DRAFT
+    assert continued.status is OperationStatus.QUEUED
+    assert (continued.model, continued.reasoning_effort) == ("gpt-5.6-luna", "high")
+    record = ai_services.operation_runner.operation(continued.id)
+    assert record.idempotency_key == f"draft-continuation:{completed.id}"
+    assert record.sources.expected_document_hash == detail.document_hash
+    assert record.sources.job_analysis_id == detail.document_analysis_id
+
+    # Off when submitted: the analysis creates the document and queues nothing.
+    fake_openai.script("propose_analysis", ANALYSIS)
+    manual = _ingested(ai_services, "Manual Draft Co")
+    _run(ai_services, _analysis_operation(ai_services, manual, model=None, fake_openai=fake_openai))
+    manual_detail = ai_services.queries.application_detail(manual.application_id)
+    assert manual_detail.document_id is not None
+    assert manual_detail.active_operation is None
 
 
 @pytest.mark.parametrize("change_composite", [False, True])

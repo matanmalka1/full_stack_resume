@@ -18,7 +18,10 @@ One synchronous application layer, called by two processes:
   React reaches the application layer through the API and nowhere else.
 - **The worker is an internal execution host.** It calls the same application layer
   through the Operation runner and serves no user. It executes Operations the API
-  created; it is not a second client for any use-case.
+  created, and the one Operation a run continues into: the `create_draft` an analysis
+  queues for the document it created when automatic generation was on (product-spec
+  §9). It holds only that enqueue (`OperationContinuationStore`), never the API's other
+  Operation commands, and is not a second client for any use-case.
 
 A second user-facing surface for a use-case the API already owns is not added: it would
 be a second contract to keep compatible with no capability the first lacks.

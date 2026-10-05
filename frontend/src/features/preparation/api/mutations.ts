@@ -2,14 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { applicationListQueryPrefix, invalidateApplicationViews, startAnalysis } from "@/api/applications";
+import { invalidateApplicationViews, startAnalysis } from "@/api/applications";
 import type { ApplicationDetail, Operation } from "@/api/contracts";
 import { buildFromAnalysis, createDraft, invalidateDocumentViews } from "@/api/documents";
 import { type QueuedOperation, isTerminalOperation, operationQueryKey, operationQueryOptions } from "@/api/operations";
 import { settingsQueryOptions } from "@/api/settings";
 import { useSettings } from "@/features/settings";
 import { routePaths } from "@/navigation/routePaths";
-import { type AutoDraftSources, autoDraftIsContinuing, autoDraftSources } from "../model/autoDraft";
+import { continuationAwaitsProjection, continuedDraft } from "../model/autoDraft";
 import { usePreparationContinuation } from "../model/usePreparationContinuation";
 import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 
@@ -46,84 +46,36 @@ export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operatio
   return { analyze, settings };
 };
 
-interface AutomaticDraftAttempt {
-  sources: AutoDraftSources;
-  triggerOperationId: string;
-}
-
-/* Owns the Web automation continuation from a successful analysis to its draft, and the
-   move to the editor once any generate this screen queued has succeeded.
-
-   Eligibility comes from two server-backed reads only: the watched analyze Operation and
-   the Application projection. The mutation's variables prevent another dispatch of the
-   same continuation while this hook is mounted; across reloads, the stable command key
-   makes a repeated request the same command at the API boundary.
+/* Follows the draft the server queued for the document the watched analysis created
+   (§9 automatic generation), and moves to the editor once a generate this screen follows
+   has succeeded. The server decides and queues; this hook only watches and navigates.
 
    History entry state retains only the tab's explicit continuation intent. */
 export const useAutomaticDraft = ({
   applicationId,
   detail,
   operation,
-  operationId,
   watch,
 }: {
   applicationId: string;
   detail: ApplicationDetail | undefined;
   operation: Operation | undefined;
-  operationId: string | null;
   watch: (operationId: string) => void;
 }) => {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const settingsQuery = useQuery(settingsQueryOptions);
   const { intent, mark } = usePreparationContinuation(applicationId);
 
-  /* One auto-draft per document hash, whichever render reaches it first. The source-
-     derived idempotency key below is the same guard at the API boundary, for a race this
-     ref cannot see across reloads. */
-  const dispatchedSourcesRef = useRef<string | null>(null);
-  const scopeRef = useRef(applicationId);
-  const mountedRef = useRef(true);
+  /* Followed once per queued draft, whichever render reaches it first. */
+  const followedRef = useRef<string | null>(null);
+  const continued = continuedDraft(operation, detail);
+  const continuedId = continued?.id ?? null;
   useEffect(() => {
-    scopeRef.current = applicationId;
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [applicationId]);
-
-  /* The automatic path is the same AI run the button starts, queued without the press. */
-  const automaticDraft = useMutation({
-    mutationFn: ({ sources }: AutomaticDraftAttempt) =>
-      createDraft(sources.applicationId, sources.documentHash, `auto-draft:${sources.documentHash}`),
-    onSuccess: ({ operation: queued }, attempt) => {
-      queryClient.setQueryData(operationQueryKey(queued.id), queued);
-      void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
-      if (
-        !mountedRef.current ||
-        scopeRef.current !== attempt.sources.applicationId ||
-        queued.application_id !== scopeRef.current
-      )
-        return;
-      if (!mark({ applicationId: attempt.sources.applicationId, draftOperationId: queued.id })) return;
-      watch(queued.id);
-    },
-  });
-
-  const attemptInScope = automaticDraft.variables?.sources.applicationId === applicationId;
-  const attemptedOperationId = attemptInScope ? (automaticDraft.variables?.triggerOperationId ?? null) : null;
-  useEffect(() => {
-    if (operationId === null || attemptedOperationId === operationId) {
-      return;
-    }
-    const sources = autoDraftSources(operation, settingsQuery.data?.settings, detail);
-    if (sources !== null && sources.applicationId === applicationId) {
-      const dispatchKey = `${sources.applicationId}:${sources.documentHash}`;
-      if (dispatchedSourcesRef.current === dispatchKey) return;
-      dispatchedSourcesRef.current = dispatchKey;
-      automaticDraft.mutate({ sources, triggerOperationId: operationId });
-    }
-  }, [applicationId, attemptedOperationId, automaticDraft, detail, operation, operationId, settingsQuery.data]);
+    if (continuedId === null || followedRef.current === continuedId) return;
+    followedRef.current = continuedId;
+    if (!mark({ applicationId, draftOperationId: continuedId })) return;
+    watch(continuedId);
+  }, [applicationId, continuedId, mark, watch]);
 
   /* A navigation receipt is intent, not proof of activation. Wait until the projection
      reports content for this Application, and never consume another URL's late result. */
@@ -147,19 +99,14 @@ export const useAutomaticDraft = ({
   }, [applicationId, contentArrived, navigate, navigationPending]);
 
   /* What the screen reporting this Application's work should say instead of reporting a
-     finished run, while this hook is about to start or move to the next one: between a
-     succeeded analyze and the generate that follows it, and between a succeeded generate
-     and the editor this hook navigates to. In both the Operation overlay must stay open
-     rather than close on "הושלמה" and reopen for what comes next.
-
-     A dispatch that failed ends the first: with no continuation coming, the analysis has
-     genuinely finished and its run settles like any other. */
+     finished run: between a succeeded analyze and the draft the server queued after it,
+     and between a succeeded generate and the editor this hook navigates to. In both the
+     Operation overlay must stay open rather than close on "הושלמה" and reopen for what
+     comes next. */
   const continuation =
     operation?.status !== "succeeded"
       ? undefined
-      : !(attemptInScope && automaticDraft.isError) &&
-          ((attemptInScope && automaticDraft.isPending) ||
-            autoDraftIsContinuing(operation, settingsQuery.data?.settings, detail))
+      : continued !== null || continuationAwaitsProjection(operation, settingsQuery.data?.settings, detail)
         ? "הניתוח הושלם. יצירת הטיוטה מתחילה מיד."
         : navigationPending
           ? "הטיוטה נוצרה. מעבר לעורך הטיוטה…"
