@@ -1,4 +1,6 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
+
+import { chromiumProject } from "./playwright.chromium";
 
 const PORT = 4173;
 
@@ -20,7 +22,7 @@ export default defineConfig({
        no Service Worker, and none may answer in its place. */
     serviceWorkers: "block",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [chromiumProject],
   webServer: {
     command: `npm run build && npm run preview -- --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,

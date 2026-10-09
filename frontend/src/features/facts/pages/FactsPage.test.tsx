@@ -260,7 +260,9 @@ describe("Facts integrity check", () => {
     fireEvent.click(await screen.findByRole("button", { name: "הפעלה" }));
 
     expect(
-      await screen.findByText("1 אי־התאמות בעובדות, 1 בעיות בקבצים או בקריאות AI — הבדיקה מדווחת בלבד ואינה מתקנת נתונים."),
+      await screen.findByText(
+        "1 אי־התאמות בעובדות, 1 בעיות בקבצים או בקריאות AI — הבדיקה מדווחת בלבד ואינה מתקנת נתונים.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("הבעיות שנמצאו (2)")).toBeInTheDocument();
     expect(screen.getByText("fact audit mismatch")).toBeInTheDocument();
