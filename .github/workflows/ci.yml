@@ -55,7 +55,7 @@ jobs:
           # Rendering and its validation, the fixtures and journeys browser tests use, the
           # real-server integration suite, and what pins the browser or the build.
           BROWSER_PATHS: >-
-            ^(cv_engine/infrastructure/|cv_engine/application/services/operations/|rendering/|config/|tests/fixtures/|tests/e2e/|tests/asgi_factory\.py|tests/conftest\.py|frontend/e2e/integration/|frontend/playwright\.integration\.config\.ts|pyproject\.toml|uv\.lock|\.github/workflows/)
+            ^(cv_engine/infrastructure/|cv_engine/application/services/operations/|rendering/|config/|tests/fixtures/|tests/e2e/|tests/asgi_factory\.py|tests/conftest\.py|frontend/e2e/integration/|frontend/playwright\.integration\.config\.ts|frontend/playwright\.chromium\.ts|pyproject\.toml|uv\.lock|\.github/workflows/)
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "browser=true" >> "$GITHUB_OUTPUT"

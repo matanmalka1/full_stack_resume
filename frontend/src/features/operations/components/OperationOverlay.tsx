@@ -197,9 +197,7 @@ export const OperationOverlay = ({
      anything, and a fresh run may succeed. The row stops drawing it as an open blocker
      and says what can be done, instead of staying red until the next run replaces it. */
   const retryableRefusal =
-    record?.status === "failed" &&
-    record.failure_code === "PROVIDER_NOT_CONFIGURED" &&
-    ai === "available";
+    record?.status === "failed" && record.failure_code === "PROVIDER_NOT_CONFIGURED" && ai === "available";
   const withheld = record === undefined ? 0 : withheldCount(record);
   const tone: Tone =
     record === undefined || continuing

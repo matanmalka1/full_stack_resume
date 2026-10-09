@@ -178,8 +178,7 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
                           כתיבה למטמון <LtrText>${selectedModel.cache_write_per_million_usd}</LtrText>,{" "}
                         </>
                       )}
-                      ופלט{" "}
-                      <LtrText>${selectedModel.output_per_million_usd}</LtrText>. העלות בפועל תוצג לאחר כל פעולה.
+                      ופלט <LtrText>${selectedModel.output_per_million_usd}</LtrText>. העלות בפועל תוצג לאחר כל פעולה.
                     </p>
                     <p className="mt-2 text-support text-cv-text-muted">
                       בבקשות ארוכות במיוחד עשוי לחול תעריף מוגדל. המחירון הוא snapshot מתוארך ולא התחייבות למחיר עתידי.

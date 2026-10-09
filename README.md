@@ -330,6 +330,11 @@ Do not run other database suites concurrently against the same test database.
 The ordinary `npm --prefix frontend run e2e` suite keeps its stubbed API and excludes
 these integration tests.
 
+Both Playwright configurations launch the Chromium that `npx playwright install chromium`
+placed, unless `CV_PLAYWRIGHT_CHROMIUM` names another executable. In a cloud agent
+container (`CLAUDE_CODE_REMOTE=true`) they use the preinstalled
+`$PLAYWRIGHT_BROWSERS_PATH/chromium` instead (`frontend/playwright.chromium.ts`).
+
 ## Historical artifacts
 
 The pre-v1 generation scripts and the v1 submission data they wrote (`outputs/`,

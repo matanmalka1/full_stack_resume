@@ -1,4 +1,6 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
+
+import { chromiumProject } from "./playwright.chromium";
 
 const baseURL = process.env.CV_TEST_BASE_URL;
 if (!baseURL) {
@@ -19,5 +21,5 @@ export default defineConfig({
     serviceWorkers: "block",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [chromiumProject],
 });
