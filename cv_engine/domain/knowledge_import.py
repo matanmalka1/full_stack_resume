@@ -55,6 +55,27 @@ def fact_from_row(row: dict[str, Any]) -> Fact:
     return Fact.model_validate({**content, "source_file": f"base/{row['source']}.json"})
 
 
+def fact_store_from_rows(rows: list[dict[str, Any]]) -> FactStore:
+    """The store a user's fact rows make, laid out in source and file order.
+
+    There are no per-file source versions any more: `fact_store_version` replaces them
+    (architecture §18.2) and is not hashed here, because it advances on every mutation
+    and `version` must stay blind to a `pending` fact, as a source version was.
+    """
+    ordered = sorted(rows, key=lambda row: (FACT_SOURCES.index(row["source"]), row["ordinal"]))
+    return FactStore({row["fact_id"]: fact_from_row(row) for row in ordered}, source_versions={})
+
+
+def template_of(document: dict[str, Any]) -> dict[str, Any]:
+    """A Profile document's template: everything but the binding fields it may carry."""
+    template = {key: value for key, value in document.items() if key not in BINDING_FIELDS}
+    template["sections"] = [
+        {key: value for key, value in section.items() if key not in SECTION_BINDING_FIELDS}
+        for section in document["sections"]
+    ]
+    return template
+
+
 def candidate_payload(candidate: CandidateContext) -> dict[str, Any]:
     """The declared candidate context, without what is resolved from facts."""
     return candidate.model_dump(mode="json", exclude=set(RESOLVED_CANDIDATE_FIELDS))

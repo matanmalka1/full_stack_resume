@@ -43,6 +43,9 @@ fact_events = Table(
     Column("facts_version", Text, nullable=False),
     Column("lifecycle_version", Text, nullable=False),
     Column("created_at", IsoTimestamp(), nullable=False),
+    # Set once, NULL -> a user, by `import-knowledge` for events written before
+    # Knowledge had an owner; nothing else about an event ever changes (migration 0005).
+    Column("user_id", UUID(as_uuid=False), ForeignKey("users.id")),
 )
 Index(
     "idx_fact_events_fact",

@@ -12,6 +12,10 @@ class UserKnowledgeRepository(Protocol):
         """Whether the user has any fact, candidate context, or Profile binding."""
         ...
 
+    def assign_unowned_fact_events(self, tx: WriteTransaction, user_id: str) -> int:
+        """Give every fact event without an owner this one; the count assigned."""
+        ...
+
     def insert_knowledge(
         self,
         tx: WriteTransaction,

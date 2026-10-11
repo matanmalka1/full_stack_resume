@@ -108,7 +108,7 @@ def main(
             )
             print(
                 f"imported {result.facts} facts and {result.profiles} profile bindings "
-                f"for {result.email}",
+                f"for {result.email}; {result.fact_events} fact events now belong to them",
                 file=out,
             )
     except ApplicationError as error:

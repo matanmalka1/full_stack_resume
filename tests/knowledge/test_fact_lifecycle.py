@@ -576,6 +576,20 @@ def test_lifecycle_events_are_immutable(services: Services) -> None:
             connection = transactions.connection_for(tx, access="write")
             connection.execute(delete(fact_events))
 
+    # The one permitted change: an owner, NULL -> a user, with nothing else (0005).
+    owner = services.accounts.create_user("owner@example.com", "a password long enough")
+    with pytest.raises(ProgrammingError, match="immutable record"):
+        with transactions.write() as tx:
+            connection = transactions.connection_for(tx, access="write")
+            connection.execute(update(fact_events).values(user_id=owner.id, reason="changed"))
+    with transactions.write() as tx:
+        connection = transactions.connection_for(tx, access="write")
+        connection.execute(update(fact_events).values(user_id=owner.id))
+    with pytest.raises(ProgrammingError, match="immutable record"):
+        with transactions.write() as tx:
+            connection = transactions.connection_for(tx, access="write")
+            connection.execute(update(fact_events).values(user_id=None))
+
 
 def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) -> None:
     """The full product path a new fact has to travel.

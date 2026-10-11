@@ -87,11 +87,13 @@ def build_candidate_context(
             "resolved_filename_name": filename_name,
             # The hash covers the declared context and the exact facts it resolved
             # to, so a changed name, contact rendering, or link target is a changed
-            # context.
+            # context. The declared context is hashed as validated, not as spelled: an
+            # optional field left at its default is the same context whether or not
+            # the source wrote it out, so a file and its database row hash alike.
             "version_hash": sha256_text(
                 canonical_json(
                     {
-                        "context": payload,
+                        "context": context.model_dump(mode="json"),
                         "names": names,
                         "contacts": {
                             fact_id: {

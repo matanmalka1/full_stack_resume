@@ -131,8 +131,12 @@ one user. For an existing installation, in delivery order (§5):
    runs `import-knowledge --email <address>`, which reads `base/*.json`,
    `base/candidate.json`, and the candidate-specific parts of `profiles/*.yaml` into that
    user's Knowledge in one transaction, and refuses when the user already has Knowledge.
-   `fact_events` ownership below is part of the switch to database Knowledge, not of the
-   import.
+   In the same transaction it gives every existing `fact_events` row that user as its
+   owner (revision 0005 adds the column and its guard).
+   Run it with the application stopped and immediately before the switch to database
+   Knowledge: that switch strips the bindings from `profiles/`, so the files can no
+   longer be imported afterwards, and a fact edited in the files after the import never
+   reaches the database.
    Existing semantic fact IDs (`common.contact.email`, …) keep their exact spelling for
    that user, so every existing document, Submission, and fact event still resolves.
    `fact_events` rows get their owner through a *permitted transition*: the guard allows

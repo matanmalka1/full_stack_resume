@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Connection, exists, insert, select
+from sqlalchemy import Connection, exists, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from ...application.errors import StateConflict
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import new_id
 from .connection import SqlAlchemyTransactionManager
-from .tables import candidate_contexts, profile_bindings
+from .tables import candidate_contexts, fact_events, profile_bindings
 from .tables import facts as facts_table
 
 _FACT_COLUMNS = (
@@ -52,6 +52,12 @@ class SqlAlchemyUserKnowledgeRepository:
             connection.execute(select(exists().where(table.c.user_id == user_id))).scalar_one()
             for table in (facts_table, candidate_contexts, profile_bindings)
         )
+
+    def assign_unowned_fact_events(self, tx: WriteTransaction, user_id: str) -> int:
+        cursor = self._transactions.connection_for(tx, access="write").execute(
+            update(fact_events).where(fact_events.c.user_id.is_(None)).values(user_id=user_id)
+        )
+        return cursor.rowcount
 
     def insert_knowledge(
         self,

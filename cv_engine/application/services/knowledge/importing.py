@@ -6,6 +6,9 @@ load is refused before anything is written. The rows are then read back inside t
 transaction and rebuilt, and the import commits only if they reproduce every fact, every
 Profile, and the candidate context it read. A lossy import cannot be committed.
 
+In the same transaction the existing fact events get their owner, the one permitted
+change to that history (migration 0005).
+
 The application keeps reading the files until the step that switches it over
 (docs/decisions/multi-user-accounts.md §5, step 4); nothing here changes what it reads.
 """
@@ -36,6 +39,7 @@ class KnowledgeImportResult(BoundaryDTO):
     email: str
     facts: int
     profiles: int
+    fact_events: int
 
 
 class KnowledgeImportService:
@@ -102,7 +106,12 @@ class KnowledgeImportService:
                 raise KnowledgeRejected(
                     "Knowledge changed while it was being imported; run the import again."
                 )
-        return KnowledgeImportResult(email=user.email, facts=len(rows), profiles=len(bindings))
+            # The lifecycle history written before Knowledge had an owner is this user's:
+            # the database admits one user (`users_single_user`), so nothing is guessed.
+            events = self.repo.assign_unowned_fact_events(tx, user.id)
+        return KnowledgeImportResult(
+            email=user.email, facts=len(rows), profiles=len(bindings), fact_events=events
+        )
 
     def _refuse_unresolved_mutation(self, tx: ReadTransaction) -> None:
         if self.journal.prepared_mutations(tx) or self.journal.quarantined_mutations(tx):

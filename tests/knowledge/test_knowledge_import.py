@@ -21,6 +21,7 @@ from cv_engine.application.errors import KnowledgeRejected, StateConflict, Unkno
 from cv_engine.application.knowledge_mutations import PrepareKnowledgeMutation
 from cv_engine.application.services.knowledge.importing import KnowledgeImportService
 from cv_engine.domain.knowledge_import import join_profile, split_profile
+from cv_engine.infrastructure.database_knowledge import DatabaseKnowledge
 from cv_engine.infrastructure.knowledge import FileKnowledge
 from cv_engine.infrastructure.persistence.accounts import SqlAlchemyAccountRepository
 from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
@@ -28,6 +29,7 @@ from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
 )
 from cv_engine.infrastructure.persistence.tables import (
     candidate_contexts,
+    fact_events,
     facts,
     profile_bindings,
 )
@@ -38,6 +40,14 @@ from cv_engine.util import new_id
 
 EMAIL = "candidate@example.com"
 PASSWORD = "test password, long enough"
+PENDING_FACT = {
+    "fact_id": "situational.postgres",
+    "meaning": "Used PostgreSQL for local application state in a personal project.",
+    "renderings": {"en": "Used PostgreSQL for local application state in a personal project."},
+    "tags": ["development", "situational", "databases"],
+    "provenance": "candidate wording from the user; not yet verified",
+    "resume_style": "bullet",
+}
 
 
 @pytest.fixture
@@ -53,14 +63,48 @@ def _counts(database_engine) -> tuple[int, int, int]:
         )
 
 
-def test_the_installations_own_knowledge_imports_and_rebuilds_exactly(services, user) -> None:
-    """The real `base/` and `profiles/`, not a fixture: what the user will import."""
+def test_the_installations_own_knowledge_imports_and_reads_back_from_the_database(
+    services, user, transaction_manager
+) -> None:
+    """The real `base/` and `profiles/`, not a fixture: what the user will import.
+
+    Read back through `DatabaseKnowledge`, it is the Knowledge the files held. Only the
+    fact-store versions move, because per-file source versions are gone (§18.2); every
+    fact, Profile, and the candidate context is the same, in the same order.
+    """
     knowledge = FileKnowledge(SOURCE_ROOT).load()
 
     result = services.knowledge_import.import_knowledge(EMAIL, FileKnowledge(SOURCE_ROOT))
+    with transaction_manager.read() as tx:
+        stored = DatabaseKnowledge(
+            SqlAlchemyUserKnowledgeRepository(transaction_manager), SOURCE_ROOT
+        ).load(tx, user.id)
 
     assert result.facts == len(knowledge.facts.facts)
     assert result.profiles == len(knowledge.profiles.profiles)
+    assert list(stored.facts.facts.items()) == list(knowledge.facts.facts.items())
+    assert stored.profiles.profiles == knowledge.profiles.profiles
+    assert stored.profiles.sources == knowledge.profiles.sources
+    assert stored.candidate == knowledge.candidate
+    fact_versions = {"facts", "facts_lifecycle"}
+    assert {
+        name: version for name, version in stored.versions().items() if name not in fact_versions
+    } == {
+        name: version for name, version in knowledge.versions().items() if name not in fact_versions
+    }
+
+
+def test_import_gives_the_existing_fact_events_their_owner(
+    services, user, project_root, database_engine
+) -> None:
+    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(PENDING_FACT))
+
+    result = services.knowledge_import.import_knowledge(EMAIL, FileKnowledge(project_root))
+
+    with database_engine.connect() as connection:
+        owners = connection.execute(select(fact_events.c.user_id)).scalars().all()
+    assert result.fact_events == len(owners) > 0
+    assert set(owners) == {user.id}
 
 
 def test_rows_carry_each_fact_its_source_order_and_the_split_profiles(
