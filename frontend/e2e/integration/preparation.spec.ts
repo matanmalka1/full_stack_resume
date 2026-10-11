@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
+
+import { expect, test } from "./fixtures";
 
 const postResponse = (page: Page, path: string) =>
   page.waitForResponse(

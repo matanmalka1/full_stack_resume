@@ -99,6 +99,10 @@ const problemMessages: Record<string, ProblemMessage> = {
   PAYLOAD_TOO_LARGE: { reason: "התוכן שנשלח ארוך מדי.", action: "יש לקצר אותו ולנסות שוב." },
   ORIGIN_NOT_ALLOWED: { reason: "הגישה נדחתה.", action: "יש לפתוח את המערכת מהכתובת שהוגדרה עבורה." },
   FORBIDDEN: { reason: "הגישה נדחתה.", action: "יש לפתוח את המערכת מהכתובת שהוגדרה עבורה." },
+  AUTHENTICATION_REQUIRED: { reason: "פג תוקף ההתחברות.", action: "יש להתחבר מחדש." },
+  INVALID_CREDENTIALS: { reason: "האימייל או הסיסמה שגויים.", action: "אפשר לנסות שוב." },
+  REAUTHENTICATION_FAILED: { reason: "הסיסמה הנוכחית שגויה.", action: "אפשר לנסות שוב." },
+  PASSWORD_POLICY_FAILED: { reason: "הסיסמה החדשה צריכה להכיל 12 עד 256 תווים.", action: "יש לבחור סיסמה אחרת." },
 };
 
 /* The known reason and action for a problem code, or null for a code this client does

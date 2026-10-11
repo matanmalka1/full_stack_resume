@@ -15,7 +15,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException
@@ -30,6 +30,7 @@ from .middleware.request_logging import (
 )
 from .middleware.security import BodySizeLimitMiddleware, OriginPolicyMiddleware, allowed_origins
 from .problems import (
+    AUTHENTICATION_REQUIRED_OPENAPI_RESPONSE,
     REQUEST_VALIDATION_OPENAPI_RESPONSE,
     application_error_handler,
     http_error_handler,
@@ -50,6 +51,7 @@ from .routers import (
     tracking,
 )
 from .services import ApiServices
+from .session_cookie import require_session
 from .versioning import API_PREFIX, API_VERSION
 
 __all__ = ["API_PREFIX", "API_VERSION", "DEFAULT_HOST", "DEFAULT_PORT", "create_app"]
@@ -124,9 +126,16 @@ def create_app(
     app.add_exception_handler(HTTPException, http_error_handler)
     app.add_exception_handler(Exception, unexpected_error_handler)
 
+    # Sign-in and health answer without a session; `auth` resolves its own for the
+    # routes that need one. Every other router requires a session as a whole, so a route
+    # added to one cannot forget to.
+    for router in (health.router, auth.router):
+        app.include_router(
+            router,
+            prefix=API_PREFIX,
+            responses={422: REQUEST_VALIDATION_OPENAPI_RESPONSE},
+        )
     for router in (
-        health.router,
-        auth.router,
         applications.router,
         analyses.router,
         documents.router,
@@ -139,7 +148,11 @@ def create_app(
         app.include_router(
             router,
             prefix=API_PREFIX,
-            responses={422: REQUEST_VALIDATION_OPENAPI_RESPONSE},
+            dependencies=[Depends(require_session)],
+            responses={
+                401: AUTHENTICATION_REQUIRED_OPENAPI_RESPONSE,
+                422: REQUEST_VALIDATION_OPENAPI_RESPONSE,
+            },
         )
     install_problem_details_openapi(app)
     if frontend_dist is not None:

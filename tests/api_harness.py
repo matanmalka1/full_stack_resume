@@ -26,11 +26,35 @@ from helpers import analysis_proposal
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
 from cv_engine.api.schemas.operations import OperationResponse
+from cv_engine.api.session_cookie import SESSION_COOKIE
 from cv_engine.application.operations import TERMINAL_OPERATION_STATUSES
 from cv_engine.runtime.composition import Services, build_api_services
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
+
+#: The one user every signed-in harness creates. Every route but sign-in and health
+#: requires a session, so a harness signs in before handing its client over.
+TEST_EMAIL = "candidate@example.com"
+TEST_PASSWORD = "test password, long enough"
+
+
+def sign_in(client: TestClient, services: Services) -> TestClient:
+    """Create the test user and carry its session on every request of `client`.
+
+    The cookie is `Secure`, so the client's jar would keep it off the plain-HTTP test
+    transport; it is set as a default header instead, as a browser on https sends it.
+    """
+    services.accounts.create_user(TEST_EMAIL, TEST_PASSWORD)
+    response = client.post(
+        f"{API_PREFIX}/auth/login",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+        headers=MUTATION_HEADERS,
+    )
+    assert response.status_code == 200, response.text
+    client.headers["Cookie"] = f"{SESSION_COOKIE}={response.cookies[SESSION_COOKIE]}"
+    return client
+
 
 #: Derived from the lifecycle contract rather than restated, so a new terminal
 #: status cannot leave the harness waiting forever for work that has finished.
@@ -149,6 +173,7 @@ def api_with_worker(services: Services, *, fake_openai: FakeOpenAI | None = None
         daemon=True,
     )
     with TestClient(create_app(build_api_services(services))) as client:
+        sign_in(client, services)
         thread.start()
         try:
             yield ApiHarness(client=client, services=services, fake_openai=fake_openai)

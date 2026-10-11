@@ -63,8 +63,13 @@ export const test = base.extend<{ api: Api }>({
         },
       };
 
-      /* Every screen sits in the shell, and the shell reads Settings. One deliberate default
-         rather than a copy per spec; a scenario about Settings replaces it. */
+      /* Every screen sits in the shell, and the shell reads who is signed in and their
+         Settings. One deliberate default each rather than a copy per spec; a scenario
+         about either replaces it. */
+      api.stub(
+        "GET /api/v1/auth/me",
+        json({ id: "user-1", email: "candidate@example.com", created_at: "2026-10-11T12:00:00+00:00" }),
+      );
       api.stub("GET /api/v1/settings", json(settings()));
 
       await context.route(

@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { buttonClasses } from "@/ui/Button";
 import { cx } from "@/ui/cx";
 import { Tooltip } from "@/ui/Tooltip";
+import { SignOutButton } from "@/features/auth";
 import { GlobalSearch } from "../search/GlobalSearch";
 import { boardPath } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
@@ -120,6 +121,7 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
             )}
           >
             <GlobalSearch className={collapsed ? undefined : "lg:w-full"} compact={collapsed} showTrigger />
+            <SignOutButton compact={collapsed} />
 
             {collapsed ? (
               <Tooltip label="משרה חדשה" placement="rail">

@@ -1,9 +1,8 @@
 """Local security: body size, Origin, and CORS.
 
-v2.0 has no authentication and no CSRF token. What stands in for them is that
-the service is loopback-only, the UI is served same-origin, and every
-state-changing request has to prove it came from an origin this instance
-recognises.
+There is no CSRF token. A session cookie is `SameSite=Lax`, the UI is served
+same-origin, and every state-changing request has to prove it came from an origin
+this instance recognises (architecture §18.5).
 
 Both middlewares are raw ASGI rather than `BaseHTTPMiddleware`, deliberately.
 `BaseHTTPMiddleware` builds its own `Request`, and reading the body from it

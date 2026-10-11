@@ -2910,6 +2910,15 @@ export interface operations {
                     "application/json": components["schemas"]["AnalysisDecisionsResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -2948,6 +2957,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApplicationListResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -2979,6 +2997,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateApplicationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3014,6 +3041,15 @@ export interface operations {
                     "application/json": components["schemas"]["DuplicateCheckResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3043,6 +3079,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationDetailResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3083,6 +3128,15 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3112,6 +3166,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CloseApplicationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3145,6 +3208,15 @@ export interface operations {
                     "application/json": components["schemas"]["DeleteApplicationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3174,6 +3246,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3214,6 +3295,15 @@ export interface operations {
                     "application/json": components["schemas"]["DocumentMutationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3247,6 +3337,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentCheckResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3284,6 +3383,15 @@ export interface operations {
                     "application/json": components["schemas"]["DocumentMutationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3319,6 +3427,15 @@ export interface operations {
                     "application/json": components["schemas"]["DocumentCheckResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3348,6 +3465,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DecisionExportResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3388,6 +3514,15 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3417,6 +3552,15 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": string;
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3450,6 +3594,15 @@ export interface operations {
                     "text/html": string;
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3479,6 +3632,15 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": string;
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3519,6 +3681,15 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3555,6 +3726,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3595,6 +3775,15 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3628,6 +3817,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmissionResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3665,6 +3863,15 @@ export interface operations {
                     "application/json": components["schemas"]["UpdateJobTextResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3698,6 +3905,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationMutationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3735,6 +3951,15 @@ export interface operations {
                     "application/json": components["schemas"]["UpdateApplicationNotesResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3768,6 +3993,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationMutationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3805,6 +4039,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApplicationMutationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -3838,6 +4081,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmissionResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4018,6 +4270,15 @@ export interface operations {
                     "application/json": components["schemas"]["FactListResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -4051,6 +4312,15 @@ export interface operations {
                     "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -4080,6 +4350,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactAttachmentTargetsResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4115,6 +4394,15 @@ export interface operations {
                     "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -4142,6 +4430,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactHistoryResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4173,6 +4470,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactDetailResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4210,6 +4516,15 @@ export interface operations {
                     "application/json": components["schemas"]["FactAttachmentResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -4243,6 +4558,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactMutationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4280,6 +4604,15 @@ export interface operations {
                     "application/json": components["schemas"]["ConfirmAndUseFactResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -4315,6 +4648,15 @@ export interface operations {
                     "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -4344,6 +4686,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactHistoryResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4404,6 +4755,15 @@ export interface operations {
                     "application/json": components["schemas"]["OrphanInventoryResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -4431,6 +4791,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconciliationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4464,6 +4833,15 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -4493,6 +4871,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4529,6 +4916,15 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description The request did not match the API contract. */
             422: {
                 headers: {
@@ -4558,6 +4954,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4596,6 +5001,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */

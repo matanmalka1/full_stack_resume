@@ -8,6 +8,7 @@ from pathlib import Path
 from threading import Event, Thread
 
 import pytest
+from api_harness import TEST_EMAIL, TEST_PASSWORD
 from fake_provider import HTTPStatus
 from helpers import analysis_proposal
 
@@ -45,7 +46,12 @@ def run_browser(live_api_server, spec: str) -> None:
             spec,
         ],
         cwd=FRONTEND,
-        env={**os.environ, "CV_TEST_BASE_URL": live_api_server.base_url},
+        env={
+            **os.environ,
+            "CV_TEST_BASE_URL": live_api_server.base_url,
+            "CV_TEST_EMAIL": TEST_EMAIL,
+            "CV_TEST_PASSWORD": TEST_PASSWORD,
+        },
         capture_output=True,
         text=True,
         timeout=180,

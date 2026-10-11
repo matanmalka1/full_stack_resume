@@ -35,8 +35,15 @@ local database and apply the current migrations before starting the application:
 ```bash
 docker compose up -d postgres
 ./.venv/bin/alembic upgrade head
+./.venv/bin/python -m cv_engine.admin create-user --email you@example.com
 ./scripts/dev.sh
 ```
+
+Every screen but sign-in requires a session, so the first run creates the one user;
+`create-user` prompts for the password twice (12 to 256 characters). A forgotten
+password is reset with `python -m cv_engine.admin set-password --email …`, which also
+ends every session. The database admits one user until per-user isolation ships
+(`docs/decisions/multi-user-accounts.md`).
 
 Multiple worktrees may share the same PostgreSQL server, but worktrees that run in
 parallel should use separate databases through `CV_DATABASE_URL`; they do not need
@@ -206,6 +213,11 @@ For the Vite frontend alone, bind it to the local network with:
 cd frontend
 npm run dev:mobile
 ```
+
+Sign-in does not work over this address yet. The session cookie is `Secure` (architecture
+§18.4), and a browser stores one only from a secure context: `localhost` and `127.0.0.1`
+are, a LAN address over plain HTTP is not. Mobile access needs HTTPS in front of the dev
+server first.
 
 To start the API, worker, and the same mobile-accessible frontend together, run:
 

@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { Settings, ShieldCheck } from "lucide-react";
+import { KeyRound, Settings, ShieldCheck } from "lucide-react";
 
 import { settingsQueryOptions } from "@/api/settings";
+import { ChangePasswordForm } from "@/features/auth";
 import { Card } from "@/ui/Card";
 import { PageShell } from "@/ui/PageShell";
 import { LiveRegion } from "@/ui/LiveRegion";
@@ -62,6 +63,15 @@ export const SettingsPage = () => {
         >
           {query.data === undefined ? null : <SettingsForm etag={query.data.etag} settings={query.data.settings} />}
         </QueryState>
+      </Card>
+      <Card className="mt-6 bg-cv-surface p-5 shadow-surface sm:p-6">
+        <SectionHeader
+          className="mb-5"
+          description="שינוי הסיסמה מנתק את כל ההתחברויות האחרות."
+          icon={KeyRound}
+          title="סיסמה"
+        />
+        <ChangePasswordForm />
       </Card>
     </PageShell>
   );

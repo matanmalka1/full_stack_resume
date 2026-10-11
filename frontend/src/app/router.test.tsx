@@ -8,6 +8,8 @@ import { ApplicationPage } from "@/features/application-detail/pages/Application
 import { ApplicationResumePage } from "@/features/application-detail/pages/ApplicationResumePage";
 import { DraftEditorPage } from "@/features/drafts/pages/DraftEditorPage";
 import { ReadyPage } from "@/features/ready/pages/ReadyPage";
+import { SessionGate } from "@/features/auth";
+import { LoginPage } from "@/features/auth/pages/LoginPage";
 import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorBoundary";
 import { routes } from "./router";
 
@@ -32,6 +34,15 @@ describe("the route table", () => {
 
     expect(await screenOf(index)).toBe(ApplicationListPage);
     expect(await elementType("applications/new")).toBe(NewApplicationPage);
+  });
+
+  it("puts every screen behind the session gate and sign-in outside it", async () => {
+    const shell = routes[0]?.element;
+    const login = routes.find((entry) => entry.path === "/login");
+
+    expect(isValidElement(shell) ? shell.type : null).toBe(SessionGate);
+    expect(await screenOf(login)).toBe(LoginPage);
+    expect(routes.filter((entry) => entry.path !== "/" && entry.path !== "/login")).toEqual([]);
   });
 
   it("keeps root and in-layout failures in containers that own different landmarks", () => {

@@ -715,9 +715,9 @@ The product version does not substitute for any of them.
 ## 18. Identity, sessions, and isolation
 
 *Partly built.* Built: `users` and `user_sessions` (§18.1), sessions and passwords
-(§18.4), and `create-user` and `set-password` (§18.7); no route requires a session yet
-(`../decisions/multi-user-accounts.md` §5, step 3). Everything else here is designed,
-not built. Product rules: product-spec.md §22. Commands and codes:
+(§18.4), `create-user` and `set-password` (§18.7), and the session requirement on every
+route but sign-in and health (`../decisions/multi-user-accounts.md` §5, steps 2 and 3).
+Everything else here is designed, not built. Product rules: product-spec.md §22. Commands and codes:
 state-and-use-cases.md §23. Why, the migration of an existing installation, and the
 delivery order: `../decisions/multi-user-accounts.md`.
 
