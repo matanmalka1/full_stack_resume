@@ -289,23 +289,26 @@ def test_confirm_and_use_audit_failure_leaves_the_fact_and_the_binding_as_they_w
     assert services.knowledge.load().profiles.get("account-manager") == profile_before
 
 
-def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(
-    services: Services,
-) -> None:
-    """Staging a fact for one application must not break another's draft.
+def test_an_unrelated_fact_change_leaves_a_document_approvable(drafted_application) -> None:
+    """Only the facts a document depends on are its concern (state-and-use-cases §6).
 
-    `facts.version` identifies the canonical surface a CV may be built from, so
-    a `pending` fact changes `lifecycle_version` only.
+    A fact created and confirmed for nothing this document cites moves the canonical
+    surface (`facts.version`) but not the document's basis, and the document still
+    passes its check and approves: there is no store-wide version check to fail.
     """
+    setup = drafted_application("Unrelated Fact Co")
+    services, application_id = setup
     before = _reload(services)
     services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     after = _reload(services)
-
     assert after.version == before.version
     assert after.lifecycle_version != before.lifecycle_version
 
     services.knowledge_lifecycle.confirm_fact("situational.postgres", explicitly_confirmed=True)
     assert _reload(services).version != before.version
+
+    approved = approve_active_draft(services, application_id)
+    assert approved.passed, approved.report
 
 
 def test_lifecycle_refuses_unconfirmed_illegal_duplicate_and_repeated_deletion(
