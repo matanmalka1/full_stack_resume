@@ -824,11 +824,14 @@ analysis = analyses.get_for_application(tx, analysis_id, application.id)
 - Session token: 32 random bytes, sent only in the `__Host-cv_session` cookie
   (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`), stored as SHA-256.
   Browsers treat `http://localhost` as secure, so the same cookie works in development.
-  A session lives 30 days from sign-in (`CV_SESSION_DAYS`); there is no idle timeout and
-  no refresh. Sign-in always mints a new session.
+  A session lives 30 days from sign-in (`CV_SESSION_DAYS`, at least 1); there is no idle
+  timeout and no refresh. Sign-in always mints a new session and revokes the one the
+  request presented, if it is live.
 - Passwords: Argon2id with the library's default parameters. Policy: 12 to 256
   characters, no composition rules. When the email is unknown, a fixed dummy hash is
-  verified anyway, so timing does not reveal it.
+  verified anyway, so timing does not reveal it; the dummy is made before the lookup, so
+  the first unknown email costs what the first wrong password does. A hash made with
+  other parameters than the current defaults is replaced at the next sign-in.
 
 ### 18.5 Transport and rate limit
 

@@ -13,6 +13,10 @@ class PasswordHasher(Protocol):
 
     def verify(self, password_hash: str, password: str) -> bool: ...
 
+    def needs_rehash(self, password_hash: str) -> bool:
+        """Whether the hash was made with parameters other than the current ones."""
+        ...
+
 
 class AccountRepository(Protocol):
     def insert_user(

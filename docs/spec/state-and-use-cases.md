@@ -1060,25 +1060,29 @@ exceptions. They become a refusal only when a command they block is attempted.
 
 *Partly built.* `login`, `logout`, `logout_all`, `me`, `change_password`, and the
 operator commands `create-user` and `set-password` are built, and every other route
-requires a session; the sign-in rate limit and `import-knowledge` are not yet
+requires a session, and so is `import-knowledge`; the sign-in rate limit is not yet
 (`../decisions/multi-user-accounts.md` §5). Product rules: product-spec.md §22.
 Mechanisms, tables, and default limits: architecture.md §18. Why: `../decisions/multi-user-accounts.md`.
 
 Routes are under `/api/v1/auth`. Bodies are JSON; every mutation passes the Origin
 check (architecture.md §14). A session is an opaque cookie; no route returns a token in
-a body. `login` is the only route that needs no session.
+a body. `login` and `logout` are the only routes that need no session. No `/auth`
+response may be cached (`Cache-Control: no-store`).
 
 ### `login(email, password)`
 
 `POST /auth/login`. Rate limited first: past the limit it is `429 RATE_LIMITED` with
 `Retry-After`, whatever the credentials. On success creates a new session, sets its
-cookie, and returns `me`. On any failure — unknown email or wrong password — answers
+cookie, and returns `me`; a live session the request presented is revoked, so signing in
+again replaces the browser's session rather than adding one. A password hash made with
+parameters other than the current ones is replaced on that sign-in. On any failure — unknown email or wrong password — answers
 `401 INVALID_CREDENTIALS` with the same body and comparable timing, and logs the failure
 without the password.
 
 ### `logout()` / `logout_all()`
 
-`POST /auth/logout` revokes the current session and clears the cookie.
+`POST /auth/logout` revokes the current session and clears the cookie. With no live
+session there is nothing to revoke; it still clears the cookie and answers `204`.
 `POST /auth/logout-all` revokes every session of the user, the current one included.
 Both `204`.
 

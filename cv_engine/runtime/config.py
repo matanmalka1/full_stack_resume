@@ -43,6 +43,14 @@ class Setting:
     the same field. Not applied to `default`, which is already typed."""
 
 
+def positive_int(raw: str) -> int:
+    """An integer of at least 1: a zero or negative count is a misconfiguration."""
+    value = int(raw)
+    if value < 1:
+        raise ValueError("must be at least 1")
+    return value
+
+
 # The HTTP body limit lives here rather than in the API package because the
 # test plan (§10) requires the chosen value to be recorded in the config
 # contract and can be reported by diagnostics.
@@ -114,7 +122,8 @@ SETTINGS: dict[str, Setting] = {
         Setting("s3_region", "CV_S3_REGION", default=None),
         # How long a session lives from sign-in; no idle timeout, no refresh
         # (architecture §18.4).
-        Setting("session_days", "CV_SESSION_DAYS", default=30, cast=int),
+        # A session of zero days would sign every user out as they sign in.
+        Setting("session_days", "CV_SESSION_DAYS", default=30, cast=positive_int),
     )
 }
 

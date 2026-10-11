@@ -53,6 +53,15 @@ def test_config_precedence_secret_exclusion_and_parsing(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="unknown project config settings"):
         resolve_config(env={}, project_root=tmp_path)
 
+    # A session of zero days would end every session as it starts: refused at startup.
+    (tmp_path / CONFIG_NAME).write_text("{}", encoding="utf-8")
+    assert (
+        resolve_config(env={"CV_SESSION_DAYS": "7"}, project_root=tmp_path).get("session_days") == 7
+    )
+    for invalid in ("0", "-3"):
+        with pytest.raises(ConfigError, match="CV_SESSION_DAYS.*at least 1"):
+            resolve_config(env={"CV_SESSION_DAYS": invalid}, project_root=tmp_path)
+
     env_root = tmp_path / "env-only"
     env_root.mkdir()
     (env_root / ".env").write_text(
