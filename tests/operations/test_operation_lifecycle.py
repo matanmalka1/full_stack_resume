@@ -228,7 +228,7 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     )
     attempts = 0
 
-    def prepare_that_fails(_command, *, operation_id=None, still_owned=None):
+    def prepare_that_fails(_actor, _command, *, operation_id=None, still_owned=None):
         nonlocal attempts
         attempts += 1
         raise InfrastructureFailure("provider request timed out")
@@ -252,7 +252,7 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     assert completed.failure_code is OperationFailureCode.INFRASTRUCTURE_FAILED
     assert attempts == 1
 
-    def prepare_that_is_refused(_command, *, operation_id=None, still_owned=None):
+    def prepare_that_is_refused(_actor, _command, *, operation_id=None, still_owned=None):
         raise PreconditionFailed("the document has no content yet")
 
     monkeypatch.setattr(services.analysis, "prepare", prepare_that_is_refused)

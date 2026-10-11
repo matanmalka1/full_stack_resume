@@ -161,9 +161,9 @@ def test_generic_status_transition_to_applied_is_always_blocked(
         )
     with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationStore(transaction_manager).get_application(tx, app_id)[
-                "current_status"
-            ]
+            SqlAlchemyApplicationStore(transaction_manager).get_application(
+                tx, app_id, actor_of(services).user_id
+            )["current_status"]
             == "saved"
         )
 

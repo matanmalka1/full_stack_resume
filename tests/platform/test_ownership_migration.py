@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from alembic import command
@@ -67,12 +68,12 @@ def test_ownership_migration_assigns_the_only_user_and_moves_settings(
                     text("SELECT user_id FROM applications WHERE id = :id"),
                     {"id": application_id},
                 ).scalar_one()
-                == user_id
+                == UUID(user_id)
             )
             settings = connection.execute(
                 text("SELECT user_id, edit_version, ui_theme FROM user_settings")
             ).one()
-            assert tuple(settings) == (user_id, 7, "dark")
+            assert tuple(settings) == (UUID(user_id), 7, "dark")
             tables = set(inspect(connection).get_table_names())
             assert "app_settings" not in tables
             assert "user_settings" in tables

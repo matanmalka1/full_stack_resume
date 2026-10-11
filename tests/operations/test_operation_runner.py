@@ -149,7 +149,9 @@ def test_racing_claimants_produce_one_claim_and_one_execution(
             {OperationType.ANALYZE_JOB: handler},
             runner_id="worker-racer",
         ),
-        request_cancellation=services.operation_lifecycle.cancel,
+        request_cancellation=lambda operation_id: services.operation_lifecycle.cancel(
+            actor_of(services), operation_id
+        ),
         exclusive=_held_slot,
         concurrency=1,
         poll_interval_seconds=0,
@@ -190,7 +192,9 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
             operation_failure_logger=event_logger.record_operation_failure,
             operation_event_logger=event_logger.record_event,
         ),
-        request_cancellation=services.operation_lifecycle.cancel,
+        request_cancellation=lambda operation_id: services.operation_lifecycle.cancel(
+            actor_of(services), operation_id
+        ),
         exclusive=_held_slot,
         concurrency=1,
     )
@@ -501,7 +505,9 @@ def test_worker_stops_when_its_lock_session_ends(services, database_engine) -> N
     """
     worker = OperationWorker(
         _runner(services, {}, runner_id="lock-loser"),
-        request_cancellation=services.operation_lifecycle.cancel,
+        request_cancellation=lambda operation_id: services.operation_lifecycle.cancel(
+            actor_of(services), operation_id
+        ),
         exclusive=lambda: worker_exclusivity(database_engine),
         concurrency=1,
         poll_interval_seconds=0.01,
@@ -608,7 +614,7 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     )
     attempts = 0
 
-    def prepare_that_fails(_command, *, operation_id=None, still_owned=None):
+    def prepare_that_fails(_actor, _command, *, operation_id=None, still_owned=None):
         nonlocal attempts
         attempts += 1
         raise MissingFactRendering("situational.agentic_multi_agent", "he")
@@ -661,7 +667,7 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     original_cancel = services.operation_lifecycle.operations.request_cancellation
     cancellation_attempts = []
 
-    def cancel_after_runner_write(tx, operation_id):
+    def cancel_after_runner_write(tx, operation_id, user_id):
         cancellation_attempts.append(operation_id)
         if len(cancellation_attempts) == 1:
             # Establish the cancellation snapshot, then commit a runner write to the
@@ -669,7 +675,7 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
             services.operation_runner.execution_store.operation(tx, operation_id)
             with ThreadPoolExecutor(max_workers=1) as pool:
                 pool.submit(_runner_touches_row, database_engine, operation_id).result(timeout=2)
-        return original_cancel(tx, operation_id)
+        return original_cancel(tx, operation_id, user_id)
 
     monkeypatch.setattr(
         services.operation_lifecycle.operations, "request_cancellation", cancel_after_runner_write
@@ -688,7 +694,9 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     )
     worker = OperationWorker(
         runner,
-        request_cancellation=services.operation_lifecycle.cancel,
+        request_cancellation=lambda operation_id: services.operation_lifecycle.cancel(
+            actor_of(services), operation_id
+        ),
         exclusive=_held_slot,
         concurrency=1,
         poll_interval_seconds=0.01,

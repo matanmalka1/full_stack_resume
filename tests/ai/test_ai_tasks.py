@@ -1127,8 +1127,8 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
     queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     original = ai_services.analysis.prepare
 
-    def prepare_then_cancel(command, *, operation_id=None, still_owned=None):
-        prepared = original(command, operation_id=operation_id, still_owned=still_owned)
+    def prepare_then_cancel(actor, command, *, operation_id=None, still_owned=None):
+        prepared = original(actor, command, operation_id=operation_id, still_owned=still_owned)
         ai_services.operation_lifecycle.cancel(actor_of(ai_services), operation_id)
         return prepared
 
@@ -1156,8 +1156,8 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
     queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     original = ai_services.analysis.prepare
 
-    def prepare_then_move_the_source(command, *, operation_id=None, still_owned=None):
-        prepared = original(command, operation_id=operation_id, still_owned=still_owned)
+    def prepare_then_move_the_source(actor, command, *, operation_id=None, still_owned=None):
+        prepared = original(actor, command, operation_id=operation_id, still_owned=still_owned)
         ai_services.applications.update_job_text(
             actor_of(ai_services),
             UpdateJobTextCommand(
@@ -1638,8 +1638,8 @@ def test_a_retried_operation_logs_its_own_attempts_and_never_rewrites_the_first(
     ingested = _ingested(ai_services, "Retry Log Co")
     queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
 
-    def prepare_then_cancel(command, *, operation_id=None, still_owned=None):
-        value = prepare(command, operation_id=operation_id, still_owned=still_owned)
+    def prepare_then_cancel(actor, command, *, operation_id=None, still_owned=None):
+        value = prepare(actor, command, operation_id=operation_id, still_owned=still_owned)
         ai_services.operation_lifecycle.cancel(actor_of(ai_services), queued.id)
         return value
 

@@ -86,7 +86,7 @@ def test_imported_knowledge_reads_back_through_the_installations_templates(
     result = services.knowledge_import.import_knowledge(EMAIL, FileKnowledge(project_root))
     stored = DatabaseKnowledge(
         transaction_manager, SqlAlchemyUserKnowledgeRepository(transaction_manager), SOURCE_ROOT
-    ).load()
+    ).load(user.id)
 
     assert result.facts == len(knowledge.facts.facts)
     assert result.profiles == len(knowledge.profiles.profiles)

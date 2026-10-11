@@ -431,7 +431,7 @@ def test_an_emphasis_decision_creates_an_analysis_and_keeps_manual_wording(
     drafted_application,
 ):
     """§13: Emphasis is classification, so the document and its wording stay as they are."""
-        from helpers import edit_document_claim
+    from helpers import edit_document_claim
 
     from cv_engine.application.commands import ApplyAnalysisDecisionsCommand
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 def test_exact_undo_restores_approval_and_reapproval_refreshes_only_the_check(approved_application):
     """§3/§15: returning to identical content restores the stamp, not a new approval."""
-        from helpers import actor_of, approve_active_draft, stored_document, validate_active_draft
+    from helpers import actor_of, approve_active_draft, stored_document, validate_active_draft
 
     from cv_engine.application.commands import UpdateDocumentCommand
     from cv_engine.domain.document import ContentCheck, PreparationState

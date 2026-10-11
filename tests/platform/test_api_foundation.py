@@ -242,7 +242,7 @@ def test_problem_details_carry_a_stable_code_and_leak_nothing(
         "Traceback: provider wire message"
     )
 
-    def fail_ingest(_command):
+    def fail_ingest(_actor, _command):
         raise InfrastructureFailure(leaked)
 
     monkeypatch.setattr(services.applications, "ingest", fail_ingest)

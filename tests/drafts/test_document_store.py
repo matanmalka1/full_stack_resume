@@ -78,7 +78,7 @@ def test_first_analysis_and_document_commit_together_or_not_at_all(
     services, monkeypatch, database_engine
 ):
     """§13 atomicity moved from the obsolete analysis/selection-plan HTTP scenario."""
-        from helpers import persisted_counts, seed_existing_analysis
+    from helpers import persisted_counts, seed_existing_analysis
 
     from cv_engine.application.commands import IngestCommand
     from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
