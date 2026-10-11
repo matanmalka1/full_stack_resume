@@ -102,6 +102,8 @@ const invalidServerResponse = (): ApiProblem =>
    test that renders one screen with a mocked API is not redirected anywhere. */
 let sessionLost: () => void = () => undefined;
 
+const AUTH_PATH_PREFIX = "/api/v1/auth/";
+
 export const onSessionLost = (handler: () => void): void => {
   sessionLost = handler;
 };
@@ -153,7 +155,9 @@ export const apiRequest = async <T>(path: ApiPath, options: ApiRequestOptions = 
 
   if (!response.ok) {
     const problem = isProblemDetails(payload) ? payload : fallbackProblem(response);
-    if (problem.code === "AUTHENTICATION_REQUIRED") sessionLost();
+    /* The sign-in routes answer for themselves: `/auth/me`'s 401 is the ordinary
+       signed-out state its caller routes on, not a session lost under an open screen. */
+    if (problem.code === "AUTHENTICATION_REQUIRED" && !path.startsWith(AUTH_PATH_PREFIX)) sessionLost();
     throw new ApiProblem(problem);
   }
   /* A command that answers 204 has nothing to read; any other success must carry JSON. */

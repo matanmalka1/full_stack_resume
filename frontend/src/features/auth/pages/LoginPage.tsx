@@ -1,8 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogIn } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
-import { login, meQueryKey } from "@/api/auth";
+import { login, meQueryKey, meQueryOptions } from "@/api/auth";
 import type { LoginRequest } from "@/api/contracts";
 import { useAppForm } from "@/hooks/useAppForm";
 import { Button } from "@/ui/Button";
@@ -19,13 +19,18 @@ export const LoginPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { handleSubmit, register } = useAppForm<LoginRequest>({ defaultValues: { email: "", password: "" } });
+  const next = safeNextPath(searchParams.get("next"));
+  /* Already signed in - a bookmarked or back-button visit - there is nothing to sign in to. */
+  const me = useQuery(meQueryOptions);
   const signIn = useMutation({
     mutationFn: login,
-    onSuccess: (me) => {
-      queryClient.setQueryData(meQueryKey, me);
-      void navigate(safeNextPath(searchParams.get("next")), { replace: true });
+    onSuccess: (signedIn) => {
+      queryClient.setQueryData(meQueryKey, signedIn);
+      void navigate(next, { replace: true });
     },
   });
+
+  if (me.data) return <Navigate replace to={next} />;
 
   return (
     <main className="page-gutter flex min-h-screen items-center justify-center py-10 text-cv-text">

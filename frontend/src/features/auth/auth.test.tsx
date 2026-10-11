@@ -96,6 +96,17 @@ describe("sign-in", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/login");
   });
 
+  it("sends a reader who is already signed in on, without showing the form", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(json(me))),
+    );
+    renderApp("/login?next=%2Fsettings");
+
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/settings"));
+    expect(screen.getByText("מסך פנימי")).toBeInTheDocument();
+  });
+
   it("returns only to a path inside the app", () => {
     expect(safeNextPath("/applications/a-1")).toBe("/applications/a-1");
     for (const refused of [null, "https://evil.example", "//evil.example", "/login?next=/x", "applications"]) {
@@ -106,10 +117,14 @@ describe("sign-in", () => {
 
 describe("signing out", () => {
   it("ends the session, clears the reader's browser state, and returns to sign-in", async () => {
+    let signedIn = true;
     const fetchMock = vi.fn((input: string | URL | Request) => {
       const url = String(input);
-      if (url === "/api/v1/auth/me") return Promise.resolve(json(me));
-      if (url === "/api/v1/auth/logout") return Promise.resolve(new Response(null, { status: 204 }));
+      if (url === "/api/v1/auth/me") return Promise.resolve(signedIn ? json(me) : unauthenticated());
+      if (url === "/api/v1/auth/logout") {
+        signedIn = false;
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
       throw new Error(`unexpected ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -123,7 +138,14 @@ describe("signing out", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/auth/logout", expect.objectContaining({ method: "POST" }));
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
-    expect(client.getQueryCache().getAll()).toEqual([]);
+    // The sign-in screen asks who is signed in again; nothing read under the session remains.
+    await waitFor(() => expect(client.getQueryData(["auth", "me"])).toBeNull());
+    expect(
+      client
+        .getQueryCache()
+        .getAll()
+        .filter((query) => query.state.data != null),
+    ).toEqual([]);
   });
 });
 
@@ -144,6 +166,14 @@ describe("a session lost under an open screen", () => {
     );
     await expect(apiRequest("/api/v1/auth/login", { method: "POST", body: {} })).rejects.toThrow("no");
     expect(lost).toHaveBeenCalledTimes(1);
+
+    // `/auth/me` answering 401 is the signed-out state its caller routes on, not a loss.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(unauthenticated())),
+    );
+    await expect(apiRequest("/api/v1/auth/me")).rejects.toThrow("no");
+    expect(lost).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -161,6 +191,7 @@ describe("changing the password", () => {
 
     fireEvent.change(screen.getByLabelText("סיסמה נוכחית"), { target: { value: "old password here" } });
     fireEvent.change(screen.getByLabelText("סיסמה חדשה"), { target: { value: "new password here" } });
+    fireEvent.change(screen.getByLabelText("סיסמה חדשה שוב"), { target: { value: "new password here" } });
     fireEvent.click(screen.getByRole("button", { name: "שינוי סיסמה" }));
 
     expect(await screen.findByText("כל ההתחברויות האחרות הסתיימו.")).toBeInTheDocument();
@@ -170,5 +201,23 @@ describe("changing the password", () => {
       current_password: "old password here",
       new_password: "new password here",
     });
+  });
+
+  it("sends nothing while the new password and its repeat differ", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ChangePasswordForm />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("סיסמה נוכחית"), { target: { value: "old password here" } });
+    fireEvent.change(screen.getByLabelText("סיסמה חדשה"), { target: { value: "new password here" } });
+    fireEvent.change(screen.getByLabelText("סיסמה חדשה שוב"), { target: { value: "new password hrer" } });
+    fireEvent.click(screen.getByRole("button", { name: "שינוי סיסמה" }));
+
+    expect(await screen.findByText("הסיסמאות אינן זהות.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
