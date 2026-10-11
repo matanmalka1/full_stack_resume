@@ -165,21 +165,24 @@ _SECRET_KEYS = frozenset(
         "secret",
     }
 )
+#: Identity a payload must never carry: an Operation's owner is read from the database,
+#: through its Application, when it is claimed (architecture §18.3).
+_IDENTITY_KEYS = frozenset({"user_id", "owner_user_id", "actor"})
 
 
-def _secret_key_path(value: Any, path: str = "payload") -> str | None:
+def _key_path(value: Any, keys: frozenset[str], path: str = "payload") -> str | None:
     if isinstance(value, dict):
         for key, child in value.items():
             normalized = str(key).strip().casefold().replace("-", "_")
             child_path = f"{path}.{key}"
-            if normalized in _SECRET_KEYS:
+            if normalized in keys:
                 return child_path
-            found = _secret_key_path(child, child_path)
+            found = _key_path(child, keys, child_path)
             if found is not None:
                 return found
     elif isinstance(value, (list, tuple)):
         for index, child in enumerate(value):
-            found = _secret_key_path(child, f"{path}[{index}]")
+            found = _key_path(child, keys, f"{path}[{index}]")
             if found is not None:
                 return found
     return None
@@ -197,10 +200,13 @@ class CreateOperation(OperationModel):
     retry_of_operation_id: str | None = None
 
     @model_validator(mode="after")
-    def payload_is_secret_free(self) -> CreateOperation:
-        secret_path = _secret_key_path(self.payload)
+    def payload_is_secret_and_identity_free(self) -> CreateOperation:
+        secret_path = _key_path(self.payload, _SECRET_KEYS)
         if secret_path is not None:
             raise ValueError(f"Operation payload contains a secret field: {secret_path}")
+        identity_path = _key_path(self.payload, _IDENTITY_KEYS)
+        if identity_path is not None:
+            raise ValueError(f"Operation payload names an identity: {identity_path}")
         return self
 
     @property
@@ -336,6 +342,10 @@ class PersistedOperation(OperationView):
     payload_hash: str
     idempotency_key: str
     sources: OperationSources
+    #: Who the Operation acts for: its Application's owner, read from the database with
+    #: the record, never from the payload (architecture §18.3). A runner field: it does
+    #: not reach a query client.
+    owner_user_id: str
     lease_owner: str | None = None
     technical_log_reference: str | None = None
 

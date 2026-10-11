@@ -16,7 +16,7 @@ from ...application.operations import (
     OperationType,
     PersistedOperation,
 )
-from .tables import ai_calls, operation_outputs, operations
+from .tables import ai_calls, applications, operation_outputs, operations
 
 _USAGE_FIELDS = (
     "input_tokens",
@@ -108,9 +108,13 @@ def _operation_record(row: Any, connection: Connection) -> PersistedOperation:
         raise UnknownRecord("operation does not exist")
     record = dict(row)
     outputs = _outputs(connection, record["id"])
+    owner = connection.execute(
+        select(applications.c.user_id).where(applications.c.id == record["application_id"])
+    ).scalar_one()
     return PersistedOperation(
         id=record["id"],
         application_id=record["application_id"],
+        owner_user_id=owner,
         operation_type=record["operation_type"],
         payload=record["payload_json"],
         payload_hash=record["payload_hash"],

@@ -7,6 +7,7 @@ from ..dependencies import Services
 from ..headers import IdempotencyKey
 from ..responses import accepted_operation, operation_response
 from ..schemas.operations import OperationResponse
+from ..session_cookie import CurrentActor
 
 router = APIRouter(prefix="/operations", tags=["operations"])
 
@@ -16,8 +17,8 @@ router = APIRouter(prefix="/operations", tags=["operations"])
     response_model=OperationResponse,
     summary="Read the progress of one durable Operation",
 )
-def operation(operation_id: str, services: Services) -> OperationResponse:
-    return operation_response(services.operation_lifecycle.get(operation_id))
+def operation(operation_id: str, services: Services, actor: CurrentActor) -> OperationResponse:
+    return operation_response(services.operation_lifecycle.get(actor, operation_id))
 
 
 @router.post(
@@ -25,7 +26,9 @@ def operation(operation_id: str, services: Services) -> OperationResponse:
     response_model=OperationResponse,
     summary="Cancel queued work, or ask running work to stop",
 )
-def cancel_operation(operation_id: str, services: Services) -> OperationResponse:
+def cancel_operation(
+    operation_id: str, services: Services, actor: CurrentActor
+) -> OperationResponse:
     """`200`, not `202`: cancellation is recorded synchronously.
 
     Queued work is cancelled outright. Running work has
@@ -33,7 +36,7 @@ def cancel_operation(operation_id: str, services: Services) -> OperationResponse
     returned status is truthfully still `running` - the request is what
     completed, not the Operation.
     """
-    return operation_response(services.operation_lifecycle.cancel(operation_id))
+    return operation_response(services.operation_lifecycle.cancel(actor, operation_id))
 
 
 @router.post(
@@ -45,6 +48,7 @@ def cancel_operation(operation_id: str, services: Services) -> OperationResponse
 def retry_operation(
     operation_id: str,
     services: Services,
+    actor: CurrentActor,
     response: Response,
     idempotency_key: IdempotencyKey = None,
 ) -> OperationResponse:
@@ -54,6 +58,7 @@ def retry_operation(
     be retried; retrying a live one is a `409`.
     """
     queued = services.operation_lifecycle.retry(
+        actor,
         operation_id,
         idempotency_key=idempotency_key or new_id(),
     )

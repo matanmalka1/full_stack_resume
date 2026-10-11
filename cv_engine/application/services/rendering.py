@@ -19,6 +19,7 @@ from ...domain.contracts.validation import ValidationReport
 from ...domain.document import DocumentState, document_state
 from ...domain.knowledge import Knowledge
 from ...util import new_id, utc_now
+from ..actor import Actor
 from ..artifacts import DocumentPdfDelivery
 from ..commands import RenderCommand, RenderResult
 from ..errors import (
@@ -51,6 +52,8 @@ from .documents import (
 
 @dataclass(frozen=True)
 class PreparedRender:
+    #: Whose document this is: activation resolves it for the same user.
+    actor: Actor
     command: RenderCommand
     knowledge: Knowledge
     source: DocumentSource
@@ -87,19 +90,19 @@ class RenderingService:
         self.renderer = renderer
         self.payloads = payloads
 
-    def load_knowledge(self) -> Knowledge:
-        return load_knowledge(self._knowledge)
+    def load_knowledge(self, actor: Actor) -> Knowledge:
+        return load_knowledge(self._knowledge, actor)
 
-    def _source(self, application_id: str) -> DocumentSource:
+    def _source(self, actor: Actor, application_id: str) -> DocumentSource:
         with self._transactions.read() as tx:
-            return read_document_source(tx, self._documents, self._sources, application_id)
+            return read_document_source(tx, self._documents, self._sources, application_id, actor)
 
-    def admit(self, command: RenderCommand) -> None:
+    def admit(self, actor: Actor, command: RenderCommand) -> None:
         """§16 admission: the document is approved at its current basis, with no blocker."""
-        source = self._source(command.application_id)
+        source = self._source(actor, command.application_id)
         refuse_deleted(command.application_id, source.deleted_at)
         require_hash(source.document, command.expected_document_hash)
-        knowledge = self.load_knowledge()
+        knowledge = self.load_knowledge(actor)
         state = document_state(source.document, current_basis(source.document, knowledge))
         if state is not DocumentState.APPROVED:
             raise PreconditionFailed(
@@ -108,12 +111,12 @@ class RenderingService:
             )
         refuse_review_reasons(source.document, knowledge)
 
-    def prepare(self, command: RenderCommand) -> PreparedRender:
+    def prepare(self, actor: Actor, command: RenderCommand) -> PreparedRender:
         """Validate the content against the current context before any browser starts."""
-        source = self._source(command.application_id)
+        source = self._source(actor, command.application_id)
         refuse_deleted(command.application_id, source.deleted_at)
         require_hash(source.document, command.expected_document_hash)
-        knowledge = self.load_knowledge()
+        knowledge = self.load_knowledge(actor)
         report = validate_document(source, knowledge)
         if not report.passed:
             raise ValidationBlocked(
@@ -127,6 +130,7 @@ class RenderingService:
         except (KeyError, ValueError) as exc:
             raise LineageBroken(f"the document's Profile is unavailable: {exc}") from exc
         return PreparedRender(
+            actor=actor,
             command=command,
             knowledge=knowledge,
             source=source,
@@ -187,7 +191,9 @@ class RenderingService:
         rendering; nothing is written and the caller discards this attempt's files.
         """
         command = executed.prepared.command
-        source = lock_document_source(tx, self._documents, self._sources, command.application_id)
+        source = lock_document_source(
+            tx, self._documents, self._sources, command.application_id, executed.prepared.actor
+        )
         document = source.document
         require_hash(document, command.expected_document_hash)
         rendered_basis = current_basis(document, knowledge)
@@ -212,7 +218,11 @@ class RenderingService:
         )
 
     def record_failure(
-        self, application_id: str, expected_document_hash: str, error: dict[str, Any]
+        self,
+        actor: Actor,
+        application_id: str,
+        expected_document_hash: str,
+        error: dict[str, Any],
     ) -> bool:
         """Record `last_render_error` only while the hash still matches (§16).
 
@@ -221,6 +231,7 @@ class RenderingService:
         """
         payload = {**error, "document_hash": expected_document_hash}
         with self._transactions.write() as tx:
+            self._sources.require_owned(tx, application_id, actor.user_id)
             return self._documents.record_render_error(
                 tx, application_id, expected_document_hash, payload, updated_at=utc_now()
             )
@@ -230,14 +241,15 @@ class RenderingService:
         if files is not None:
             self.files.discard(files)
 
-    def render(self, command: RenderCommand) -> RenderResult:
+    def render(self, actor: Actor, command: RenderCommand) -> RenderResult:
         """The same three phases without an Operation runner, for a direct caller."""
-        self.admit(command)
-        prepared = self.prepare(command)
+        self.admit(actor, command)
+        prepared = self.prepare(actor, command)
         executed = self.execute(prepared)
         if not executed.report.passed:
             self.discard(executed.files)
             self.record_failure(
+                actor,
                 command.application_id,
                 command.expected_document_hash,
                 {"code": "render_validation", "failure_code": "RENDER_FAILED"},
@@ -252,14 +264,14 @@ class RenderingService:
         self.discard(superseded)
         return result
 
-    def export_recruiter_pdf(self, application_id: str) -> DocumentPdfDelivery:
+    def export_recruiter_pdf(self, actor: Actor, application_id: str) -> DocumentPdfDelivery:
         """§16: the Ready document's PDF, checked against the basis at request time.
 
         Exempt from the deleted-Application refusal, as every read of history is.
         """
-        source = self._source(application_id)
+        source = self._source(actor, application_id)
         document = source.document
-        knowledge = self.load_knowledge()
+        knowledge = self.load_knowledge(actor)
         state = document_state(document, current_basis(document, knowledge))
         if state is not DocumentState.READY or document.pdf_path is None:
             raise PreconditionFailed(
@@ -279,13 +291,13 @@ class RenderingService:
             stream=stream,
         )
 
-    def preview_document(self, application_id: str) -> DocumentPreviewView:
+    def preview_document(self, actor: Actor, application_id: str) -> DocumentPreviewView:
         """The current content as HTML, through the render composition; stored nowhere.
 
         No browser starts and nothing is written: no document field, Artifact, or
         Operation. No approval is needed.
         """
-        document, content, knowledge = self._previewable(application_id)
+        document, content, knowledge = self._previewable(actor, application_id)
         return DocumentPreviewView(
             application_id=application_id,
             document_id=document.id,
@@ -294,9 +306,9 @@ class RenderingService:
             html=self.renderer.preview_html(content, knowledge.candidate),
         )
 
-    def preview_document_pdf(self, application_id: str) -> DocumentPdfPreviewView:
+    def preview_document_pdf(self, actor: Actor, application_id: str) -> DocumentPdfPreviewView:
         """The current content as a PDF stamped as an unapproved draft; stored nowhere."""
-        document, content, knowledge = self._previewable(application_id)
+        document, content, knowledge = self._previewable(actor, application_id)
         return DocumentPdfPreviewView(
             application_id=application_id,
             document_id=document.id,
@@ -304,8 +316,8 @@ class RenderingService:
             pdf=self.renderer.preview_pdf(content, knowledge.candidate),
         )
 
-    def _previewable(self, application_id: str):
-        document = self._source(application_id).document
+    def _previewable(self, actor: Actor, application_id: str):
+        document = self._source(actor, application_id).document
         if document.content is None:
             raise PreconditionFailed("the document has no content to preview yet")
-        return document, document.content, self.load_knowledge()
+        return document, document.content, self.load_knowledge(actor)

@@ -18,6 +18,7 @@ from ....domain.contracts.recruitment import ApplicationStatus
 from ....domain.document import DocumentState, document_state
 from ....domain.recruitment import terminal_outcome_after
 from ....util import new_id
+from ...actor import Actor
 from ...commands import ExternalSubmissionCommand, SubmissionCommand, SubmissionResult, WriteClient
 from ...errors import (
     DOCUMENT_NOT_READY,
@@ -69,25 +70,25 @@ class SubmissionService:
         self._audit = audit
         self._knowledge = knowledge
 
-    def _active_application(self, application_id: str) -> dict:
+    def _active_application(self, actor: Actor, application_id: str) -> dict:
         try:
             with self._transactions.read() as tx:
-                application = self._recruitment.application(tx, application_id)
+                application = self._recruitment.application(tx, application_id, actor.user_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
         refuse_deleted(application_id, application.get("deleted_at"))
         return application
 
-    def submit_application(self, command: SubmissionCommand) -> SubmissionResult:
+    def submit_application(self, actor: Actor, command: SubmissionCommand) -> SubmissionResult:
         """§18: freeze the Ready document the client showed, and record that it was sent."""
-        self._active_application(command.application_id)
+        self._active_application(actor, command.application_id)
         with self._transactions.read() as tx:
             source = read_document_source(
-                tx, self._documents, self._sources, command.application_id
+                tx, self._documents, self._sources, command.application_id, actor
             )
         document = source.document
         require_hash(document, command.expected_document_hash)
-        knowledge = load_knowledge(self._knowledge)
+        knowledge = load_knowledge(self._knowledge, actor)
         submitted_basis = current_basis(document, knowledge)
         if (
             document_state(document, submitted_basis) is not DocumentState.READY
@@ -148,6 +149,7 @@ class SubmissionService:
             )
 
         return self._record(
+            actor,
             command.application_id,
             submission_id,
             "internal",
@@ -159,9 +161,11 @@ class SubmissionService:
             document_hash=document.document_hash,
         )
 
-    def record_external_submission(self, command: ExternalSubmissionCommand) -> SubmissionResult:
+    def record_external_submission(
+        self, actor: Actor, command: ExternalSubmissionCommand
+    ) -> SubmissionResult:
         """§18: a submission made outside the system; it carries no content or files."""
-        self._active_application(command.application_id)
+        self._active_application(actor, command.application_id)
         submission_id = new_id()
 
         def insert(tx: WriteTransaction, _application: dict) -> None:
@@ -177,6 +181,7 @@ class SubmissionService:
             )
 
         return self._record(
+            actor,
             command.application_id,
             submission_id,
             "external",
@@ -189,6 +194,7 @@ class SubmissionService:
 
     def _record(
         self,
+        actor: Actor,
         application_id: str,
         submission_id: str,
         submission_type: str,
@@ -205,7 +211,7 @@ class SubmissionService:
         with self._transactions.write() as tx:
             # Locked first: it orders this against `update_job_text`, so the job text
             # the Submission records is the one that stays.
-            application = self._recruitment.lock_application(tx, application_id)
+            application = self._recruitment.lock_application(tx, application_id, actor.user_id)
             refuse_deleted(application_id, application.get("deleted_at"))
             current = ApplicationStatus(application["current_status"])
             insert(tx, application)
@@ -241,7 +247,7 @@ class SubmissionService:
                 ),
             )
         with self._transactions.read() as tx:
-            updated = self._recruitment.application(tx, application_id)
+            updated = self._recruitment.application(tx, application_id, actor.user_id)
         return SubmissionResult(
             application_id=application_id,
             submission_id=submission_id,

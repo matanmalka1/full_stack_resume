@@ -5,6 +5,7 @@ from datetime import date
 from ....domain.contracts.recruitment import ApplicationStatus
 from ....domain.document import basis, content_check, preparation_state
 from ....domain.recruitment import user_transition_targets
+from ...actor import Actor
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
@@ -57,8 +58,8 @@ class ApplicationQueryService:
         self._submissions = submissions
         self._knowledge = knowledge
 
-    def load_knowledge(self):
-        return load_knowledge(self._knowledge)
+    def load_knowledge(self, actor: Actor):
+        return load_knowledge(self._knowledge, actor)
 
     def _state_inputs(self, transaction: ReadTransaction, application_record, knowledge):
         application_id = application_record["id"]
@@ -78,18 +79,20 @@ class ApplicationQueryService:
         )
         return context, analyses
 
-    def list_applications(self, query: ApplicationListQuery | None = None) -> ApplicationListView:
+    def list_applications(
+        self, actor: Actor, query: ApplicationListQuery | None = None
+    ) -> ApplicationListView:
         """One page of the Application list, narrowed and ordered by `query`.
 
         The projection is computed for every record before the query is applied:
         `preparation_state` is derived from the document and the basis, not stored,
         so there is nothing to filter, order, or page by until it exists.
         """
-        knowledge = self.load_knowledge()
+        knowledge = self.load_knowledge(actor)
         try:
             with self._transactions.read() as transaction:
                 captured = []
-                for row in self._projections.applications(transaction):
+                for row in self._projections.applications(transaction, actor.user_id):
                     context, analyses = self._state_inputs(transaction, row, knowledge)
                     captured.append((row, context, analyses))
             items = []
@@ -101,11 +104,13 @@ class ApplicationQueryService:
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored application projection is invalid: {exc}") from exc
 
-    def application_detail(self, application_id: str) -> ApplicationDetailView:
-        knowledge = self.load_knowledge()
+    def application_detail(self, actor: Actor, application_id: str) -> ApplicationDetailView:
+        knowledge = self.load_knowledge(actor)
         try:
             with self._transactions.read() as transaction:
-                application_record = self._projections.application(transaction, application_id)
+                application_record = self._projections.application(
+                    transaction, application_id, actor.user_id
+                )
                 context, analyses = self._state_inputs(transaction, application_record, knowledge)
                 posting = job_posting_view(
                     application_record,
@@ -136,15 +141,17 @@ class ApplicationQueryService:
             recruitment_timeline=timeline,
         )
 
-    def document(self, application_id: str) -> DocumentView:
+    def document(self, actor: Actor, application_id: str) -> DocumentView:
         """§20: the CV document with its token, states, report and candidate accounting."""
-        knowledge = self.load_knowledge()
+        knowledge = self.load_knowledge(actor)
         with self._transactions.read() as tx:
-            self._projections.application(tx, application_id)
+            self._projections.application(tx, application_id, actor.user_id)
             document = self._documents.document(tx, application_id)
             if document is None:
                 raise UnknownRecord(f"application {application_id} has no CV document yet")
-            analysis = self._projections.analysis(tx, document.analysis_id)["analysis"]
+            analysis = self._projections.analysis(tx, document.analysis_id, application_id)[
+                "analysis"
+            ]
         current = basis(document, knowledge.facts.facts)
         return document_view(
             document,
@@ -154,9 +161,9 @@ class ApplicationQueryService:
             content_check=content_check(document, current),
         )
 
-    def submissions(self, application_id: str) -> SubmissionsView:
+    def submissions(self, actor: Actor, application_id: str) -> SubmissionsView:
         """§20: every Submission with the content it sent and each file's checksum."""
         with self._transactions.read() as tx:
-            self._projections.application(tx, application_id)
+            self._projections.application(tx, application_id, actor.user_id)
             records = self._submissions.submissions(tx, application_id)
         return SubmissionsView(items=[submission_view(record) for record in records])

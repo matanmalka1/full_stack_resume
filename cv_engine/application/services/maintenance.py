@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from ...util import canonical_json, sha256_text
+from ..actor import Actor
 from ..commands import ReconciliationResult
 from ..maintenance import ORPHAN_MIN_AGE, OrphanInventory
 from ..ports import PayloadInventory
@@ -46,8 +47,12 @@ class MaintenanceService:
         self.inspection = inspection
         self.knowledge = knowledge
 
-    def reconcile(self) -> ReconciliationResult:
-        """Report whether stored evidence and the fact lifecycle both agree.
+    def reconcile(self, actor: Actor) -> ReconciliationResult:
+        """Report whether stored evidence and the actor's fact lifecycle both agree.
+
+        The payload and AI-call checks span the installation; the fact lifecycle is the
+        actor's. Maintenance becomes an operator command spanning every user when a
+        second user is admitted (product-spec §16).
 
         Neither half is short-circuited: a failing artifact check must not
         hide a broken lifecycle, because the report exists to say what is
@@ -75,7 +80,7 @@ class MaintenanceService:
                 != call["sanitized_response_hash"]
             ):
                 problems.append(f"AI call response hash mismatch: {call['id']}")
-        fact_lifecycle = self.knowledge.reconcile_facts()
+        fact_lifecycle = self.knowledge.reconcile_facts(actor)
         return ReconciliationResult(
             passed=not problems and fact_lifecycle.passed,
             payloads_checked=checked,

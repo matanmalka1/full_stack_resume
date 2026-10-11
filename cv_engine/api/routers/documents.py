@@ -47,6 +47,7 @@ from ..schemas.documents import (
     UpdateDocumentRequest,
 )
 from ..schemas.operations import OperationResponse
+from ..session_cookie import CurrentActor
 
 router = APIRouter(prefix="/applications/{application_id}/document", tags=["documents"])
 
@@ -74,9 +75,11 @@ def _check(response: Response, result) -> DocumentCheckResponse:
 
 
 @router.get("", response_model=DocumentResponse, summary="Read the Application's CV document")
-def read_document(application_id: str, services: Services, response: Response) -> DocumentResponse:
+def read_document(
+    application_id: str, services: Services, actor: CurrentActor, response: Response
+) -> DocumentResponse:
     """`200` with the document and its `document_hash` as the ETag; `404` before analysis."""
-    result = services.queries.document(application_id)
+    result = services.queries.document(actor, application_id)
     response.headers["ETag"] = document_etag(result.document_hash)
     return DocumentResponse.model_validate(result.model_dump(mode="json"))
 
@@ -89,6 +92,7 @@ def update_document(
     request: UpdateDocumentRequest,
     if_match: DocumentIfMatch,
     services: Services,
+    actor: CurrentActor,
     response: Response,
 ) -> DocumentMutationResponse:
     """`200` with the new hash; `409` when `If-Match` no longer describes the document.
@@ -97,6 +101,7 @@ def update_document(
     it blocks approval, not the save.
     """
     result = services.draft_editing.update_document(
+        actor,
         UpdateDocumentCommand(
             application_id=application_id,
             expected_document_hash=parse_document_etag(if_match),
@@ -111,7 +116,7 @@ def update_document(
             claim_orders={
                 name: list(claim_ids) for name, claim_ids in request.claim_orders.items()
             },
-        )
+        ),
     )
     return _mutation(response, result)
 
@@ -127,9 +132,9 @@ def update_document(
         }
     },
 )
-def preview_document(application_id: str, services: Services) -> HTMLResponse:
+def preview_document(application_id: str, services: Services, actor: CurrentActor) -> HTMLResponse:
     """`200` and the document itself; `412` before content exists. Nothing is stored."""
-    result = services.rendering.preview_document(application_id)
+    result = services.rendering.preview_document(actor, application_id)
     return HTMLResponse(
         content=result.html,
         headers={**_PREVIEW_HEADERS, "ETag": document_etag(result.document_hash)},
@@ -150,9 +155,9 @@ def preview_document(application_id: str, services: Services) -> HTMLResponse:
         }
     },
 )
-def preview_document_pdf(application_id: str, services: Services) -> Response:
+def preview_document_pdf(application_id: str, services: Services, actor: CurrentActor) -> Response:
     """`200` and the PDF inline; needs no approval and touches no approval stamp."""
-    result = services.rendering.preview_document_pdf(application_id)
+    result = services.rendering.preview_document_pdf(actor, application_id)
     return Response(
         content=result.pdf,
         media_type="application/pdf",
@@ -174,16 +179,18 @@ def build_from_analysis(
     application_id: str,
     request: BuildFromAnalysisRequest,
     services: Services,
+    actor: CurrentActor,
     response: Response,
 ) -> DocumentMutationResponse:
     """`200` with a document pinned to the named analysis and no content."""
     result = services.draft_editing.build_from_analysis(
+        actor,
         BuildFromAnalysisCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return _mutation(response, result)
 
@@ -198,11 +205,13 @@ def create_draft(
     application_id: str,
     request: CreateDraftRequest,
     services: Services,
+    actor: CurrentActor,
     response: Response,
     idempotency_key: IdempotencyKey = None,
 ) -> OperationResponse:
     """`202` and a `Location`; activation writes content only while the hash still holds."""
     queued = services.operation_submissions.submit_draft(
+        actor,
         DraftCommand(application_id=application_id, **request.model_dump(mode="python")),
         idempotency_key=idempotency_key or new_id(),
         draft_service=services.drafts,
@@ -220,11 +229,13 @@ def regenerate_section(
     application_id: str,
     request: RegenerateDocumentSectionRequest,
     services: Services,
+    actor: CurrentActor,
     response: Response,
     idempotency_key: IdempotencyKey = None,
 ) -> OperationResponse:
     """`202`. A provider failure never falls back to a deterministic rebuild."""
     queued = services.operation_submissions.submit_regeneration(
+        actor,
         RegenerateSectionCommand(
             application_id=application_id, **request.model_dump(mode="python")
         ),
@@ -244,11 +255,13 @@ def regenerate_claim(
     application_id: str,
     request: RegenerateDocumentClaimRequest,
     services: Services,
+    actor: CurrentActor,
     response: Response,
     idempotency_key: IdempotencyKey = None,
 ) -> OperationResponse:
     """`202`. The provider is given the claim's own supporting facts and nothing else."""
     queued = services.operation_submissions.submit_regeneration(
+        actor,
         RegenerateClaimCommand(application_id=application_id, **request.model_dump(mode="python")),
         idempotency_key=idempotency_key or new_id(),
         draft_service=services.drafts,
@@ -260,27 +273,37 @@ def regenerate_claim(
     "/check", response_model=DocumentCheckResponse, summary="Check the content without approving"
 )
 def check_document(
-    application_id: str, request: DocumentActionRequest, services: Services, response: Response
+    application_id: str,
+    request: DocumentActionRequest,
+    services: Services,
+    actor: CurrentActor,
+    response: Response,
 ) -> DocumentCheckResponse:
     """`200` whether or not the check passed; the report is data (§22)."""
     result = services.draft_review.check_document(
-        CheckDocumentCommand(application_id=application_id, **request.model_dump(mode="python"))
+        actor,
+        CheckDocumentCommand(application_id=application_id, **request.model_dump(mode="python")),
     )
     return _check(response, result)
 
 
 @router.post("/approve", response_model=DocumentCheckResponse, summary="Check and approve")
 def approve_document(
-    application_id: str, request: DocumentActionRequest, services: Services, response: Response
+    application_id: str,
+    request: DocumentActionRequest,
+    services: Services,
+    actor: CurrentActor,
+    response: Response,
 ) -> DocumentCheckResponse:
     """`200` with the report; approved only when it passed. `412` names a blocker."""
     result = services.draft_review.approve_document(
+        actor,
         ApproveDocumentCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return _check(response, result)
 
@@ -295,11 +318,13 @@ def render_document(
     application_id: str,
     request: DocumentActionRequest,
     services: Services,
+    actor: CurrentActor,
     response: Response,
     idempotency_key: IdempotencyKey = None,
 ) -> OperationResponse:
     """`202`; admission refuses with `412` unless the document is approved."""
     queued = services.operation_submissions.submit_render(
+        actor,
         RenderCommand(application_id=application_id, **request.model_dump(mode="python")),
         idempotency_key=idempotency_key or new_id(),
         rendering_service=services.rendering,
@@ -318,13 +343,13 @@ def render_document(
         }
     },
 )
-def download_pdf(application_id: str, services: Services) -> StreamingResponse:
+def download_pdf(application_id: str, services: Services, actor: CurrentActor) -> StreamingResponse:
     """`412` unless the document is Ready when the request is answered (§16).
 
     The rendered files are mutable working outputs, so the ETag is the document's hash
     and caching is refused: the same URL answers for whatever is Ready now.
     """
-    delivery = services.rendering.export_recruiter_pdf(application_id)
+    delivery = services.rendering.export_recruiter_pdf(actor, application_id)
     return StreamingResponse(
         delivery.stream.chunks(),
         media_type=delivery.media_type,
@@ -342,8 +367,10 @@ def download_pdf(application_id: str, services: Services) -> StreamingResponse:
     response_model=DecisionExportResponse,
     summary="Export the document's provenance as Markdown",
 )
-def export_decision_markdown(application_id: str, services: Services) -> DecisionExportResponse:
-    result = services.draft_history.export_decision_markdown(application_id)
+def export_decision_markdown(
+    application_id: str, services: Services, actor: CurrentActor
+) -> DecisionExportResponse:
+    result = services.draft_history.export_decision_markdown(actor, application_id)
     return DecisionExportResponse(
         application_id=result.application_id,
         document_id=result.document_id,

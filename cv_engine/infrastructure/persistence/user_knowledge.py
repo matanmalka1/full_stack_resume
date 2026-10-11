@@ -12,7 +12,7 @@ from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...application.ports.user_knowledge import StoredKnowledge
 from ...util import new_id
 from .connection import SqlAlchemyTransactionManager
-from .tables import candidate_contexts, fact_events, profile_bindings, users
+from .tables import candidate_contexts, fact_events, profile_bindings
 from .tables import facts as facts_table
 
 _FACT_COLUMNS = (
@@ -160,12 +160,6 @@ class SqlAlchemyUserKnowledgeRepository:
             ).mappings()
         }
         return fact_rows, candidate, bindings
-
-    def sole_user_id(self, tx: ReadTransaction) -> str | None:
-        # `users_single_user` admits at most one row until isolation is complete.
-        return (
-            self._transactions.connection_for(tx).execute(select(users.c.id)).scalar_one_or_none()
-        )
 
     def knowledge_state(self, tx: ReadTransaction, user_id: str) -> StoredKnowledge | None:
         rows, candidate, bindings = self.stored_knowledge(tx, user_id)

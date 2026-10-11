@@ -9,7 +9,7 @@ the AI call log, one immutable row per provider call attempt of an Operation. `a
 tracking services. `operations`/its support tables are generic Operation-runner
 infrastructure read by the combined query projection (`active_operation`/
 `latest_operation` span both domains); every operation type it runs today
-happens to be prep-only, but the port/contract is domain-agnostic. `app_settings`
+happens to be prep-only, but the port/contract is domain-agnostic. `user_settings`
 belongs to neither domain.
 """
 
@@ -89,6 +89,9 @@ applications = Table(
     "applications",
     metadata,
     Column("id", UUID(as_uuid=False), primary_key=True),
+    # The aggregate root's owner: every child is reached through an Application already
+    # resolved for this user (architecture §18.3).
+    Column("user_id", UUID(as_uuid=False), ForeignKey("users.id"), nullable=False),
     Column("company", Text, nullable=False),
     Column("target_role", Text, nullable=False),
     Column("normalized_role", Text),
@@ -131,6 +134,7 @@ applications = Table(
         name="terminal_outcome",
     ),
 )
+Index("ix_applications_user_id", applications.c.user_id)
 
 audit_records = Table(
     "audit_records",
@@ -242,7 +246,8 @@ operations = Table(
         "(jsonb_typeof(withheld_claims) = 'object' AND withheld_claims ? 'code')",
         name="withheld_claims_shape",
     ),
-    UniqueConstraint("operation_type", "idempotency_key"),
+    # Every Operation belongs to an Application, so its key is scoped there (§18.3).
+    UniqueConstraint("application_id", "operation_type", "idempotency_key"),
 )
 Index(
     "idx_operations_application_status",
@@ -404,10 +409,11 @@ ai_calls = Table(
 )
 Index("idx_ai_calls_operation", ai_calls.c.operation_id, ai_calls.c.started_at, ai_calls.c.id)
 
-app_settings = Table(
-    "app_settings",
+#: One user's safe Web preferences, guarded by `edit_version`.
+user_settings = Table(
+    "user_settings",
     metadata,
-    Column("singleton_id", Integer, primary_key=True, autoincrement=False),
+    Column("user_id", UUID(as_uuid=False), ForeignKey("users.id"), primary_key=True),
     Column("edit_version", Integer, nullable=False),
     Column("auto_generate_when_review_not_required", Boolean, nullable=False),
     Column("default_ai_model", Text),
@@ -416,7 +422,6 @@ app_settings = Table(
     Column("ui_text_size", Text, nullable=False),
     Column("ui_theme", Text, nullable=False, server_default=text("'system'")),
     Column("updated_at", IsoTimestamp(), nullable=False),
-    CheckConstraint("singleton_id = 1", name="singleton"),
     CheckConstraint("edit_version > 0", name="edit_version_positive"),
     CheckConstraint(
         f"default_ai_model IS NULL OR default_ai_model IN ({sql_values(AI_MODEL_IDS)})",

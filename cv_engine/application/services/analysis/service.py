@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from ....domain.contracts.document import CVDocument
 from ....domain.knowledge import Knowledge
+from ...actor import Actor
 from ...commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
@@ -54,10 +55,12 @@ class AnalysisService:
         if deleted_at is not None:
             raise StateConflict(f"application is deleted: {application_id}")
 
-    def job_text_source(self, application_id: str, job_text_hash: str) -> AnalysisJobTextSource:
+    def job_text_source(
+        self, actor: Actor, application_id: str, job_text_hash: str
+    ) -> AnalysisJobTextSource:
         """The Application's job text, refused unless it is still the text the caller read."""
         with self.transactions.read() as tx:
-            source = self.sources.job_text_source(tx, application_id)
+            source = self.sources.job_text_source(tx, application_id, actor.user_id)
         if source.job_text_hash != job_text_hash:
             raise StateConflict(
                 "the job text changed since it was read (job_text_hash): "
@@ -66,26 +69,27 @@ class AnalysisService:
         return source
 
     def analysis_context_source(
-        self, application_id: str, job_analysis_id: str
+        self, actor: Actor, application_id: str, job_analysis_id: str
     ) -> AnalysisContextSource:
         with self.transactions.read() as tx:
-            source = self.sources.analysis_context_source(tx, job_analysis_id)
+            source = self.sources.analysis_context_source(tx, job_analysis_id, actor.user_id)
         if source.application_id != application_id:
             raise LineageBroken(
                 f"job analysis {job_analysis_id} does not belong to application {application_id}"
             )
         return source
 
-    def current_document(self, application_id: str) -> CVDocument | None:
+    def current_document(self, actor: Actor, application_id: str) -> CVDocument | None:
         with self.transactions.read() as tx:
+            self.sources.require_owned(tx, application_id, actor.user_id)
             return self.documents.document(tx, application_id)
 
-    def document_source(self, application_id: str) -> DocumentSource:
+    def document_source(self, actor: Actor, application_id: str) -> DocumentSource:
         with self.transactions.read() as tx:
-            return read_document_source(tx, self.documents, self.sources, application_id)
+            return read_document_source(tx, self.documents, self.sources, application_id, actor)
 
-    def load_knowledge(self) -> Knowledge:
-        return load_knowledge(self._knowledge)
+    def load_knowledge(self, actor: Actor) -> Knowledge:
+        return load_knowledge(self._knowledge, actor)
 
     @staticmethod
     def assert_provider_io_allowed() -> None:
@@ -99,6 +103,7 @@ class AnalysisService:
 
     def prepare(
         self,
+        actor: Actor,
         command: AnalyzeCommand,
         *,
         operation_id: str | None = None,
@@ -106,14 +111,16 @@ class AnalysisService:
     ) -> PreparedAnalysis:
         assert_external_io_allowed("analysis preparation")
         return AnalysisPreparation.prepare(
-            self, command, operation_id=operation_id, still_owned=still_owned
+            self, actor, command, operation_id=operation_id, still_owned=still_owned
         )
 
-    def activate(self, command: AnalyzeCommand, prepared: PreparedAnalysis) -> AnalysisResult:
+    def activate(
+        self, actor: Actor, command: AnalyzeCommand, prepared: PreparedAnalysis
+    ) -> AnalysisResult:
         with self.transactions.write() as tx:
-            return self.activation.activate(tx, command, prepared)
+            return self.activation.activate(tx, actor, command, prepared)
 
     def apply_analysis_decisions(
-        self, command: ApplyAnalysisDecisionsCommand
+        self, actor: Actor, command: ApplyAnalysisDecisionsCommand
     ) -> AnalysisDecisionsResult:
-        return AnalysisCorrection.apply_analysis_decisions(self, command)
+        return AnalysisCorrection.apply_analysis_decisions(self, actor, command)

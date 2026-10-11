@@ -5,6 +5,7 @@ from typing import Literal
 
 from ....domain.contracts.records import AuditRecord
 from ....util import new_id, normalized_text, sha256_text, utc_now
+from ...actor import Actor
 from ...commands import (
     DuplicateCheckCommand,
     DuplicateCheckResult,
@@ -64,14 +65,15 @@ class ApplicationService:
         self._recruitment = recruitment
         self._audit = audit
 
-    def duplicate_check(self, command: DuplicateCheckCommand) -> DuplicateCheckResult:
+    def duplicate_check(self, actor: Actor, command: DuplicateCheckCommand) -> DuplicateCheckResult:
+        """Matches among the user's own Applications only; another user's are not candidates."""
         _validate_intake(command.company, command.target_role, command.job_text, command.source_url)
         normalized_hash = sha256_text(normalized_text(command.job_text))
         company_key = normalized_text(command.company)
         title_key = normalized_text(command.target_role)
         by_application: dict[str, dict] = {}
         with self._transactions.read() as tx:
-            stored_inputs = self._applications.duplicate_application_inputs(tx)
+            stored_inputs = self._applications.duplicate_application_inputs(tx, actor.user_id)
         for row in stored_inputs:
             matched_on = set()
             if command.source_url is not None and row["source_url"] == command.source_url:
@@ -108,14 +110,15 @@ class ApplicationService:
             ]
         )
 
-    def ingest(self, command: IngestCommand) -> IngestedApplication:
+    def ingest(self, actor: Actor, command: IngestCommand) -> IngestedApplication:
         duplicates = self.duplicate_check(
+            actor,
             DuplicateCheckCommand(
                 company=command.company,
                 target_role=command.target_role,
                 job_text=command.job_text,
                 source_url=command.source_url,
-            )
+            ),
         )
         if duplicates.matches and not command.acknowledged_duplicates:
             raise DuplicateAcknowledgementRequired(
@@ -130,6 +133,7 @@ class ApplicationService:
                 self._applications.insert_application(
                     tx,
                     application_id=application_id,
+                    user_id=actor.user_id,
                     company=command.company,
                     target_role=command.target_role,
                     notes="",
@@ -155,7 +159,7 @@ class ApplicationService:
             duplicate_matches=duplicates.matches,
         )
 
-    def update_job_text(self, command: UpdateJobTextCommand) -> UpdatedJobText:
+    def update_job_text(self, actor: Actor, command: UpdateJobTextCommand) -> UpdatedJobText:
         """Replace the job text in place; refused once a Submission locked it.
 
         An unchanged text and URL is not a write. Analyses of the earlier text stay
@@ -168,7 +172,9 @@ class ApplicationService:
         now = utc_now()
         with self._transactions.write() as tx:
             try:
-                current = self._applications.get_application(tx, command.application_id)
+                current = self._applications.get_application(
+                    tx, command.application_id, actor.user_id
+                )
             except UnknownRecord as exc:
                 raise UnknownRecord(f"unknown application: {command.application_id}") from exc
             if (
@@ -184,6 +190,7 @@ class ApplicationService:
             updated = self._applications.update_job_text(
                 tx,
                 command.application_id,
+                actor.user_id,
                 job_text=command.job_text,
                 job_text_hash=job_text_hash,
                 job_normalized_hash=normalized_hash,
@@ -215,12 +222,15 @@ class ApplicationService:
             job_text_updated_at=updated["job_text_updated_at"],
         )
 
-    def update_notes(self, command: UpdateApplicationNotesCommand) -> UpdatedApplicationNotes:
+    def update_notes(
+        self, actor: Actor, command: UpdateApplicationNotesCommand
+    ) -> UpdatedApplicationNotes:
         now = utc_now()
         with self._transactions.write() as tx:
             updated = self._applications.update_application_notes(
                 tx,
                 command.application_id,
+                actor.user_id,
                 command.notes,
                 command.expected_notes,
                 updated_at=now,

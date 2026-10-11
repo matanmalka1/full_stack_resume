@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ....util import new_id
+from ...actor import Actor
 from ...errors import StateConflict, UnknownRecord
 from ...operations import (
     CreateOperation,
@@ -28,22 +29,24 @@ class OperationLifecycleService:
         self.operations = operations
         self.documents = documents
 
-    def get(self, operation_id: str) -> OperationView:
+    def get(self, actor: Actor, operation_id: str) -> OperationView:
         with self.transactions.read() as tx:
-            return as_operation_view(self.operations.operation(tx, operation_id))
+            return as_operation_view(self.operations.operation(tx, operation_id, actor.user_id))
 
-    def cancel(self, operation_id: str) -> OperationView:
+    def cancel(self, actor: Actor, operation_id: str) -> OperationView:
         for attempt in range(3):
             try:
                 with self.transactions.write() as tx:
-                    operation = self.operations.request_cancellation(tx, operation_id)
+                    operation = self.operations.request_cancellation(
+                        tx, operation_id, actor.user_id
+                    )
                 return as_operation_view(operation)
             except TransactionConflict:
                 if attempt == 2:
                     raise
         raise AssertionError("unreachable")
 
-    def retry(self, operation_id: str, *, idempotency_key: str) -> OperationView:
+    def retry(self, actor: Actor, operation_id: str, *, idempotency_key: str) -> OperationView:
         """§19: a new Operation from the old one's frozen inputs.
 
         A retry of a document-mutating Operation carries the current `document_hash`
@@ -51,9 +54,11 @@ class OperationLifecycleService:
         activation discards it like any other if the document changes meanwhile.
         """
         with self.transactions.read() as tx:
-            original = self.operations.operation(tx, operation_id)
+            original = self.operations.operation(tx, operation_id, actor.user_id)
             try:
-                application = self.operations.application(tx, original.application_id)
+                application = self.operations.application(
+                    tx, original.application_id, actor.user_id
+                )
             except UnknownRecord as exc:
                 raise UnknownRecord(f"unknown application: {original.application_id}") from exc
             document = self.documents.document(tx, original.application_id)
@@ -88,5 +93,5 @@ class OperationLifecycleService:
             retry_of_operation_id=original.id,
         )
         with self.transactions.write() as tx:
-            queued = self.operations.enqueue(tx, request, operation_id=new_id())
+            queued = self.operations.enqueue(tx, request, actor.user_id, operation_id=new_id())
         return as_operation_view(queued)

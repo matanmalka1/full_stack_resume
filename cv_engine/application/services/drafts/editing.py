@@ -13,6 +13,7 @@ from __future__ import annotations
 from ....domain.document import content_check, preparation_state
 from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....util import utc_now
+from ...actor import Actor
 from ...commands import BuildFromAnalysisCommand, DocumentMutationResult, UpdateDocumentCommand
 from ...errors import LineageBroken, PreconditionFailed, UnknownRecord
 from ...ports import TransactionManager
@@ -44,7 +45,9 @@ class DraftEditingService:
         self.files = files
         self._knowledge = knowledge
 
-    def update_document(self, command: UpdateDocumentCommand) -> DocumentMutationResult:
+    def update_document(
+        self, actor: Actor, command: UpdateDocumentCommand
+    ) -> DocumentMutationResult:
         """§14 autosave: apply one structured patch against one exact hash.
 
         The whole patch commits as a single write. Nothing here validates: §15 owns
@@ -54,13 +57,15 @@ class DraftEditingService:
         draft on the next read.
         """
         with self.transactions.read() as tx:
-            source = read_document_source(tx, self.documents, self.sources, command.application_id)
+            source = read_document_source(
+                tx, self.documents, self.sources, command.application_id, actor
+            )
         refuse_deleted(command.application_id, source.deleted_at)
         require_hash(source.document, command.expected_document_hash)
         document = source.document
         if document.content is None:
             raise PreconditionFailed("the document has no content to edit yet; create a draft")
-        knowledge = load_knowledge(self._knowledge)
+        knowledge = load_knowledge(self._knowledge, actor)
         facts = knowledge.facts
         patched = document.content
         for edit in command.claim_edits:
@@ -123,15 +128,19 @@ class DraftEditingService:
             ),
         )
 
-    def build_from_analysis(self, command: BuildFromAnalysisCommand) -> DocumentMutationResult:
+    def build_from_analysis(
+        self, actor: Actor, command: BuildFromAnalysisCommand
+    ) -> DocumentMutationResult:
         """§14 `build_from_analysis`: re-pin the document to a named analysis.
 
         The previous rendered files are released by the same write and deleted
         best-effort after commit: nothing references them any more.
         """
         with self.transactions.read() as tx:
-            source = read_document_source(tx, self.documents, self.sources, command.application_id)
-            target = self.sources.analysis_context_source(tx, command.analysis_id)
+            source = read_document_source(
+                tx, self.documents, self.sources, command.application_id, actor
+            )
+            target = self.sources.analysis_context_source(tx, command.analysis_id, actor.user_id)
         refuse_deleted(command.application_id, source.deleted_at)
         require_hash(source.document, command.expected_document_hash)
         if target.application_id != command.application_id:
@@ -141,7 +150,7 @@ class DraftEditingService:
             )
         if target.job_analysis_id == source.document.analysis_id:
             raise PreconditionFailed("the document is already built on this analysis")
-        knowledge = load_knowledge(self._knowledge)
+        knowledge = load_knowledge(self._knowledge, actor)
         with self.transactions.write() as tx:
             updated, released = self.documents.repin(
                 tx,

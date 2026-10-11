@@ -6,15 +6,23 @@ from .transactions import ReadTransaction, WriteTransaction
 
 
 class RecruitmentStore(Protocol):
-    def application(self, tx: ReadTransaction, application_id: str) -> dict[str, Any]: ...
-
-    def lock_application(self, tx: WriteTransaction, application_id: str) -> dict[str, Any]:
-        """The Application row, locked until the transaction ends."""
+    def application(self, tx: ReadTransaction, application_id: str, user_id: str) -> dict[str, Any]:
+        """The user's Application; `UnknownRecord` for another user's, as for a missing one."""
         ...
 
-    def set_deleted(self, tx: WriteTransaction, application_id: str, deleted_at: str) -> None: ...
+    def lock_application(
+        self, tx: WriteTransaction, application_id: str, user_id: str
+    ) -> dict[str, Any]:
+        """The user's Application row, locked until the transaction ends."""
+        ...
 
-    def event(self, tx: ReadTransaction, event_id: str) -> dict[str, Any]: ...
+    def set_deleted(
+        self, tx: WriteTransaction, application_id: str, user_id: str, deleted_at: str
+    ) -> None: ...
+
+    def event(self, tx: ReadTransaction, event_id: str, application_id: str) -> dict[str, Any]:
+        """One of this Application's recruitment events; any other is `UnknownRecord`."""
+        ...
 
     def insert_event(
         self,

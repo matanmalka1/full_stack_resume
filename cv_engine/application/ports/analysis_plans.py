@@ -35,30 +35,40 @@ class AnalysisContextSource:
 
 
 class AnalysisKnowledgeSource(Protocol):
-    """The Knowledge a command reads: in the caller's scope when given one, else its own."""
+    """One user's Knowledge: in the caller's scope when given one, else its own."""
 
-    def load(self, tx: ReadTransaction | None = None) -> Knowledge: ...
+    def load(self, user_id: str, tx: ReadTransaction | None = None) -> Knowledge: ...
 
 
 class AnalysisContextSourceReader(Protocol):
+    def require_owned(self, tx: ReadTransaction, application_id: str, user_id: str) -> None:
+        """The root resolution every document command starts from (architecture §18.3):
+        `UnknownRecord` unless the Application exists and is this user's."""
+        ...
+
     def job_text_source(
-        self, tx: ReadTransaction, application_id: str
+        self, tx: ReadTransaction, application_id: str, user_id: str
     ) -> AnalysisJobTextSource: ...
 
     def analysis_context_source(
-        self, tx: ReadTransaction, job_analysis_id: str
-    ) -> AnalysisContextSource: ...
+        self, tx: ReadTransaction, job_analysis_id: str, user_id: str
+    ) -> AnalysisContextSource:
+        """The analysis, joined to its Application and that Application's owner."""
+        ...
 
 
 class AnalysisStore(Protocol):
     """Analysis writes and the Application's current matching configuration."""
 
-    def lock_application(self, tx: WriteTransaction, application_id: str) -> None: ...
+    def lock_application(self, tx: WriteTransaction, application_id: str, user_id: str) -> None:
+        """Lock the user's Application row; `UnknownRecord` for anyone else's."""
+        ...
 
     def save_analysis(
         self,
         tx: WriteTransaction,
         application_id: str,
+        user_id: str,
         job_text_hash: str,
         analysis: JobAnalysis,
         *,
@@ -73,5 +83,5 @@ class AnalysisStore(Protocol):
     ) -> None: ...
 
     def set_normalized_role(
-        self, tx: WriteTransaction, application_id: str, normalized_role: str
+        self, tx: WriteTransaction, application_id: str, user_id: str, normalized_role: str
     ) -> None: ...

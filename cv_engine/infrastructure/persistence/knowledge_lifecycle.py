@@ -206,9 +206,11 @@ class SqlAlchemyKnowledgeLifecycleRepository:
         record["fact_json"] = canonical_json(record["fact_json"])
         return record
 
-    def fact_events(self, tx: ReadTransaction, fact_id: str | None = None) -> list[dict[str, Any]]:
+    def fact_events(
+        self, tx: ReadTransaction, user_id: str, fact_id: str | None = None
+    ) -> list[dict[str, Any]]:
         visible = [column for column in fact_events.c if column.name != "seq"]
-        statement = select(*visible)
+        statement = select(*visible).where(fact_events.c.user_id == user_id)
         if fact_id is not None:
             statement = statement.where(fact_events.c.fact_id == fact_id)
         rows = self._transactions.connection_for(tx).execute(
@@ -216,13 +218,16 @@ class SqlAlchemyKnowledgeLifecycleRepository:
         )
         return [self._event_record(row) for row in rows.mappings()]
 
-    def latest_fact_statuses(self, tx: ReadTransaction) -> dict[str, str]:
+    def latest_fact_statuses(self, tx: ReadTransaction, user_id: str) -> dict[str, str]:
         rows = (
             self._transactions.connection_for(tx)
             .execute(
                 select(fact_events.c.fact_id, fact_events.c.to_status)
                 .where(
-                    fact_events.c.event_type.in_(("fact_created", "fact_confirmed", "fact_deleted"))
+                    fact_events.c.user_id == user_id,
+                    fact_events.c.event_type.in_(
+                        ("fact_created", "fact_confirmed", "fact_deleted")
+                    ),
                 )
                 .order_by(fact_events.c.created_at, fact_events.c.seq)
             )
@@ -231,10 +236,17 @@ class SqlAlchemyKnowledgeLifecycleRepository:
         )
         return {row["fact_id"]: row["to_status"] for row in rows}
 
-    def get_analysis(self, tx: ReadTransaction, analysis_id: str) -> dict[str, Any]:
+    def get_analysis(
+        self, tx: ReadTransaction, analysis_id: str, application_id: str
+    ) -> dict[str, Any]:
         row = (
             self._transactions.connection_for(tx)
-            .execute(select(job_analyses).where(job_analyses.c.id == analysis_id))
+            .execute(
+                select(job_analyses).where(
+                    job_analyses.c.id == analysis_id,
+                    job_analyses.c.application_id == application_id,
+                )
+            )
             .mappings()
             .one_or_none()
         )

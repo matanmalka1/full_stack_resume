@@ -14,6 +14,7 @@ class IntakeApplicationStore(Protocol):
         tx: WriteTransaction,
         *,
         application_id: str,
+        user_id: str,
         company: str,
         target_role: str,
         notes: str,
@@ -24,14 +25,21 @@ class IntakeApplicationStore(Protocol):
         created_at: str,
     ) -> None: ...
 
-    def get_application(self, tx: ReadTransaction, application_id: str) -> dict[str, Any]: ...
+    def get_application(
+        self, tx: ReadTransaction, application_id: str, user_id: str
+    ) -> dict[str, Any]:
+        """The user's Application; `UnknownRecord` for another user's, as for a missing one."""
+        ...
 
-    def duplicate_application_inputs(self, tx: ReadTransaction) -> list[dict[str, Any]]: ...
+    def duplicate_application_inputs(
+        self, tx: ReadTransaction, user_id: str
+    ) -> list[dict[str, Any]]: ...
 
     def update_job_text(
         self,
         tx: WriteTransaction,
         application_id: str,
+        user_id: str,
         *,
         job_text: str,
         job_text_hash: str,
@@ -45,6 +53,7 @@ class IntakeApplicationStore(Protocol):
         self,
         tx: WriteTransaction,
         application_id: str,
+        user_id: str,
         notes: str,
         expected_notes: str,
         *,

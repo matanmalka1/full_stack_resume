@@ -12,6 +12,7 @@ import json
 from ....domain.analysis.projection import fit_level
 from ....domain.document import content_check, dependent_fact_ids, preparation_state
 from ....util import sha256_text
+from ...actor import Actor
 from ...commands import DecisionMarkdownExport
 from ...errors import UnknownRecord
 from ...ports import TransactionManager
@@ -37,15 +38,19 @@ class DraftHistoryService:
         self.applications = applications
         self.knowledge = knowledge
 
-    def export_decision_markdown(self, application_id: str) -> DecisionMarkdownExport:
+    def export_decision_markdown(self, actor: Actor, application_id: str) -> DecisionMarkdownExport:
         """Render the document's provenance. Exempt from the deleted-Application refusal."""
         try:
             with self.transactions.read() as tx:
-                application = self.applications.history_application(tx, application_id)
-                source = read_document_source(tx, self.documents, self.sources, application_id)
+                application = self.applications.history_application(
+                    tx, application_id, actor.user_id
+                )
+                source = read_document_source(
+                    tx, self.documents, self.sources, application_id, actor
+                )
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown decision export source: {exc.args[0]}") from exc
-        knowledge = load_knowledge(self.knowledge)
+        knowledge = load_knowledge(self.knowledge, actor)
         document = source.document
         analysis = source.analysis
         current = current_basis(document, knowledge)

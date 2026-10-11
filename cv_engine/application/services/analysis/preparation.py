@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from ....domain.analysis.normalize import normalize_analysis_proposal
 from ....domain.contracts.analysis import JobAnalysis, OverrideKey
 from ....domain.contracts.document import BuiltWith
+from ...actor import Actor
 from ...commands import AnalyzeCommand
 from ...errors import PreconditionFailed, ProviderInvalidOutput
 from ...ports import AnalysisContext
@@ -35,6 +36,7 @@ class AnalysisPreparation:
     @staticmethod
     def prepare(
         service,
+        actor: Actor,
         command: AnalyzeCommand,
         *,
         operation_id: str | None = None,
@@ -46,10 +48,10 @@ class AnalysisPreparation:
         Operation, not the analysis. `still_owned` is what the runner checks before
         any retry; a caller outside the runner has no lease to lose.
         """
-        source = service.job_text_source(command.application_id, command.job_text_hash)
+        source = service.job_text_source(actor, command.application_id, command.job_text_hash)
         service.refuse_deleted(source.application_id, source.deleted_at)
         job_text = source.job_text
-        knowledge = service.load_knowledge()
+        knowledge = service.load_knowledge(actor)
         profiles = knowledge.profiles
         if command.provider != "openai" or operation_id is None:
             raise PreconditionFailed("analysis requires an OpenAI Operation")

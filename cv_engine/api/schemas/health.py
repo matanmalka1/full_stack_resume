@@ -9,16 +9,6 @@ class HttpSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class KnowledgeVersions(HttpSchema):
-    facts: str
-    facts_lifecycle: str
-    profiles: str
-    emphasis_policies: str
-    presentations: str
-    candidate_context: str
-    requirement_concepts: str
-
-
 class HealthResponse(HttpSchema):
     """Health and version surfaces for the local process."""
 
@@ -26,5 +16,3 @@ class HealthResponse(HttpSchema):
     product_version: str
     api_version: str
     schema_version: str
-    #: Null until there is Knowledge to version: before `create-user` and the import.
-    knowledge: KnowledgeVersions | None

@@ -6,8 +6,8 @@ requirement concepts are product policy and stay version-controlled files. A Pro
 its template joined with the user's binding, so it validates exactly as the file
 Profile it was imported from did, and hashes the same.
 
-Until isolation gives every request its own user (multi-user-accounts.md §5, step 5)
-Knowledge is the installation's one user's: the database admits only one.
+Knowledge is always one named user's: the caller says whose (architecture §18.3), and
+another user's rows are never read.
 """
 
 from __future__ import annotations
@@ -40,20 +40,17 @@ class DatabaseKnowledge:
         self._repo = repository
         self._root = Path(policy_root).resolve()
 
-    def load(self, tx: ReadTransaction | None = None) -> Knowledge:
+    def load(self, user_id: str, tx: ReadTransaction | None = None) -> Knowledge:
         with self._scope(tx) as scope:
-            state = self.state(scope)
+            state = self.state(scope, user_id)
         return self.build(state)
 
-    def facts(self, tx: ReadTransaction | None = None) -> FactStore:
+    def facts(self, user_id: str, tx: ReadTransaction | None = None) -> FactStore:
         with self._scope(tx) as scope:
-            state = self.state(scope)
+            state = self.state(scope, user_id)
         return fact_store_from_rows(state.facts)
 
-    def state(self, tx: ReadTransaction) -> StoredKnowledge:
-        user_id = self._repo.sole_user_id(tx)
-        if user_id is None:
-            raise KnowledgeRejected("There is no user yet; run create-user, then import-knowledge.")
+    def state(self, tx: ReadTransaction, user_id: str) -> StoredKnowledge:
         state = self._repo.knowledge_state(tx, user_id)
         if state is None:
             raise KnowledgeRejected("This user has no Knowledge yet; run import-knowledge.")

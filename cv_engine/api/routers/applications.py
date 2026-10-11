@@ -41,6 +41,7 @@ from ..schemas.applications import (
     UpdateJobTextResponse,
 )
 from ..schemas.operations import OperationResponse
+from ..session_cookie import CurrentActor
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -50,9 +51,11 @@ router = APIRouter(prefix="/applications", tags=["applications"])
     response_model=DuplicateCheckResponse,
     summary="Check for possible duplicate applications",
 )
-def duplicate_check(request: DuplicateCheckRequest, services: Services) -> DuplicateCheckResponse:
+def duplicate_check(
+    request: DuplicateCheckRequest, services: Services, actor: CurrentActor
+) -> DuplicateCheckResponse:
     result = services.applications.duplicate_check(
-        DuplicateCheckCommand(**request.model_dump(mode="python"))
+        actor, DuplicateCheckCommand(**request.model_dump(mode="python"))
     )
     return DuplicateCheckResponse.model_validate(result.model_dump(mode="json"))
 
@@ -64,14 +67,15 @@ def duplicate_check(request: DuplicateCheckRequest, services: Services) -> Dupli
     summary="Create an application with its job text",
 )
 def create_application(
-    request: CreateApplicationRequest, services: Services
+    request: CreateApplicationRequest, services: Services, actor: CurrentActor
 ) -> CreateApplicationResponse:
     result = services.applications.ingest(
+        actor,
         IngestCommand(
             **request.model_dump(mode="python"),
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return CreateApplicationResponse.model_validate(result.model_dump(mode="json"))
 
@@ -79,6 +83,7 @@ def create_application(
 @router.get("", response_model=ApplicationListResponse, summary="List applications")
 def list_applications(
     services: Services,
+    actor: CurrentActor,
     activity: ActivityFilter = ActivityFilter.ALL,
     stage: Annotated[list[PreparationState] | None, Query()] = None,
     recruitment_status: Annotated[list[RecruitmentStatus] | None, Query()] = None,
@@ -103,6 +108,7 @@ def list_applications(
     answers, and it narrows alongside them rather than replacing them.
     """
     result = services.queries.list_applications(
+        actor,
         ApplicationListQuery(
             activity=activity,
             stages=frozenset(stage or ()),
@@ -112,7 +118,7 @@ def list_applications(
             sort=sort,
             limit=limit,
             offset=offset,
-        )
+        ),
     )
     return ApplicationListResponse.model_validate(result.model_dump(mode="json"))
 
@@ -122,8 +128,10 @@ def list_applications(
     response_model=ApplicationDetailResponse,
     summary="Read an application and its active preparation state",
 )
-def application_detail(application_id: str, services: Services) -> ApplicationDetailResponse:
-    result = services.queries.application_detail(application_id)
+def application_detail(
+    application_id: str, services: Services, actor: CurrentActor
+) -> ApplicationDetailResponse:
+    result = services.queries.application_detail(actor, application_id)
     return ApplicationDetailResponse.model_validate(result.model_dump(mode="json"))
 
 
@@ -136,14 +144,16 @@ def update_application_notes(
     application_id: str,
     request: UpdateApplicationNotesRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> UpdateApplicationNotesResponse:
     result = services.applications.update_notes(
+        actor,
         UpdateApplicationNotesCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return UpdateApplicationNotesResponse.model_validate(result.model_dump(mode="json"))
 
@@ -157,14 +167,16 @@ def update_job_text(
     application_id: str,
     request: UpdateJobTextRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> UpdateJobTextResponse:
     result = services.applications.update_job_text(
+        actor,
         UpdateJobTextCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return UpdateJobTextResponse.model_validate(result.model_dump(mode="json"))
 
@@ -179,6 +191,7 @@ def create_analysis(
     application_id: str,
     request: CreateAnalysisRequest,
     services: Services,
+    actor: CurrentActor,
     response: Response,
     idempotency_key: IdempotencyKey = None,
 ) -> OperationResponse:
@@ -196,6 +209,7 @@ def create_analysis(
     Pydantic coerces a `str` subclass to survive the round trip.
     """
     queued = services.operation_submissions.submit_analysis(
+        actor,
         AnalyzeCommand(
             application_id=application_id,
             **request.model_dump(mode="json"),
@@ -211,13 +225,16 @@ def create_analysis(
     response_model=CloseApplicationResponse,
     summary="Close an application without deleting its history",
 )
-def close_application(application_id: str, services: Services) -> CloseApplicationResponse:
+def close_application(
+    application_id: str, services: Services, actor: CurrentActor
+) -> CloseApplicationResponse:
     result = services.recruitment.close_application(
+        actor,
         CloseApplicationCommand(
             application_id=application_id,
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return CloseApplicationResponse.model_validate(result.model_dump(mode="json"))
 
@@ -227,7 +244,9 @@ def close_application(application_id: str, services: Services) -> CloseApplicati
     response_model=DeleteApplicationResponse,
     summary="Soft-delete an application without touching its immutable history",
 )
-def delete_application(application_id: str, services: Services) -> DeleteApplicationResponse:
+def delete_application(
+    application_id: str, services: Services, actor: CurrentActor
+) -> DeleteApplicationResponse:
     """No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).
 
     Callable from any current status, including `closed`. Every immutable
@@ -237,10 +256,11 @@ def delete_application(application_id: str, services: Services) -> DeleteApplica
     surfacing it. The detail endpoint still returns it by ID.
     """
     result = services.recruitment.delete_application(
+        actor,
         DeleteApplicationCommand(
             application_id=application_id,
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return DeleteApplicationResponse.model_validate(result.model_dump(mode="json"))

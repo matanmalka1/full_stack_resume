@@ -8,6 +8,7 @@ method narrows to before returning.
 from __future__ import annotations
 
 from ....util import new_id
+from ...actor import Actor
 from ...ai_configuration import (
     DEFAULT_AI_MODEL,
     DEFAULT_REASONING_EFFORT,
@@ -91,9 +92,9 @@ class OperationSubmissionService:
         self._default_ai_model = normalize_ai_model(default_ai_model)
         self._default_reasoning_effort = normalize_reasoning_effort(default_reasoning_effort)
 
-    def _stored_settings(self):
+    def _stored_settings(self, actor: Actor):
         with self.transactions.read() as tx:
-            return self.settings.settings(tx)
+            return self.settings.settings(tx, actor.user_id)
 
     def _ai_execution(self, stored, model: str | None, effort: str | None) -> tuple[str, str]:
         return (
@@ -103,17 +104,17 @@ class OperationSubmissionService:
             ),
         )
 
-    def _freeze_ai_execution(self, command, stored=None):
-        """Copy current safe preferences into the immutable Operation payload."""
+    def _freeze_ai_execution(self, actor: Actor, command, stored=None):
+        """Copy the user's current safe preferences into the immutable Operation payload."""
         model, effort = self._ai_execution(
-            stored or self._stored_settings(), command.model, command.reasoning_effort
+            stored or self._stored_settings(actor), command.model, command.reasoning_effort
         )
         return command.model_copy(update={"model": model, "reasoning_effort": effort})
 
-    def _load_active_application(self, application_id: str) -> dict[str, object]:
+    def _load_active_application(self, actor: Actor, application_id: str) -> dict[str, object]:
         try:
             with self.transactions.read() as tx:
-                application = self.operations.application(tx, application_id)
+                application = self.operations.application(tx, application_id, actor.user_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
         if application.get("deleted_at") is not None:
@@ -121,22 +122,25 @@ class OperationSubmissionService:
         return application
 
     def _enqueue(
-        self, request: CreateOperation, *, operation_id: str | None = None
+        self, actor: Actor, request: CreateOperation, *, operation_id: str | None = None
     ) -> OperationView:
         with self.transactions.write() as tx:
-            stored = self.operations.enqueue(tx, request, operation_id=operation_id or new_id())
+            stored = self.operations.enqueue(
+                tx, request, actor.user_id, operation_id=operation_id or new_id()
+            )
         return as_operation_view(stored)
 
     def submit_analysis(
         self,
+        actor: Actor,
         command: AnalyzeCommand,
         *,
         idempotency_key: str,
         analysis_service: AnalysisService,
     ) -> OperationView:
-        self._load_active_application(command.application_id)
-        stored = self._stored_settings()
-        command = self._freeze_ai_execution(command, stored)
+        self._load_active_application(actor, command.application_id)
+        stored = self._stored_settings(actor)
+        command = self._freeze_ai_execution(actor, command, stored)
         if stored.auto_generate_when_review_not_required:
             # §9 automatic generation, frozen as a `create_draft` submitted now would be.
             model, effort = self._ai_execution(stored, None, None)
@@ -145,7 +149,9 @@ class OperationSubmissionService:
                     "draft_continuation": DraftContinuation(model=model, reasoning_effort=effort)
                 }
             )
-        source = analysis_service.job_text_source(command.application_id, command.job_text_hash)
+        source = analysis_service.job_text_source(
+            actor, command.application_id, command.job_text_hash
+        )
         analysis_service.refuse_deleted(source.application_id, source.deleted_at)
         request = CreateOperation(
             application_id=command.application_id,
@@ -154,13 +160,13 @@ class OperationSubmissionService:
             idempotency_key=idempotency_key,
             sources=OperationSources(
                 job_text_hash=source.job_text_hash,
-                knowledge_context_hash=analysis_service.load_knowledge().context_hash(),
+                knowledge_context_hash=analysis_service.load_knowledge(actor).context_hash(),
             ),
             provider=command.provider,
             model=command.model,
             reasoning_effort=validated_reasoning_effort(command.reasoning_effort),
         )
-        return self._enqueue(request)
+        return self._enqueue(actor, request)
 
     def _document_sources(self, source: DocumentSource, expected_document_hash: str):
         """Freeze the document the command was issued against, and what it is pinned to."""
@@ -173,6 +179,7 @@ class OperationSubmissionService:
 
     def submit_draft(
         self,
+        actor: Actor,
         command: DraftCommand,
         *,
         idempotency_key: str,
@@ -180,9 +187,9 @@ class OperationSubmissionService:
         operation_id: str | None = None,
     ) -> OperationView:
         """§14 `create_draft`: queue generation against the document the client read."""
-        self._load_active_application(command.application_id)
-        command = self._freeze_ai_execution(command)
-        source = draft_service.document_source(command.application_id)
+        self._load_active_application(actor, command.application_id)
+        command = self._freeze_ai_execution(actor, command)
+        source = draft_service.document_source(actor, command.application_id)
         sources = self._document_sources(source, command.expected_document_hash)
         if source.document.content is not None:
             raise PreconditionFailed(
@@ -190,21 +197,23 @@ class OperationSubmissionService:
                 "again from its analysis"
             )
         return self._enqueue(
+            actor,
             draft_operation_request(command, sources, idempotency_key),
             operation_id=operation_id,
         )
 
     def submit_regeneration(
         self,
+        actor: Actor,
         command: RegenerateSectionCommand | RegenerateClaimCommand,
         *,
         idempotency_key: str,
         draft_service: DraftAuthoringService,
     ) -> OperationView:
         """§14: queue one section or claim regeneration against an exact document hash."""
-        self._load_active_application(command.application_id)
-        command = self._freeze_ai_execution(command)
-        source = draft_service.document_source(command.application_id)
+        self._load_active_application(actor, command.application_id)
+        command = self._freeze_ai_execution(actor, command)
+        source = draft_service.document_source(actor, command.application_id)
         sources = self._document_sources(source, command.expected_document_hash)
         content = source.document.content
         if content is None:
@@ -244,18 +253,19 @@ class OperationSubmissionService:
             model=command.model,
             reasoning_effort=validated_reasoning_effort(command.reasoning_effort),
         )
-        return self._enqueue(request)
+        return self._enqueue(actor, request)
 
     def submit_render(
         self,
+        actor: Actor,
         command: RenderCommand,
         *,
         idempotency_key: str,
         rendering_service: RenderingService,
     ) -> OperationView:
         """§16: admit only an approved document with no review reason, then queue."""
-        self._load_active_application(command.application_id)
-        rendering_service.admit(command)
+        self._load_active_application(actor, command.application_id)
+        rendering_service.admit(actor, command)
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.RENDER_DOCUMENT,
@@ -265,4 +275,4 @@ class OperationSubmissionService:
             provider="deterministic",
             model="playwright",
         )
-        return self._enqueue(request)
+        return self._enqueue(actor, request)

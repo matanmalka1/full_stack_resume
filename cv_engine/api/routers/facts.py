@@ -37,6 +37,7 @@ from ..schemas.facts import (
     FactTransitionRequest,
     fact_event_response,
 )
+from ..session_cookie import CurrentActor
 
 router = APIRouter(prefix="/facts", tags=["facts"])
 
@@ -44,9 +45,12 @@ router = APIRouter(prefix="/facts", tags=["facts"])
 @router.get("", response_model=FactListResponse, summary="List facts and their lifecycle status")
 def list_facts(
     services: Services,
+    actor: CurrentActor,
     fact_status: Annotated[FactStatusFilter | None, Query(alias="status")] = None,
 ) -> FactListResponse:
-    result = services.knowledge_queries.list_facts(fact_status.value if fact_status else None)
+    result = services.knowledge_queries.list_facts(
+        actor, fact_status.value if fact_status else None
+    )
     return FactListResponse(
         items=[
             FactListItemResponse(
@@ -63,9 +67,9 @@ def list_facts(
     response_model=FactHistoryResponse,
     summary="Read the immutable fact lifecycle trail",
 )
-def read_fact_history(services: Services) -> FactHistoryResponse:
+def read_fact_history(services: Services, actor: CurrentActor) -> FactHistoryResponse:
     """Declared before `/{fact_id}`, so `history` is not read as a fact ID."""
-    result = services.knowledge_queries.fact_history(None)
+    result = services.knowledge_queries.fact_history(actor, None)
     return FactHistoryResponse(events=[fact_event_response(event) for event in result.events])
 
 
@@ -76,10 +80,11 @@ def read_fact_history(services: Services) -> FactHistoryResponse:
 )
 def read_fact_attachment_targets(
     services: Services,
+    actor: CurrentActor,
     fact_id: Annotated[str | None, Query()] = None,
 ) -> FactAttachmentTargetsResponse:
     """A read-only projection; it does not expose or edit Profile documents."""
-    result = services.knowledge_queries.fact_attachment_targets(fact_id)
+    result = services.knowledge_queries.fact_attachment_targets(actor, fact_id)
     return FactAttachmentTargetsResponse(
         profiles=[
             FactAttachmentProfileTargetResponse(
@@ -100,8 +105,8 @@ def read_fact_attachment_targets(
     response_model=FactDetailResponse,
     summary="Read one fact and its lifecycle events",
 )
-def read_fact(fact_id: str, services: Services) -> FactDetailResponse:
-    result = services.knowledge_queries.show_fact(fact_id)
+def read_fact(fact_id: str, services: Services, actor: CurrentActor) -> FactDetailResponse:
+    result = services.knowledge_queries.show_fact(actor, fact_id)
     return FactDetailResponse(
         fact=FactResponse.of(result.fact),
         events=[fact_event_response(event) for event in result.events],
@@ -113,8 +118,10 @@ def read_fact(fact_id: str, services: Services) -> FactDetailResponse:
     response_model=FactHistoryResponse,
     summary="Read one fact's lifecycle trail",
 )
-def read_one_fact_history(fact_id: str, services: Services) -> FactHistoryResponse:
-    result = services.knowledge_queries.fact_history(fact_id)
+def read_one_fact_history(
+    fact_id: str, services: Services, actor: CurrentActor
+) -> FactHistoryResponse:
+    result = services.knowledge_queries.fact_history(actor, fact_id)
     return FactHistoryResponse(events=[fact_event_response(event) for event in result.events])
 
 
@@ -124,7 +131,9 @@ def read_one_fact_history(fact_id: str, services: Services) -> FactHistoryRespon
     status_code=status.HTTP_201_CREATED,
     summary="Create a pending fact",
 )
-def create_fact(request: FactContentRequest, services: Services) -> FactMutationResponse:
+def create_fact(
+    request: FactContentRequest, services: Services, actor: CurrentActor
+) -> FactMutationResponse:
     """`201`: a new fact always enters at `pending`, whoever asked for it.
 
     The application layer generates the identity and refuses a supplied one, so
@@ -132,6 +141,7 @@ def create_fact(request: FactContentRequest, services: Services) -> FactMutation
     """
     payload = request.model_dump(mode="json", exclude={"source", "reason"})
     result = services.knowledge.create_pending_fact(
+        actor,
         request.source,
         payload,
         reason=request.reason,
@@ -153,9 +163,11 @@ def create_fact(request: FactContentRequest, services: Services) -> FactMutation
 def create_fact_from_claim(
     request: CaptureClaimFactRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> FactMutationResponse:
     """The claim's exact text becomes the fact's rendering, unrewritten."""
     result = services.knowledge.create_fact_from_claim(
+        actor,
         request.application_id,
         request.claim_id,
         source=request.source,
@@ -185,9 +197,11 @@ def confirm_fact(
     fact_id: str,
     request: FactTransitionRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> FactMutationResponse:
     """`confirm: false` is refused, not interpreted: see `FactTransitionRequest`."""
     result = services.knowledge.confirm_fact(
+        actor,
         fact_id,
         explicitly_confirmed=request.confirm,
         reason=request.reason,
@@ -209,6 +223,7 @@ def delete_fact(
     fact_id: str,
     request: FactTransitionRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> FactMutationResponse:
     """One-way; `confirm: false` is refused rather than interpreted.
 
@@ -218,6 +233,7 @@ def delete_fact(
     (state-and-use-cases.md §17).
     """
     result = services.knowledge.delete_fact(
+        actor,
         fact_id,
         explicitly_confirmed=request.confirm,
         reason=request.reason,
@@ -240,9 +256,11 @@ def attach_fact(
     fact_id: str,
     request: AttachFactRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> FactAttachmentResponse:
     """Attachment offers the fact to a pool; it does not select it."""
     result = services.knowledge.attach_fact(
+        actor,
         fact_id,
         request.profile,
         request.section,
@@ -270,12 +288,14 @@ def confirm_and_use_fact(
     fact_id: str,
     request: ConfirmAndUseFactRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> ConfirmAndUseFactResponse:
     """One logical command: it confirms the fact and attaches it to the Profile
     section, or it reports a complete failure. There is no partial outcome to report, so
     there is no partial success status. The document is not written.
     """
     result = services.knowledge.confirm_and_use_fact(
+        actor,
         fact_id,
         application_id=request.application_id,
         job_analysis_id=request.job_analysis_id,
