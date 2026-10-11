@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from ._metadata import metadata
 from .accounts import user_sessions, users
-from .knowledge import fact_events, knowledge_mutation_journal
+from .knowledge import (
+    candidate_contexts,
+    fact_events,
+    facts,
+    knowledge_mutation_journal,
+    profile_bindings,
+)
 from .prep import cv_documents, job_analyses
 from .shared import (
     OPERATION_FAILURE_CODES,
@@ -42,4 +48,7 @@ __all__ = [
     "knowledge_mutation_journal",
     "users",
     "user_sessions",
+    "facts",
+    "candidate_contexts",
+    "profile_bindings",
 ]

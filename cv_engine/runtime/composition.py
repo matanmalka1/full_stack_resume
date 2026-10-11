@@ -31,6 +31,7 @@ from ..application.services.knowledge import (
     KnowledgeQueryService,
     KnowledgeRecoveryService,
 )
+from ..application.services.knowledge.importing import KnowledgeImportService
 from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
     AnalysisOperationHandler,
@@ -82,6 +83,7 @@ from ..infrastructure.persistence.operation_client import SqlAlchemyOperationCli
 from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
 from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from ..infrastructure.persistence.settings_store import SqlAlchemySettingsStore
+from ..infrastructure.persistence.user_knowledge import SqlAlchemyUserKnowledgeRepository
 from ..infrastructure.persistence.worker_lock import worker_exclusivity
 from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
@@ -130,6 +132,7 @@ class Services:
     operation_worker: OperationWorker
     settings: SettingsService
     accounts: AccountService
+    knowledge_import: KnowledgeImportService
 
 
 def build_object_store(paths: AppPaths, config: RuntimeConfig) -> ObjectStore:
@@ -405,6 +408,12 @@ def build_services(
             SqlAlchemyAccountRepository(transactions),
             Argon2PasswordHasher(),
             session_days=int(resolved_config.get("session_days")),
+        ),
+        knowledge_import=KnowledgeImportService(
+            transactions,
+            SqlAlchemyAccountRepository(transactions),
+            knowledge_lifecycle_store,
+            SqlAlchemyUserKnowledgeRepository(transactions),
         ),
     )
 

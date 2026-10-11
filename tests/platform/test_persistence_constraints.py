@@ -65,9 +65,12 @@ MUTABLE_TABLES = frozenset(
         "app_settings",  # safe mutable Web preferences, guarded by edit_version
         "users",  # a password changes
         "user_sessions",  # a session is revoked
+        "facts",  # edited in place; its identity is guarded by its own trigger
+        "candidate_contexts",  # the declared context and the fact store version
+        "profile_bindings",  # pools and pins grow through attach_fact
     }
 )
-DELETE_ONLY_TABLES = frozenset({"operations", "knowledge_mutation_journal"})
+DELETE_ONLY_TABLES = frozenset({"operations", "knowledge_mutation_journal", "facts"})
 
 IMMUTABLE_MESSAGE = "immutable record"
 
