@@ -44,7 +44,13 @@ def _fit_projection(analysis: JobAnalysis | None) -> dict[str, Any]:
 #: The job posting's own columns: detail reads them as `JobPostingView`, and the
 #: state projection carries `job_text_hash`, so the Application view leaves them out.
 _JOB_POSTING_COLUMNS = frozenset(
-    {"job_text", "job_text_hash", "job_normalized_hash", "job_text_updated_at"}
+    {
+        "user_id",
+        "job_text",
+        "job_text_hash",
+        "job_normalized_hash",
+        "job_text_updated_at",
+    }
 )
 
 
