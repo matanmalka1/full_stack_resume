@@ -1,17 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, Settings, ShieldCheck } from "lucide-react";
+import { KeyRound, Settings } from "lucide-react";
 
 import { settingsQueryOptions } from "@/api/settings";
-import { ChangePasswordForm } from "@/features/auth";
+import { ChangePasswordForm, SignOutButton } from "@/features/auth";
 import { Card } from "@/ui/Card";
 import { PageShell } from "@/ui/PageShell";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { SectionHeader } from "@/ui/SectionHeader";
 import { Skeleton } from "@/ui/Skeleton";
-import { SettingsForm } from "../components/SettingsForm";
+import { SettingsForm, settingsCardClasses } from "../components/SettingsForm";
 
-/* The three `FormSection`s the form opens with - automation, AI, display - held at their
+/* The sections the form opens with - AI, automation, display - held at their
    own size while the read is in flight, and the row of controls that closes it. The screen
    is reached directly from the navigation, so the wait is the reader's first sight of it,
    and a single line of muted text under a section heading made that first sight look like
@@ -26,8 +26,7 @@ const settingsLoading = (
         <Skeleton className="mt-2 block h-11 w-full" />
       </div>
     ))}
-    {/* `ActionBar` defaults to the closing edge, so the placeholder stands where the save
-        button will actually land rather than on the opposite side of the card. */}
+    {/* The save row's button stands at its closing edge. */}
     <div className="flex justify-end">
       <Skeleton className="block h-11 w-40" />
     </div>
@@ -48,30 +47,29 @@ export const SettingsPage = () => {
         </span>
       }
     >
-      <Card className="bg-cv-surface p-5 shadow-surface sm:p-6">
-        <SectionHeader
-          className="mb-5"
-          description="השינויים נשמרים באפליקציה ומשפיעים מיד על הממשק."
-          icon={ShieldCheck}
-          title="מדיניות הפעלה ותצוגה"
-        />
-        <QueryState
-          error={query.error}
-          errorTitle="לא ניתן לטעון את ההגדרות"
-          loading={query.data === undefined}
-          loadingState={settingsLoading}
-        >
-          {query.data === undefined ? null : <SettingsForm etag={query.data.etag} settings={query.data.settings} />}
-        </QueryState>
-      </Card>
-      <Card className="mt-6 bg-cv-surface p-5 shadow-surface sm:p-6">
+      {/* One card per area - AI, display, account - instead of one long card. The two
+          settings cards are one form with one save, so they come from `SettingsForm`. */}
+      <QueryState
+        error={query.error}
+        errorTitle="לא ניתן לטעון את ההגדרות"
+        loading={query.data === undefined}
+        loadingState={<Card className={settingsCardClasses}>{settingsLoading}</Card>}
+      >
+        {query.data === undefined ? null : <SettingsForm etag={query.data.etag} settings={query.data.settings} />}
+      </QueryState>
+      <Card className={settingsCardClasses}>
         <SectionHeader
           className="mb-5"
           description="שינוי הסיסמה מנתק את כל ההתחברויות האחרות."
           icon={KeyRound}
-          title="סיסמה"
+          title="חשבון"
         />
         <ChangePasswordForm />
+        {/* On a wide screen sign-out sits in the sidebar; a narrow screen's masthead keeps
+            only the wordmark and the new-job command, so it lives here instead. */}
+        <div className="mt-6 border-t border-cv-hairline pt-4 lg:hidden">
+          <SignOutButton />
+        </div>
       </Card>
     </PageShell>
   );

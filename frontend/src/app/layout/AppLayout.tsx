@@ -45,7 +45,8 @@ export const AppLayout = () => {
       <RouteFocusManager />
       <DisplaySettingsPreviewProvider onPreview={setDisplayPreview}>
         <AppHeader collapsed={sidebar.collapsed} onToggleCollapsed={sidebar.toggle} />
-        <main className="page-gutter min-w-0 py-5 sm:py-6 lg:col-start-2 lg:row-start-1">
+        {/* The page's end clears the bottom navigation bar a narrow screen pins over it. */}
+        <main className="page-gutter min-w-0 pt-5 pb-[calc(var(--cv-bottom-nav-height)+1.5rem)] sm:pt-6 lg:col-start-2 lg:row-start-1">
           <Outlet />
         </main>
       </DisplaySettingsPreviewProvider>

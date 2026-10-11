@@ -147,7 +147,7 @@ export const ApplicationListPage = () => {
      board is on screen. They appear once there is a board to slice. */
   const presetTabs =
     page === undefined || page.total === 0 ? undefined : (
-      <div className="self-center">
+      <div className="w-full min-w-0 self-center sm:w-auto">
         <ApplicationPresetTabs
           counts={page.preset_counts}
           onSelect={(preset) => updateQuery({ ...query, preset: preset === "all" ? undefined : preset })}

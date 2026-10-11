@@ -25,6 +25,17 @@
   --cv-z-toast: 60;
   --stroke-icon: 2;
   --stroke-icon-strong: 3;
+  /* Below the large breakpoint the primary navigation is a bar pinned to the bottom of the
+     viewport (AppNavigation). Everything else that pins itself to the bottom - a commit
+     bar, a sticky form action, the page's own end - stands on top of it by this height
+     rather than underneath it. The sidebar layout has no bottom bar, so it is zero there. */
+  --cv-bottom-nav-height: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 64rem) {
+  :root {
+    --cv-bottom-nav-height: 0px;
+  }
 }
 
 :root[data-theme="light"] {
@@ -160,7 +171,7 @@ html {
      into view - a focused control, a find match, a linked claim - stops above it rather
      than landing underneath. The bar measures itself into this variable (`CommitBar`);
      with no bar on the page it is unset and nothing is reserved. */
-  scroll-padding-bottom: var(--cv-commit-bar-clearance, 0px);
+  scroll-padding-bottom: calc(var(--cv-commit-bar-clearance, 0px) + var(--cv-bottom-nav-height));
 }
 
 /* One scrollbar for the whole product. Every scroll area - the page, a dialog body, the

@@ -117,16 +117,14 @@ it("preserves edits through refresh failure and repeated conflict, and merges on
   });
   vi.stubGlobal("fetch", fetch);
   renderRoute("/settings", "/settings", <SettingsPage />);
-  await screen.findByRole("switch", { name: "ערכת נושא לפי המערכת" });
-  fireEvent.click(screen.getByRole("switch", { name: "ערכת נושא לפי המערכת" }));
-  fireEvent.click(screen.getByRole("switch", { name: "ערכת נושא כהה" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "כהה" }));
   fireEvent.change(screen.getByLabelText("מאמץ חשיבה"), { target: { value: "low" } });
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
   await screen.findByText("ההגדרות השתנו מאז שפתחת את הטופס");
   expect(screen.getByRole("button", { name: "שמירת הגדרות" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
   await screen.findByRole("alert");
-  expect(screen.getByRole("switch", { name: "ערכת נושא כהה" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "כהה" })).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
   fireEvent.click(await screen.findByRole("checkbox", { name: "החלת העריכה: ערכת נושא" }));
   fireEvent.click(screen.getByRole("button", { name: "החלת הבחירה על הגרסה העדכנית" }));
@@ -166,12 +164,11 @@ it("discards local edits only by explicit choice and adopts the current server v
     }),
   );
   renderRoute("/settings", "/settings", <SettingsPage />);
-  fireEvent.click(await screen.findByRole("switch", { name: "ערכת נושא לפי המערכת" }));
-  fireEvent.click(screen.getByRole("switch", { name: "ערכת נושא כהה" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "כהה" }));
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
   fireEvent.click(await screen.findByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
   fireEvent.click(await screen.findByRole("button", { name: "טעינת ערכי השרת והשלכת העריכות שלי" }));
-  expect(screen.getByRole("switch", { name: "ערכת נושא כהה" })).not.toBeChecked();
+  expect(screen.getByRole("radio", { name: "כהה" })).not.toBeChecked();
   expect(screen.getByRole("button", { name: "שמירת הגדרות" })).toBeDisabled();
 });
 
@@ -196,13 +193,12 @@ it("keeps a non-conflict 412 as a validation failure and retains unsaved edits",
     ),
   );
   renderRoute("/settings", "/settings", <SettingsPage />);
-  fireEvent.click(await screen.findByRole("switch", { name: "ערכת נושא לפי המערכת" }));
-  fireEvent.click(screen.getByRole("switch", { name: "ערכת נושא כהה" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "כהה" }));
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
   await screen.findByText("ההגדרות לא נשמרו");
   expect(
     screen.getByText("הפעולה אינה זמינה בשלב הנוכחי. יש להשלים את השלבים הקודמים ולנסות שוב."),
   ).toBeInTheDocument();
   expect(screen.queryByText("ההגדרות השתנו מאז שפתחת את הטופס")).not.toBeInTheDocument();
-  expect(screen.getByRole("switch", { name: "ערכת נושא כהה" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "כהה" })).toBeChecked();
 });

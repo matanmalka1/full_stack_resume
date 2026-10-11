@@ -92,21 +92,20 @@ test("applies the saved theme from Settings and follows system changes", async (
   api.stub("PATCH /api/v1/settings", answer);
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/settings");
-  await expect(page.getByRole("switch", { name: "ערכת נושא לפי המערכת", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "לפי המערכת", exact: true })).toBeChecked();
   await expect(page.locator("html")).not.toHaveAttribute("data-theme");
   const dark = await page.locator("html").evaluate((element) => getComputedStyle(element).backgroundColor);
   await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator("html")).not.toHaveAttribute("data-theme");
   const light = await page.locator("html").evaluate((element) => getComputedStyle(element).backgroundColor);
   expect(light).not.toBe(dark);
-  await page.getByRole("switch", { name: "ערכת נושא לפי המערכת", exact: true }).click();
-  await page.getByRole("switch", { name: "ערכת נושא כהה", exact: true }).click();
+  await page.getByText("כהה", { exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByRole("button", { name: "שמירת הגדרות" }).click();
   await expect(page.getByText("ההגדרות נשמרו")).toBeVisible();
   await expect(page.getByRole("button", { name: /^ערכת נושא:/ })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("switch", { name: "ערכת נושא כהה", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "כהה", exact: true })).toBeChecked();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
