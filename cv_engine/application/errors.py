@@ -143,6 +143,14 @@ class PasswordPolicyFailed(ApplicationError):
     """A new password is outside the policy; the message names only the rule."""
 
 
+class RateLimited(ApplicationError):
+    """Sign-in is temporarily throttled; the client may retry after the window."""
+
+    def __init__(self, retry_after_seconds: int):
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__("Too many sign-in attempts. Try again later.", code="RATE_LIMITED")
+
+
 class InfrastructureFailure(ApplicationError):
     """A configured persistence, provider, browser, or filesystem dependency failed."""
 

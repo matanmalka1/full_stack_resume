@@ -1,33 +1,33 @@
-"""Sign-in for the one user (product-spec §22, state-and-use-cases §23, architecture §18).
-
-Step 2 of the accounts delivery order: the routes and the operator CLI exist, but no
-other route requires a session yet.
-"""
+"""Accounts, sessions, and the shared sign-in throttle."""
 
 from __future__ import annotations
 
 import io
 import logging
 import re
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from api_harness import MUTATION_HEADERS
 from argon2 import PasswordHasher
-from sqlalchemy import insert, select, text, update
-from sqlalchemy.exc import IntegrityError
+from fastapi.testclient import TestClient
+from sqlalchemy import select, text, update
+from starlette.requests import Request
 
 from cv_engine.admin.cli import main as admin
-from cv_engine.api.app import API_PREFIX
+from cv_engine.api.app import API_PREFIX, create_app
+from cv_engine.api.client_address import client_ip
 from cv_engine.api.session_cookie import SESSION_COOKIE
-from cv_engine.application.errors import PasswordPolicyFailed, StateConflict
+from cv_engine.application.errors import PasswordPolicyFailed, RateLimited, StateConflict
 from cv_engine.domain.accounts import (
     EmailRejected,
     PasswordRejected,
     check_password_policy,
     normalize_email,
 )
-from cv_engine.infrastructure.persistence.tables import user_sessions, users
-from cv_engine.util import new_id, sha256_text, utc_now
+from cv_engine.infrastructure.persistence.tables import rate_limit_buckets, user_sessions, users
+from cv_engine.runtime.composition import build_api_services, build_services
+from cv_engine.util import sha256_text
 
 EMAIL = "Candidate@Example.com"
 PASSWORD = "correct horse battery"
@@ -108,24 +108,20 @@ def test_create_user_stores_a_normalized_email_and_only_an_argon2_hash(
     assert PASSWORD not in row["password_hash"]
 
 
-def test_the_database_admits_one_user(services, database_engine) -> None:
-    services.accounts.create_user(EMAIL, PASSWORD)
+def test_the_database_admits_multiple_users_but_keeps_email_unique(
+    services, database_engine
+) -> None:
+    first = services.accounts.create_user(EMAIL, PASSWORD)
+    second = services.accounts.create_user("someone.else@example.com", PASSWORD)
 
-    with pytest.raises(StateConflict, match="second one is refused"):
-        services.accounts.create_user("someone.else@example.com", PASSWORD)
+    assert first.id != second.id
     with pytest.raises(StateConflict):
         services.accounts.create_user(EMAIL, PASSWORD)
-    # The limit is the index itself, not a check a race could pass.
-    with pytest.raises(IntegrityError, match="users_single_user"):
-        with database_engine.begin() as connection:
-            connection.execute(
-                insert(users).values(
-                    id=new_id(),
-                    email="raw@example.com",
-                    password_hash="x",
-                    created_at=utc_now(),
-                )
-            )
+    with database_engine.connect() as connection:
+        assert {str(value) for value in connection.execute(select(users.c.id)).scalars()} == {
+            first.id,
+            second.id,
+        }
 
 
 def test_create_user_refuses_a_password_outside_the_policy(services) -> None:
@@ -334,7 +330,7 @@ def test_cli_creates_the_user_from_stdin_or_a_twice_entered_prompt(services, api
     assert _login(api_anonymous.client, password=OTHER_PASSWORD).status_code == 200
 
 
-def test_cli_refuses_a_mismatched_prompt_and_a_second_user(services) -> None:
+def test_cli_refuses_a_mismatched_prompt_and_creates_a_second_user(services) -> None:
     answers = iter([PASSWORD, "something else entirely"])
     err = io.StringIO()
     code = admin(
@@ -356,8 +352,116 @@ def test_cli_refuses_a_mismatched_prompt_and_a_second_user(services) -> None:
         out=io.StringIO(),
         err=err,
     )
-    assert code == 1
-    assert "second one is refused" in err.getvalue()
+    assert code == 0, err.getvalue()
+
+
+def test_sign_in_rate_limit_is_shared_and_returns_retry_after(
+    api_anonymous, database_engine
+) -> None:
+    now = [datetime(2026, 10, 11, 12, 1, tzinfo=UTC)]
+    api_anonymous.services.accounts.clock = lambda: now[0]
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+
+    # A successful sign-in gives back the count its reservation took: it is not a failure.
+    assert _login(api_anonymous.client, password=PASSWORD).status_code == 200
+    for _ in range(5):
+        response = _login(api_anonymous.client, password="wrong password")
+        assert response.status_code == 401
+
+    limited = _login(api_anonymous.client, password=PASSWORD)
+    assert limited.status_code == 429
+    assert limited.json()["code"] == "RATE_LIMITED"
+    assert 1 <= int(limited.headers["Retry-After"]) <= 15 * 60
+
+    with database_engine.connect() as connection:
+        rows = connection.execute(select(rate_limit_buckets)).mappings().all()
+    assert {row["bucket_type"] for row in rows} == {"email_failure", "client_attempt"}
+    assert all(len(row["key_hash"]) == 64 for row in rows)
+    assert EMAIL.lower() not in repr(rows)
+    assert "testclient" not in repr(rows)
+
+    now[0] += timedelta(minutes=15)
+    assert _login(api_anonymous.client, password=PASSWORD).status_code == 200
+
+
+def test_attempts_in_flight_are_counted_when_they_start(api_anonymous) -> None:
+    """Each attempt is counted by the statement that reserves it, before its outcome is
+    known, so attempts racing each other cannot all see room under the email limit."""
+    accounts = api_anonymous.services.accounts
+    now = datetime(2026, 10, 11, 12, 1, tzinfo=UTC)
+    key = accounts._email_rate_key(EMAIL)
+    for index in range(5):
+        accounts._reserve_attempt(key, sha256_text(f"client:{index}"), now)
+    with pytest.raises(RateLimited):
+        accounts._reserve_attempt(key, sha256_text("client:late"), now)
+
+
+def test_sign_in_rate_limit_is_shared_by_independent_api_compositions(api_anonymous) -> None:
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+    second_services = build_services(
+        api_anonymous.services.paths,
+        database_url=api_anonymous.services.database_url,
+    )
+    with TestClient(create_app(build_api_services(second_services))) as second_client:
+        for _ in range(3):
+            assert _login(api_anonymous.client, password="wrong password").status_code == 401
+        for _ in range(2):
+            assert _login(second_client, password="wrong password").status_code == 401
+        limited = _login(second_client, password=PASSWORD)
+    assert limited.status_code == 429
+    assert limited.json()["code"] == "RATE_LIMITED"
+
+
+def test_rate_limit_cleanup_removes_only_completed_windows(api_anonymous, database_engine) -> None:
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+    assert _login(api_anonymous.client, password="wrong password").status_code == 401
+    with database_engine.begin() as connection:
+        connection.execute(
+            update(rate_limit_buckets).values(
+                window_started_at=(datetime.now(UTC) - timedelta(hours=1)).isoformat()
+            )
+        )
+    assert api_anonymous.services.accounts.cleanup_rate_limits() == 2
+    with database_engine.connect() as connection:
+        assert connection.execute(select(rate_limit_buckets)).all() == []
+
+
+def test_client_address_trusts_forwarding_only_for_configured_proxy_hops() -> None:
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/",
+            "headers": [(b"x-forwarded-for", b"198.51.100.10, 192.0.2.4")],
+            "client": ("203.0.113.8", 443),
+        }
+    )
+    assert client_ip(request, 0) == "203.0.113.8"
+    assert client_ip(request, 1) == "192.0.2.4"
+    assert client_ip(request, 2) == "198.51.100.10"
+
+    invalid = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/",
+            "headers": [(b"x-forwarded-for", b"attacker-controlled-text")],
+            "client": ("203.0.113.8", 443),
+        }
+    )
+    assert client_ip(invalid, 1) == "203.0.113.8"
+
+
+def test_client_attempt_limit_spans_email_addresses(api_anonymous) -> None:
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+
+    for index in range(20):
+        response = _login(api_anonymous.client, email=f"unknown-{index}@example.com")
+        assert response.status_code == 401
+
+    limited = _login(api_anonymous.client)
+    assert limited.status_code == 429
+    assert limited.json()["code"] == "RATE_LIMITED"
 
 
 def test_set_password_ends_every_session(api_anonymous) -> None:

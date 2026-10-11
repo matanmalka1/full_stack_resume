@@ -61,6 +61,14 @@ def test_config_precedence_secret_exclusion_and_parsing(tmp_path: Path) -> None:
     for invalid in ("0", "-3"):
         with pytest.raises(ConfigError, match="CV_SESSION_DAYS.*at least 1"):
             resolve_config(env={"CV_SESSION_DAYS": invalid}, project_root=tmp_path)
+    assert (
+        resolve_config(env={"CV_TRUSTED_PROXY_HOPS": "2"}, project_root=tmp_path).get(
+            "trusted_proxy_hops"
+        )
+        == 2
+    )
+    with pytest.raises(ConfigError, match="CV_TRUSTED_PROXY_HOPS.*at least 0"):
+        resolve_config(env={"CV_TRUSTED_PROXY_HOPS": "-1"}, project_root=tmp_path)
 
     env_root = tmp_path / "env-only"
     env_root.mkdir()

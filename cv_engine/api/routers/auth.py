@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
+from ..client_address import client_ip
 from ..dependencies import Services
+from ..problems import RATE_LIMITED_OPENAPI_RESPONSE
 from ..schemas.auth import ChangePasswordRequest, LoginRequest, MeResponse
 from ..session_cookie import SessionToken, clear_session_cookie, set_session_cookie
 
@@ -22,11 +24,25 @@ def _empty() -> Response:
     return response
 
 
-@router.post("/login", response_model=MeResponse, summary="Sign in and start a session")
+@router.post(
+    "/login",
+    response_model=MeResponse,
+    summary="Sign in and start a session",
+    responses={429: RATE_LIMITED_OPENAPI_RESPONSE},
+)
 def login(
-    request: LoginRequest, services: Services, token: SessionToken, response: Response
+    request: LoginRequest,
+    services: Services,
+    token: SessionToken,
+    response: Response,
+    http_request: Request,
 ) -> MeResponse:
-    grant = services.accounts.login(request.email, request.password, presented_token=token)
+    grant = services.accounts.login(
+        request.email,
+        request.password,
+        client_ip=client_ip(http_request, services.limits.trusted_proxy_hops),
+        presented_token=token,
+    )
     set_session_cookie(response, grant)
     return MeResponse.model_validate(grant.user.model_dump(mode="json"))
 

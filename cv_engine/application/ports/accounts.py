@@ -28,7 +28,7 @@ class AccountRepository(Protocol):
         password_hash: str,
         created_at: str,
     ) -> StoredUser:
-        """Raise `StateConflict` for a taken email or a second user."""
+        """Raise `StateConflict` for a taken email."""
         ...
 
     def user_by_email(self, tx: ReadTransaction, email: str) -> StoredUser | None: ...
@@ -62,3 +62,26 @@ class AccountRepository(Protocol):
     ) -> None:
         """Revoke one session of the user, or every unrevoked one when none is named."""
         ...
+
+    def release_rate_limit(
+        self,
+        tx: WriteTransaction,
+        *,
+        bucket_type: str,
+        key_hash: str,
+        window_started_at: str,
+    ) -> None:
+        """Give back one count a reservation took; a bucket that reaches zero goes."""
+        ...
+
+    def increment_rate_limit(
+        self,
+        tx: WriteTransaction,
+        *,
+        bucket_type: str,
+        key_hash: str,
+        window_started_at: str,
+        updated_at: str,
+    ) -> int: ...
+
+    def delete_rate_limit_windows_before(self, tx: WriteTransaction, before: str) -> int: ...

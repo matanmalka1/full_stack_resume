@@ -31,6 +31,7 @@ from ..application.errors import (
     LineageBroken,
     PasswordPolicyFailed,
     PreconditionFailed,
+    RateLimited,
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
@@ -73,6 +74,21 @@ AUTHENTICATION_REQUIRED_OPENAPI_RESPONSE: dict[str, Any] = {
     },
 }
 
+RATE_LIMITED_OPENAPI_RESPONSE: dict[str, Any] = {
+    "description": "The shared sign-in limit was reached (`RATE_LIMITED`).",
+    "headers": {
+        "Retry-After": {
+            "description": "Seconds until the current fixed window ends.",
+            "schema": {"type": "integer", "minimum": 1},
+        }
+    },
+    "content": {
+        PROBLEM_CONTENT_TYPE: {
+            "schema": {"$ref": "#/components/schemas/ProblemDetails"},
+        }
+    },
+}
+
 
 def install_problem_details_openapi(app: FastAPI) -> None:
     """Register the shared error component referenced by router responses."""
@@ -94,6 +110,7 @@ def install_problem_details_openapi(app: FastAPI) -> None:
 STATUS_BY_ERROR: dict[type[ApplicationError], int] = {
     AuthenticationFailed: 401,
     PasswordPolicyFailed: 422,
+    RateLimited: 429,
     UnknownRecord: 404,
     StateConflict: 409,
     DuplicateAcknowledgementRequired: 412,
@@ -115,6 +132,7 @@ TITLES: dict[int, str] = {
     412: "Precondition Failed",
     413: "Payload Too Large",
     422: "Unprocessable Content",
+    429: "Too Many Requests",
     500: "Internal Server Error",
     503: "Service Unavailable",
 }
@@ -216,6 +234,9 @@ def _safe_detail(error: ApplicationError) -> str:
 async def application_error_handler(request: Request, exc: Exception) -> JSONResponse:
     error = exc if isinstance(exc, ApplicationError) else ApplicationError(str(exc))
     status = status_for(error)
+    headers = None
+    if isinstance(error, RateLimited):
+        headers = {"Retry-After": str(error.retry_after_seconds)}
     return _request_problem(
         request,
         status,
@@ -223,6 +244,7 @@ async def application_error_handler(request: Request, exc: Exception) -> JSONRes
         _safe_detail(error),
         context=_safe_context(error),
         error=error,
+        headers=headers,
     )
 
 
