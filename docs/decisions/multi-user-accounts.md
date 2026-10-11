@@ -159,8 +159,9 @@ import input only. They are no longer read at runtime.
 ## 5. Delivery order
 
 Each step is its own pull request and brings the focused tests for what it changes, as
-`CLAUDE.md` requires. Until step 6 ships, the database admits one user (decision 14),
-so no step before it can expose one user's data to another.
+`AGENTS.md` requires. Through step 5 the database admitted one user (decision 14), so
+no earlier step could expose one user's data to another. Step 6 removes that guard only
+after the ownership and isolation boundaries are in place.
 
 1. **Specs and decision records.** Documentation only.
 2. **Login, backend:** `users`, `user_sessions`, and the `users_single_user` index;

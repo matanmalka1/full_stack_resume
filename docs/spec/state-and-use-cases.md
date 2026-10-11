@@ -2,8 +2,7 @@
 
 Status: **Binding.** Describes the single-document model as implemented
 ([`../decisions/single-document-model.md`](../decisions/single-document-model.md)).
-Accounts and per-user isolation (§23, product-spec.md §22) are approved and not built;
-each rule they change is marked *designed, not built*.
+Accounts and per-user isolation (§23, product-spec.md §22) are implemented.
 
 Product authority: [`product-spec.md`](product-spec.md). Section numbers are cited from
 code docstrings; keep them stable.
@@ -20,9 +19,9 @@ CVDocument is named by its Application and guarded by the `expected_document_has
 client last read. A query may resolve "latest" for presentation; a command never does.
 
 Every write records `actor_type` (`user` | `system`) and `client` (`web` | `worker`).
-*Designed, not built (§23):* every command and query runs for one signed-in user and
+Every command and query runs for one signed-in user and
 reaches only that user's records; the acting user is the owner of what it touches, and
-the worker acts for the owner of the Operation. Today there is no authenticated user.
+the worker acts for the owner of the Operation.
 
 ## 2. Entity lifecycle summary
 
@@ -33,7 +32,7 @@ Mutable:
   (`update_job_text`, §12)
 - exactly one CVDocument per Application, once the first analysis activates
 - the Settings row (one per user once accounts ship)
-- *designed, not built (§23):* the user, their sessions, and their facts' current status
+- the user, their sessions, and their facts' current status
 
 Immutable or append-only:
 
@@ -516,7 +515,7 @@ deleted Application is 409.
 
 Every command in §13–§18, and `close_application`, resolves its Application through
 one shared precondition: 404 if it does not exist, 409 if it is deleted.
-*Designed, not built (§23):* resolution is always for the signed-in user, and an
+Resolution is always for the signed-in user, and an
 Application of another user is 404 exactly as if it did not exist; this applies to every
 command and query below, including the ones exempt from the deleted check.
 `update_job_text` and `update_application_notes` check existence only. Reads of
@@ -727,7 +726,7 @@ Facts are the user's, in PostgreSQL, and every fact mutation is one transaction
 (architecture.md §7.2). The cross-store journal is retired with its refusals: its rows
 are history that reconciliation reports (§19b) and that blocks no mutation and no
 approval. Attachment targets are the user's Profile binding over the shared
-templates. *Designed, not built (§23):* the signed-in user's facts; a `fact_id` is
+templates. Facts belong to the signed-in user; a `fact_id` is
 unique per user, and another user's fact is 404.
 
 Fact statuses: `pending`, `canonical`, `deleted`. The lifecycle is
@@ -898,13 +897,13 @@ document.
 Every asynchronous command accepts an optional `Idempotency-Key`; the boundary
 generates one when absent. Keys are scoped per Operation type. Reusing a key with the
 same payload returns the existing Operation; with a different payload it is
-`IDEMPOTENCY_KEY_REUSED` (409). *Designed, not built (§23):* keys are also scoped per
+`IDEMPOTENCY_KEY_REUSED` (409). Keys are also scoped per
 Application (architecture.md §18.3), so a key another user already used is a new key,
 never their Operation.
 
 ## 19a. Settings commands
 
-*Designed, not built (§23):* settings are per user; each user has one row with its own
+Settings are per user; each user has one row with its own
 `edit_version`. Provider configuration stays the operator's and is only reported.
 
 ### `read_settings()`
@@ -924,12 +923,11 @@ secrets are never writable.
 
 ## 19b. Maintenance commands
 
-*Designed, not built (§23):* both commands span every user, so they leave the API and
-become operator CLI commands with the same semantics. No user route reaches them.
+Both commands span every user and are operator CLI commands. No user route reaches them.
 
 ### `reconcile()`
 
-`POST /api/v1/maintenance/reconciliations`. Checks database references and stored
+`python -m cv_engine.admin reconcile`. Checks database references and stored
 hashes against the payload store — every Submission file
 against its SHA-256 (`payloads_checked`) — every logged AI call's sanitized response
 against its `sanitized_response_hash` (`ai_calls_checked`), and the fact lifecycle
@@ -944,7 +942,7 @@ mutable and not checked.
 
 ### `inspect_orphans()`
 
-`GET /api/v1/maintenance/orphans` returns `candidates`: a sorted list of managed
+`python -m cv_engine.admin inspect-orphans` returns `candidates`: a sorted list of managed
 immutable payload references found in storage that no database row references and that
 were stored longer than one hour ago (`ORPHAN_MIN_AGE`, architecture.md §7.1). A younger
 unregistered payload may still be on its way to registration and is not listed.
@@ -986,7 +984,7 @@ storage and is only reported (architecture.md §7.1).
 There is no revision history and no revision comparison. The history of what was sent
 is the list of Submissions.
 
-*Designed, not built (§23):* every query above returns only the signed-in user's
+Every query above returns only the signed-in user's
 records, and every list, count, and facet is computed over them alone. Health returns
 only liveness and versions to an anonymous caller.
 
@@ -1007,9 +1005,9 @@ idempotency, and synchronous versus asynchronous behavior.
   body as `expected_document_hash`, because an action on a resource is not a conditional
   replacement of it.
 - Settings use the ETag `"settings-<edit_version>"` with `If-Match` on `PATCH`.
-- CORS exposes `ETag`, `Location`, and `Content-Disposition`, and allows `If-Match` and
-  `Idempotency-Key`.
-- *Designed, not built (§23):* the session travels only in its cookie. Every route
+- CORS exposes `ETag`, `Location`, `Content-Disposition`, and `Retry-After`, and allows
+  `If-Match` and `Idempotency-Key`.
+- The session travels only in its cookie. Every route
   requires a session except `login` (§23) and health.
 
 ## 22. HTTP outcomes
@@ -1052,10 +1050,10 @@ exceptions. They become a refusal only when a command they block is attempted.
 
 ## 23. Account commands
 
-*Partly built.* `login`, `logout`, `logout_all`, `me`, `change_password`, and the
-operator commands `create-user` and `set-password` are built, and every other route
-requires a session, and so is `import-knowledge`; the sign-in rate limit is not yet
-(`../decisions/multi-user-accounts.md` §5). Product rules: product-spec.md §22.
+Implemented through multi-user delivery step 6: `login`, `logout`, `logout_all`, `me`,
+`change_password`, shared sign-in rate limiting, and the operator commands
+`create-user`, `set-password`, and `import-knowledge`. Every other user route requires a
+session. Product rules: product-spec.md §22.
 Mechanisms, tables, and default limits: architecture.md §18. Why: `../decisions/multi-user-accounts.md`.
 
 Routes are under `/api/v1/auth`. Bodies are JSON; every mutation passes the Origin

@@ -8,7 +8,7 @@ Split by domain (prep / tracking / knowledge / shared) as siblings under one
 from __future__ import annotations
 
 from ._metadata import metadata
-from .accounts import user_sessions, users
+from .accounts import rate_limit_buckets, user_sessions, users
 from .knowledge import (
     candidate_contexts,
     fact_events,
@@ -47,6 +47,7 @@ __all__ = [
     "knowledge_mutation_journal",
     "users",
     "user_sessions",
+    "rate_limit_buckets",
     "facts",
     "candidate_contexts",
     "profile_bindings",

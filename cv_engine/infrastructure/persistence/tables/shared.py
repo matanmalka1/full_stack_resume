@@ -134,7 +134,9 @@ applications = Table(
         name="terminal_outcome",
     ),
 )
-Index("ix_applications_user_id", applications.c.user_id)
+Index("idx_applications_user_created", applications.c.user_id, applications.c.created_at)
+Index("idx_applications_user_status", applications.c.user_id, applications.c.current_status)
+Index("idx_applications_user_updated", applications.c.user_id, applications.c.updated_at)
 
 audit_records = Table(
     "audit_records",

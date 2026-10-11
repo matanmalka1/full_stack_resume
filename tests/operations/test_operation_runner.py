@@ -9,6 +9,7 @@ import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
 from helpers import (
     actor_of,
+    analysis_proposal,
     edit_document_claim,
     seed_document,
     seed_draft,
@@ -30,6 +31,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 import cv_engine.infrastructure.rendering as rendering_adapter
+from cv_engine.application.actor import Actor
 from cv_engine.application.commands import (
     AnalyzeCommand,
     ApproveDocumentCommand,
@@ -61,6 +63,7 @@ from cv_engine.application.operations import (
     OperationType,
 )
 from cv_engine.domain.document import PreparationState
+from cv_engine.infrastructure.knowledge import FileKnowledge
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.operation_execution import (
@@ -178,6 +181,62 @@ def test_racing_claimants_produce_one_claim_and_one_execution(
     assert worker_result is None or worker_result.id == operation.id
 
 
+def test_worker_reads_knowledge_for_the_operations_owner(
+    ai_services, fake_openai, project_root
+) -> None:
+    owner = actor_of(ai_services)
+    other_user = ai_services.accounts.create_user(
+        "worker-other@example.com", "another password, long enough"
+    )
+    ai_services.knowledge_import.import_knowledge(other_user.email, FileKnowledge(project_root))
+    other = Actor(user_id=other_user.id)
+
+    def canonical_fact(actor: Actor, text: str) -> None:
+        created = ai_services.knowledge_lifecycle.create_pending_fact(
+            actor,
+            "situational_skills.json",
+            {
+                "meaning": text,
+                "renderings": {"en": text},
+                "tags": ["situational"],
+                "provenance": "explicit worker isolation fixture",
+                "resume_style": "bullet",
+            },
+        )
+        ai_services.knowledge_lifecycle.confirm_fact(
+            actor, created.fact.fact_id, explicitly_confirmed=True
+        )
+
+    canonical_fact(owner, "OWNER-ONLY-WORKER-FACT")
+    canonical_fact(other, "OTHER-USER-WORKER-FACT")
+    ingested = ai_services.applications.ingest(
+        owner,
+        IngestCommand(
+            company="Worker Owner Co",
+            target_role="Developer",
+            job_text="A detailed Python backend role for worker isolation testing.",
+            client="web",
+        ),
+    )
+    fake_openai.script("propose_analysis", analysis_proposal())
+    queued = ai_services.operation_submissions.submit_analysis(
+        owner,
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_text_hash=ingested.job_text_hash,
+        ),
+        idempotency_key=new_id(),
+        analysis_service=ai_services.analysis,
+    )
+
+    completed = foreground_executor(ai_services).execute(queued.id)
+
+    assert completed.status is OperationStatus.SUCCEEDED
+    payload = repr(fake_openai.calls_for("propose_analysis")[-1].payload)
+    assert "OWNER-ONLY-WORKER-FACT" in payload
+    assert "OTHER-USER-WORKER-FACT" not in payload
+
+
 def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
     services, caplog, tmp_path
 ) -> None:
@@ -222,6 +281,22 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
     assert entries[0]["phase"] == OperationPhase.EXECUTING.value
     assert all(entry["operation_id"] == operation.id for entry in entries)
     assert entries[-1]["duration_ms"] >= 0
+
+
+def test_worker_runs_maintenance_before_recovery_or_claiming(services) -> None:
+    calls: list[str] = []
+    worker = OperationWorker(
+        _runner(services, {}, runner_id="maintenance-worker"),
+        request_cancellation=lambda _operation_id: None,
+        exclusive=_held_slot,
+        maintenance=lambda: calls.append("maintenance"),
+    )
+    stop = Event()
+    stop.set()
+
+    worker.serve(stop)
+
+    assert calls == ["maintenance"]
 
 
 def _application(services, company: str) -> str:

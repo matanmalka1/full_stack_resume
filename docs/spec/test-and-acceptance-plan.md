@@ -127,7 +127,7 @@ Evidence: `tests/platform/` (`test_transactions.py`, `test_persistence_constrain
 - 413 on oversize bodies; intake field-length and control-character limits.
 - Origin policy guards mutations; no wildcard CORS; the dev origin only when configured;
   loopback bind by default.
-  *Designed, not built:* the account, session, and isolation evidence is §3.11.
+  Account, session, and isolation evidence is §3.11.
 - No endpoint accepts or exposes a filesystem path; the document's files are addressed
   by the Application only.
 - Secrets and authorization headers are redacted from logs; Operation payloads refuse
@@ -265,17 +265,16 @@ journeys are launched by `tests/e2e/test_browser_api_journey.py`.
 
 ### 3.11 Accounts and isolation
 
-*Designed, not built* (product-spec.md §22, state-and-use-cases.md §23, architecture.md
-§18). Each delivery step in `../decisions/multi-user-accounts.md` §5 owes the part of
-this list it touches.
+Implemented through multi-user delivery step 6 (product-spec.md §22,
+state-and-use-cases.md §23, architecture.md §18). Hosted transport remains step 7.
 
 - **Cross-user matrix, derived.** User A drives one Application through Submission,
   plus facts and settings. User B, signed in, calls every route in
   `openapi/openapi.json` that names a record, with A's IDs — read, write, delete,
   download, preview, Operation cancel and retry — and gets `404` with nothing changed
-  and nothing streamed. The route list comes from the schema; a route left out of the
-  matrix must be in a named exception list (`login`, health), and a
-  stale exception fails. Lists, facets, counts, and duplicate detection for B contain
+  and nothing streamed. The record-addressed route set is derived from path, query, and
+  request-body ID fields in the schema, so adding another such route expands the matrix
+  automatically. Lists, facets, counts, settings, and duplicate detection for B contain
   nothing of A's.
 - **Ownership in the schema, derived.** Every table either carries `user_id`, reaches a
   table that does through a `NOT NULL` foreign-key path, or is in a named list of system
@@ -295,16 +294,15 @@ this list it touches.
 - **Authentication.** Login; wrong password and unknown email give the same answer;
   logout; logout-all; expired and revoked sessions are `401`; change password needs the
   current one and revokes the other sessions; `set-password` revokes every session;
-  `create-user` refuses a second user, and a second `users` row is refused by the
-  database itself, until `users_single_user` is dropped; `--password-stdin` and the
-  prompt set the same password.
+  multiple users have isolated records and duplicate email is refused;
+  `--password-stdin` and the prompt set the same password.
 - **Secrets.** No password or session secret appears in the database, the logs,
   Problem Details, or Operation payloads; the cookie carries `HttpOnly`, `Secure`, and
   `SameSite=Lax`.
 - **Limits.** Sign-in answers `429` with `Retry-After` past its limit, across both
   processes, and recovers when the window passes.
-- **Transport.** A foreign `Host` and a mutation without an allowed `Origin` are refused
-  before routing, `login` included.
+- **Transport (delivery step 7).** A foreign `Host` and a mutation without an allowed
+  `Origin` are refused before routing, `login` included.
 - **Pipeline.** `tests/e2e/test_pipeline_end_to_end.py` runs as a signed-in user and still
   reaches Ready with `OPENAI_API_KEY` unset.
 - **Frontend.** Private routes redirect to `/login` when signed out; a `401` clears the

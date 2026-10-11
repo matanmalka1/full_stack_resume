@@ -4,7 +4,7 @@ import threading
 import time
 
 import pytest
-from helpers import actor_of, seed_document, stored_document
+from helpers import seed_document, stored_document
 from pydantic import ValidationError
 from sqlalchemy import create_engine, delete, func, insert, inspect, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
@@ -66,20 +66,53 @@ MUTABLE_TABLES = frozenset(
         "user_settings",  # safe mutable Web preferences, guarded by edit_version
         "users",  # a password changes
         "user_sessions",  # a session is revoked
+        "rate_limit_buckets",  # fixed-window counters advance and old windows are purged
         "facts",  # edited in place; its identity is guarded by its own trigger
         "candidate_contexts",  # the declared context and the fact store version
         "profile_bindings",  # pools and pins grow through attach_fact
-        "fact_events",  # immutable but for user_id NULL -> a user, once; its own trigger
     }
 )
-DELETE_ONLY_TABLES = frozenset({"operations", "knowledge_mutation_journal", "facts", "fact_events"})
+DELETE_ONLY_TABLES = frozenset({"operations", "knowledge_mutation_journal", "facts"})
 
 IMMUTABLE_MESSAGE = "immutable record"
+
+# Tables that intentionally have no candidate owner. `users` is identity itself;
+# rate-limit keys are hashed pre-authentication inputs; the retired journal is legacy
+# installation recovery state. The guard below proves this list is both necessary and
+# exhaustive, so an exception that becomes owned also fails.
+SYSTEM_OWNERSHIP_TABLES = frozenset({"users", "rate_limit_buckets", "knowledge_mutation_journal"})
 
 
 @pytest.fixture
 def knowledge_store(transaction_manager):
     return SqlAlchemyKnowledgeLifecycleRepository(transaction_manager)
+
+
+def test_every_table_has_a_derived_owner_path_or_is_a_named_system_table() -> None:
+    tables = {table.name: table for table in metadata.tables.values()}
+
+    def reaches_owner(table_name: str, seen: frozenset[str] = frozenset()) -> bool:
+        if table_name in seen:
+            return False
+        table = tables[table_name]
+        if "user_id" in table.c:
+            column = table.c.user_id
+            return not column.nullable and any(
+                foreign_key.column.table.name == "users" for foreign_key in column.foreign_keys
+            )
+        return any(
+            reaches_owner(foreign_key.column.table.name, seen | {table_name})
+            for foreign_key in table.foreign_keys
+            if not foreign_key.parent.nullable
+            if foreign_key.column.table.name in tables
+        )
+
+    assert SYSTEM_OWNERSHIP_TABLES <= tables.keys()
+    assert all(not reaches_owner(name) for name in SYSTEM_OWNERSHIP_TABLES)
+    unowned = sorted(
+        name for name in tables if name not in SYSTEM_OWNERSHIP_TABLES and not reaches_owner(name)
+    )
+    assert unowned == []
 
 
 def test_analysis_plan_adapter_rejects_read_closed_and_foreign_tokens(
