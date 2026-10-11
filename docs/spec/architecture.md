@@ -440,9 +440,7 @@ queueing, not failure: a waiting Operation stays `queued`, and its phase reads
 running. That phase is derived when the Operation is read, never written, so it cannot
 go stale. How much work runs at once is a separate question with one answer, the
 worker's thread count (concurrency 2); there is no separate AI limit, and AI work for
-different Applications runs side by side up to that count. *Designed, not built
-(§18.3):* fairness between users is decided by the order in which the next Operation is
-claimed, not by a limit.
+different Applications runs side by side up to that count.
 
 **Claiming.** The worker (`runtime/execution.py`) runs a thread pool (concurrency 2,
 poll 0.25 s). A claim walks the queued Operations oldest first, skipping one whose
@@ -723,18 +721,17 @@ delivery order: `../decisions/multi-user-accounts.md`.
 ### 18.1 Identity tables
 
 Mutable (they join the mutable exception set, §6.1): `users`, `user_sessions`,
-`rate_limit_buckets`. Immutable: `auth_events`.
+`rate_limit_buckets`. There is no account-event table
+(`../decisions/multi-user-accounts.md` decision 13).
 
 - `users`: `id`, `email` (normalized — NFC, trimmed, lowercased, nothing else —
-  `UNIQUE`), `password_hash` (NULL only after deactivation), `is_active`, `created_at`,
-  `updated_at`, `deactivated_at`.
+  `UNIQUE`), `password_hash` (`NOT NULL`), `created_at`. Nothing else has a reader;
+  a column arrives with the feature that reads it.
+- `users_single_user`: a unique index over a constant (`ON users ((true))`), so the
+  database admits one user. The step that completes isolation drops it in its own
+  migration (`../decisions/multi-user-accounts.md` §5, step 6).
 - `user_sessions`: `id`, `user_id`, `token_hash` (`UNIQUE`), `created_at`, `expires_at`,
-  `revoked_at`.
-- `auth_events`: `id`, `user_id` (NULL for a failed sign-in with no matching account),
-  `event_type` (`login`, `failed_login`, `logout`, `password_changed`,
-  `password_set`, `account_deactivated`), `occurred_at`. Nothing else: no password,
-  token, email, or IP. It is append-only and separate from `audit_records`, which
-  stays Application-scoped: an account event is not an Application event.
+  `revoked_at`, with an index on `user_id` for revoking every session of a user.
 - `user_settings`: `user_id` is the primary key and a foreign key to `users`; the
   columns are today's `app_settings` columns without `singleton_id`. It replaces
   `app_settings`.
@@ -761,8 +758,7 @@ templates, `config/`, `ai/`, `rendering/`) stays in files.
   `confirmed_at`, `created_at`, `updated_at`.
   Content columns never change once written: a correction is a new fact that
   `replaces` the old one (product-spec.md §17). A guard trigger permits only `status`,
-  `confirmed_at`, and `updated_at` to change, plus erasing content during
-  `deactivate_account`.
+  `confirmed_at`, and `updated_at` to change.
 - **`fact_events`** (immutable, existing): gains `user_id`, `NOT NULL` for every new
   row. It stays the lifecycle history, with the fact as it was in `fact_json`.
 - **`candidate_contexts`** (mutable): `user_id` is the primary key; `name_fact_id`,
@@ -817,10 +813,9 @@ analysis = analyses.get_for_application(tx, analysis_id, application.id)
   table (dropped in revision `0003`).
 - **Concurrency.** The per-Application rule is keyed by the Application, which is already
   owned. The render rule and the worker's thread count are global on purpose: they
-  bound machine and provider load, not access, and hold no data. Fairness between
-  users is in the claim order: a free worker thread takes the oldest queued Operation of
-  a user with nothing running before any other, so one user's queue cannot hold back
-  another's, and a user alone still gets every thread. No per-user slot is stored.
+  bound machine and provider load, not access, and hold no data. The claim order stays
+  oldest first; fairness between users is deferred
+  (`../decisions/multi-user-accounts.md` §6). No per-user slot is stored.
 - **The worker never trusts the payload for identity.** An Operation's owner is
   `operations.application_id → applications.user_id`, read from the database when the
   Operation is claimed. The payload carries no `user_id`; a payload that names one is
@@ -840,7 +835,7 @@ analysis = analyses.get_for_application(tx, analysis_id, application.id)
   characters, no composition rules. When the email is unknown, a fixed dummy hash is
   verified anyway, so timing does not reveal it.
 
-### 18.5 Transport, rate limit, and quota
+### 18.5 Transport and rate limit
 
 Supersedes §14 once built.
 
@@ -857,10 +852,7 @@ Supersedes §14 once built.
   attempts per client IP. The IP comes from a forwarding header only when
   `CV_TRUSTED_PROXY_HOPS` says how many proxies to trust; otherwise it is the socket
   peer. Rows of past windows are removed by the worker.
-- AI quota: counted from the user's own AI Operations created in the last 24 hours, not
-  from a counter, so it cannot drift from the work it counts. Default 50
-  (`CV_AI_DAILY_OPERATION_LIMIT`). The check runs in the write scope that queues the
-  Operation, under a lock on the user row, so concurrent requests cannot both pass.
+- A per-user AI quota is deferred (`../decisions/multi-user-accounts.md` §6).
 
 ### 18.6 Renderer isolation
 
@@ -885,9 +877,12 @@ postings, so the browser that renders it gets nothing else:
 `python -m cv_engine.admin` runs as the operator and has no HTTP surface. It calls the
 same application layer.
 
-- `create-user --email` prompts for the password. It refuses a second user until the
-  isolation steps have shipped (`../decisions/multi-user-accounts.md` §5).
-- `set-password --email` prompts for a new password and revokes every session.
+Passwords are read from a prompt that does not echo, entered twice, or with
+`--password-stdin` from standard input; never from an argument.
+
+- `create-user --email` creates a user. A second user is refused by
+  `users_single_user` (§18.1) until isolation is complete.
+- `set-password --email` sets a new password and revokes every session.
 - `import-knowledge --user --from <dir>` reads facts, CandidateContext, and Profile
   bindings in the `base/` format into one user's Knowledge (§18.2) in one transaction,
   and refuses when that user already has facts.

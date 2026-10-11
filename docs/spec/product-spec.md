@@ -640,8 +640,8 @@ from any status; deletion is orthogonal to recruitment status and has no undo.
 Audit identity is `actor_type` (`user` | `system`) and `client` (`web` | `worker`),
 and the acting user is the owner of the record audited: a user acts only on their own
 records, and the worker acts for the owner of the Operation it runs (§22). The UI may
-show "You" for `actor_type = user`; client identity belongs to provenance. Account
-events have their own audit (§22).
+show "You" for `actor_type = user`; client identity belongs to provenance. Sign-in and
+sign-out are not Application events and are not audited here (§22).
 
 ## 15. Runtime and security
 
@@ -814,7 +814,8 @@ State as of this revision (details: `tailoring-decisions.md` §2–§3):
 - **Approved, not built:** user accounts, per-user isolation, and per-user Knowledge
   (§22). Until they ship, the implementation is the single-candidate, loopback-only,
   unauthenticated tool, and every section marked *designed, not built* describes the
-  target. Delivery order: `../decisions/multi-user-accounts.md` §5.
+  target. Delivery order: `../decisions/multi-user-accounts.md` §5 — sign-in first,
+  with the database admitting one user until isolation is complete.
 
 Executable evidence and the release matrix are defined only in
 `test-and-acceptance-plan.md`.
@@ -841,20 +842,21 @@ ID taken from a URL or a log. Lists, facets, counts, duplicate detection, and
 idempotency never see across users.
 
 **Ownership.** A user owns their Applications, their Knowledge (facts, fact events,
-CandidateContext, Profile binding), their settings, and their sessions and account
-events. Everything else — job text, analyses, the CVDocument, Operations,
-artifacts, Submissions, recruitment and audit events — belongs to an Application and
-through it to its user. A canonical fact belongs to a user, not to an Application;
-Applications reference facts. The worker runs every Operation as the owner of its
-Application and reads only that user's Knowledge.
+CandidateContext, Profile binding), their settings, and their sessions. Everything else
+— job text, analyses, the CVDocument, Operations, artifacts, Submissions, recruitment
+and audit events — belongs to an Application and through it to its user. A canonical
+fact belongs to a user, not to an Application; Applications reference facts. The worker
+runs every Operation as the owner of its Application and reads only that user's
+Knowledge.
 
 **Accounts.** There is no self sign-up. The operator creates a user from the command
 line with an email and a password, and imports that user's initial facts. The email is
 stored normalized and is unique. Passwords are stored only as a memory-hard hash; no
 password or session secret is stored or logged in raw form. A user can sign in, sign
-out, sign out of every device, change the password (with the current one), and
-deactivate the account (with the current password). Changing the password ends every other
-session. A forgotten password is reset by the operator, which also ends every session.
+out, sign out of every device, and change the password (with the current one).
+Changing the password ends every other session. A forgotten password is reset by the
+operator, which also ends every session. Until isolation is complete the database
+admits exactly one user.
 
 **Sessions** expire and can be revoked, and are carried only in an `HttpOnly`,
 `Secure`, `SameSite=Lax` cookie; the Web client never holds a token in script-readable
@@ -862,19 +864,14 @@ storage. A request with no valid session is `401`, and the Web client then clear
 state and returns to sign-in.
 
 **Sign-in** fails with one answer — the email or password is wrong — whatever the
-reason, and is rate limited with a temporary throttle and no permanent lockout. AI
-Operations are subject to a per-user quota, because the provider key and its cost are
-the operator's.
+reason, and is rate limited with a temporary throttle and no permanent lockout. A
+failed sign-in is logged without the password or any session secret.
 
-**Account deactivation** is the only way an account ends: deactivate, revoke every
-session, and anonymize the personal data held in mutable fields — the exact list is
-state-and-use-cases.md §23. There is no account deletion. Immutable records — Submissions, the job text they locked, the AI call log, audit and fact events
-— stay, owned by a user row that no longer identifies anyone and that nobody can sign
-in to. A hard delete is not a product capability.
-
-**Audit.** Sign-in, failed sign-in, sign-out, password change and reset, and account
-deactivation are recorded as append-only account events, separate from Application
-audit, never with a password or a session secret.
+**Deferred.** Ending an account, a per-user AI quota, fairness between users in the
+worker, and an account-event audit are not part of this contract; each returns, through
+a specification change, on the condition named in
+[`../decisions/multi-user-accounts.md`](../decisions/multi-user-accounts.md) §6. Until
+then no account ends, and a hard delete is not a product capability.
 
 **Unchanged.** Every rule in §1–§21 still holds inside one user's data: factual safety,
 approval boundaries, immutability, the provider-free path from an existing analysis to
