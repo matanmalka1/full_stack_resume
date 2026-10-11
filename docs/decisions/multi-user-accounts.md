@@ -124,9 +124,9 @@ Defaults adopted with this decision: the exact limits (session lifetime, sign-in
 A fresh installation starts empty, and nothing below applies to it beyond creating its
 one user. For an existing installation, in delivery order (§5):
 
-1. **Login step:** the revision creates `users` and `user_sessions`. The operator runs
-   `create-user --email <real address>`, which prompts for a password. From then on
-   every route but sign-in and health needs a session.
+1. **Login steps:** the revision creates `users` and `user_sessions`. The operator runs
+   `create-user --email <real address>`, which prompts for a password. Once enforcement
+   ships (§5, step 3), every route but sign-in and health needs a session.
 2. **Knowledge step:** the revision creates the per-user Knowledge tables. The operator
    runs `import-knowledge --user <id> --from base/`, which reads `base/*.json`,
    `base/candidate.json`, and the candidate-specific parts of `profiles/*.yaml` into that
@@ -159,11 +159,13 @@ so no step before it can expose one user's data to another.
 1. **Specs and decision records.** Documentation only.
 2. **Login, backend:** `users`, `user_sessions`, and the `users_single_user` index;
    `create-user` and `set-password` (`--password-stdin` as well as a prompt); `login`,
-   `logout`, `logout-all`, `me`, `change-password`; the session dependency that makes
-   every route but sign-in and health answer `401` without a session.
-3. **Login, frontend:** the sign-in screen, the auth state, private routes, a `401`
-   clearing the auth state and the query cache, sign-out clearing per-user browser
-   state.
+   `logout`, `logout-all`, `me`, `change-password`. The other routes do not yet require
+   a session, so the Web client keeps working while it has no sign-in screen.
+3. **Login, frontend, and enforcement:** the sign-in screen, the auth state, private
+   routes, a `401` clearing the auth state and the query cache, sign-out clearing
+   per-user browser state; and, in the same change, the session dependency that makes
+   every route but sign-in and health answer `401` without a session. Enforcement and
+   the screen ship together so `main` never has one without the other.
 4. **Per-user Knowledge:** `facts`, `candidate_contexts`, `profile_bindings`
    (architecture §18.2); `import-knowledge`; the journal retired; the Profile
    template/binding split. The riskiest step for fact semantics.
