@@ -723,9 +723,8 @@ dependent facts, and stored content report. Writes nothing.
 ## 17. Knowledge commands
 
 Facts are the user's, in PostgreSQL, and every fact mutation is one transaction
-(architecture.md §7.2). The cross-store journal is retired with its refusals: its rows
-are history that reconciliation reports (§19b) and that blocks no mutation and no
-approval. Attachment targets are the user's Profile binding over the shared
+(architecture.md §7.2). The cross-store journal is retired: its rows are history that
+nothing reads. Attachment targets are the user's Profile binding over the shared
 templates. Facts belong to the signed-in user; a `fact_id` is
 unique per user, and another user's fact is 404.
 
@@ -932,7 +931,7 @@ hashes against the payload store — every Submission file
 against its SHA-256 (`payloads_checked`) — every logged AI call's sanitized response
 against its `sanitized_response_hash` (`ai_calls_checked`), and the fact lifecycle
 against its trail: events for facts that no longer exist, live statuses the trail never
-recorded or contradicts, and prepared or quarantined journal mutations. Every part
+recorded or contradicts. Every part
 always runs.
 
 It reports and never repairs: the records it checks are immutable, and a repair would
@@ -1021,12 +1020,12 @@ The status comes from the refusal's class, never its message:
 | `202` | accepted Operation with `Location` |
 | `401` | no valid session (`AUTHENTICATION_REQUIRED`), failed sign-in (`INVALID_CREDENTIALS`), or a wrong current password (`REAUTHENTICATION_FAILED`) |
 | `403` | refused Origin or Host (`ORIGIN_NOT_ALLOWED`). Never used for another user's record |
-| `404` | unknown record (`UNKNOWN_RECORD`), including a document not yet created, an unknown route, and — *designed, not built* — a record of another user |
+| `404` | unknown record (`UNKNOWN_RECORD`), including a document not yet created, an unknown route, and a record of another user |
 | `409` | state conflict: hash, notes, or settings mismatch; deleted Application; disallowed status transition; job text changed or locked; idempotency-key payload mismatch |
 | `412` | a named state cannot satisfy the command: missing precondition, blocker, review reason, intake refusal, lineage or Knowledge refusal |
 | `413` | body limit exceeded |
 | `422` | request does not match the schema (`REQUEST_VALIDATION_FAILED`) |
-| `429` | *designed, not built:* sign-in rate limit (`RATE_LIMITED`), with `Retry-After` |
+| `429` | sign-in rate limit (`RATE_LIMITED`), with `Retry-After` |
 | `500` | infrastructure failure |
 | `503` | a required collaborator is not configured |
 
