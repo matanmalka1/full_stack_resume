@@ -68,7 +68,7 @@ const SidebarToggle = ({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
 export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean; onToggleCollapsed: () => void }) => {
   return (
     <header
-      className="sticky top-0 z-(--cv-z-navigation) border-b border-cv-hairline bg-cv-canvas/90 backdrop-blur-xl lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-b-0 lg:border-e lg:bg-cv-canvas lg:backdrop-blur-none"
+      className="sticky top-0 z-(--cv-z-navigation) border-b border-cv-hairline bg-cv-canvas lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-b-0 lg:border-e"
       id={SIDEBAR_ID}
     >
       {/* The rail drops `page-gutter`: that class is unlayered CSS, so its 2rem inline
@@ -107,7 +107,6 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
               <SidebarToggle collapsed={collapsed} onToggle={onToggleCollapsed} />
             </div>
 
-            <div className="hidden h-5 w-px bg-cv-hairline sm:block lg:hidden" />
             <AppNavigation collapsed={collapsed} />
           </div>
 
@@ -120,8 +119,19 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
               collapsed ? "lg:flex-col" : "lg:flex-wrap",
             )}
           >
-            <GlobalSearch className={collapsed ? undefined : "lg:w-full"} compact={collapsed} showTrigger />
-            <SignOutButton compact={collapsed} />
+            {/* The quick switcher and sign-out live in the sidebar only. On a narrow screen
+                the board's own search field covers finding a job, Settings carries
+                sign-out, and the masthead keeps to the wordmark and the new-job command.
+                The ⌘K shortcut stays live everywhere. */}
+            <GlobalSearch
+              className={collapsed ? undefined : "lg:w-full"}
+              compact={collapsed}
+              showTrigger
+              triggerWrapperClassName={cx("hidden lg:flex", !collapsed && "lg:w-full")}
+            />
+            <span className={cx("hidden lg:flex", !collapsed && "lg:w-full")}>
+              <SignOutButton compact={collapsed} />
+            </span>
 
             {collapsed ? (
               <Tooltip label="משרה חדשה" placement="rail">

@@ -19,7 +19,11 @@ interface ApplicationPresetTabsProps {
    The screen's weight belongs to the records underneath.
 
    Each option is one compact pill. The count stays typographically distinct without
-   becoming a second badge inside the control. */
+   becoming a second badge inside the control.
+
+   On a phone the pills stay on one line and the row scrolls sideways, bleeding to the
+   screen's edges so a pill cut off at the edge says there is more. Wrapped, the four
+   pills took two lines of the masthead above the first record. */
 const presetTabs: readonly { id: PresetSelection; label: string }[] = [
   { id: "all", label: "הכל" },
   { id: "active_interviews", label: "ראיונות פעילים" },
@@ -30,8 +34,12 @@ const presetTabs: readonly { id: PresetSelection; label: string }[] = [
 export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPresetTabsProps) => (
   // A non-form group of toggle buttons; role="group" is the ARIA authoring-practices
   // pattern here, and none of the suggested native tags (fieldset, etc.) fit.
-  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-  <div aria-label="סינון מהיר לפי מצב" className="flex flex-wrap items-center gap-1.5" role="group">
+  <div
+    aria-label="סינון מהיר לפי מצב"
+    className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 py-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
+    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+    role="group"
+  >
     {presetTabs.map(({ id, label }) => {
       const active = id === value;
       const count = counts?.[id];
@@ -45,7 +53,7 @@ export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPr
         <button
           aria-pressed={active}
           className={cx(
-            "inline-flex min-h-9 items-center gap-2 rounded-pill border px-3 text-support font-medium transition-colors",
+            "inline-flex min-h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-pill border px-3 text-support font-medium transition-colors",
             active
               ? "border-cv-accent bg-cv-accent text-cv-on-accent"
               : waiting

@@ -74,8 +74,21 @@ one of these roles. Raw spacing remains appropriate for local optical adjustment
 ## Shell and surfaces
 
 On desktop the application uses a text-first navigation sidebar on the RTL inline-start
-edge; smaller viewports collapse it back to a horizontal masthead. Active navigation is a
-flat background step, a heavier label and a 2px edge indicator.
+edge. Active navigation there is a flat background step, a heavier label and a 2px edge
+indicator.
+
+Below the large breakpoint the masthead keeps only the wordmark and the new-job command,
+and the three destinations move to a bar pinned to the bottom of the viewport: icon over
+a short visible label, the active one marked by a pill behind its icon and a heavier
+label. The quick switcher's trigger and sign-out appear in the sidebar only; the ⌘K
+shortcut stays live everywhere and sign-out moves to the Settings account card. The bar's
+height is `--cv-bottom-nav-height` (zero at the large breakpoint), and every other
+bottom-pinned surface - `CommitBar`, a sticky `ActionBar`, the Settings save row, the
+page's own bottom padding and scroll padding - stands on top of it by that height.
+
+A single choice among a few visible options (the theme) uses `SegmentedControl`: native
+radios in a fieldset, drawn as segments, rather than a pair of switches encoding three
+states.
 
 The reader can fold the desktop sidebar to an icon rail. The choice is a per-browser
 convenience kept in local storage, not a Setting, and it never reaches the narrow

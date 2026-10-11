@@ -55,7 +55,7 @@ export const CommitBarTargetContext = createContext<HTMLElement | null | undefin
    do now" in a shape of its own - a row of buttons in the flow on the preparation screen,
    a pinned approval in the editor, a download inside the identity card on the ready
    screen - and it is this component, at all three, that makes the answer one shape. */
-/* The pinned bar's height, plus its `bottom-4` offset and a little air, published as the
+/* The pinned bar's height, plus its 1rem offset and a little air, published as the
    page's bottom scroll padding (styles.css) for as long as the bar is mounted. */
 const useScrollClearance = (pinned: boolean) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -81,7 +81,7 @@ const CommitBarSurface = ({ back, children, inline, label, primary, result }: Co
     <div
       ref={ref}
       className={cx(
-        !inline && "sticky bottom-4 z-(--cv-z-sticky)",
+        !inline && "sticky bottom-[calc(var(--cv-bottom-nav-height)+1rem)] z-(--cv-z-sticky)",
         "rounded-surface border border-cv-border bg-cv-surface/95 p-card-padding shadow-floating backdrop-blur-xl",
       )}
     >

@@ -197,7 +197,7 @@ test.describe("accessibility", () => {
 
   test("the Settings screen has no automatically detectable violations", async ({ page }) => {
     await page.goto("/settings");
-    await expect(page.getByText("מדיניות הפעלה ותצוגה")).toBeVisible();
+    await expect(page.getByRole("radio", { name: "לפי המערכת" })).toBeChecked();
 
     await scan(page);
   });

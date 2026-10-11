@@ -29,7 +29,7 @@ export const SignOutButton = ({ compact = false }: { compact?: boolean }) => {
       type="button"
     >
       <LogOut aria-hidden="true" className="size-icon-md" />
-      {compact ? null : <span className="hidden sm:inline">התנתקות</span>}
+      {compact ? null : <span>התנתקות</span>}
     </button>
   );
 

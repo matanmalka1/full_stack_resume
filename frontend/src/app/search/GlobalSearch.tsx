@@ -20,15 +20,21 @@ const isTypingTarget = (target: EventTarget | null): boolean => {
    about a dialog it does not otherwise know.
 
    `compact` is the collapsed sidebar's icon-only trigger: the same button and shortcut,
-   with the visible label moved into a tooltip beside the rail. */
+   with the visible label moved into a tooltip beside the rail.
+
+   `triggerWrapperClassName` lets the shell show the trigger at some breakpoints only. It
+   wraps the trigger alone: the dialog must stay outside a `display: none` ancestor, or
+   the shortcut would open a palette nobody can see. */
 export const GlobalSearch = ({
   className,
   compact = false,
   showTrigger = true,
+  triggerWrapperClassName,
 }: {
   className?: string;
   compact?: boolean;
   showTrigger?: boolean;
+  triggerWrapperClassName?: string;
 }) => {
   const [open, setOpen] = useState(false);
 
@@ -76,14 +82,17 @@ export const GlobalSearch = ({
 
   return (
     <>
-      {showTrigger &&
-        (compact ? (
-          <Tooltip label="מעבר מהיר (⌘K)" placement="rail">
-            {trigger}
-          </Tooltip>
-        ) : (
-          trigger
-        ))}
+      {showTrigger && (
+        <span className={triggerWrapperClassName ?? "contents"}>
+          {compact ? (
+            <Tooltip label="מעבר מהיר (⌘K)" placement="rail">
+              {trigger}
+            </Tooltip>
+          ) : (
+            trigger
+          )}
+        </span>
+      )}
 
       <GlobalSearchDialog onClose={() => setOpen(false)} open={open} />
     </>
