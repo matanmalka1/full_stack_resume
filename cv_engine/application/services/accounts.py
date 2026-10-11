@@ -100,7 +100,13 @@ class AccountService:
 
     # Web commands (state-and-use-cases.md §23).
 
-    def login(self, email: str, password: str) -> SessionGrant:
+    def login(self, email: str, password: str, presented_token: str | None = None) -> SessionGrant:
+        """Sign in with a new session; the session the browser presented, if any, ends.
+
+        The dummy hash is ready before the user is looked up, so the first unknown email
+        costs no more than the first wrong password.
+        """
+        dummy = self._dummy()
         try:
             normalized: str | None = normalize_email(email)
         except EmailRejected:
@@ -111,20 +117,38 @@ class AccountService:
                 user = self.repo.user_by_email(tx, normalized)
         if user is None:
             # Verify anyway, so an unknown email takes as long as a wrong password.
-            self.hasher.verify(self._dummy(), password)
+            self.hasher.verify(dummy, password)
             self._log_failed_sign_in()
             raise InvalidCredentials("The email or password is wrong.")
         if not self.hasher.verify(user.password_hash, password):
             self._log_failed_sign_in()
             raise InvalidCredentials("The email or password is wrong.")
+        # A hash made with weaker parameters than the library's current defaults is
+        # replaced now, while the password is in hand; nothing else could replace it.
+        rehashed = (
+            self.hasher.hash(password) if self.hasher.needs_rehash(user.password_hash) else None
+        )
         with self.transactions.write() as tx:
+            if rehashed is not None:
+                self.repo.set_password_hash(tx, user.id, rehashed)
+            if presented_token:
+                previous = self.repo.active_session(tx, _token_hash(presented_token), utc_now())
+                if previous is not None:
+                    self.repo.revoke_sessions(
+                        tx, previous.user.id, utc_now(), only_session_id=previous.session_id
+                    )
             return self._new_session(tx, user)
 
     def current_user(self, token: str | None) -> UserView:
         return _view(self._session(token).user)
 
     def logout(self, token: str | None) -> None:
-        session = self._session(token)
+        """End this session. Without a live one there is nothing to end, which is not an error:
+        the reader asked to leave, and the cookie is cleared either way."""
+        try:
+            session = self._session(token)
+        except AuthenticationRequired:
+            return
         with self.transactions.write() as tx:
             self.repo.revoke_sessions(
                 tx, session.user.id, utc_now(), only_session_id=session.session_id

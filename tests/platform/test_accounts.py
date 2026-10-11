@@ -12,6 +12,7 @@ import re
 
 import pytest
 from api_harness import MUTATION_HEADERS
+from argon2 import PasswordHasher
 from sqlalchemy import insert, select, text, update
 from sqlalchemy.exc import IntegrityError
 
@@ -151,11 +152,46 @@ def test_login_sets_a_host_only_secure_http_only_lax_cookie_and_stores_only_its_
     assert {"httponly", "secure", "path", "expires"} <= attributes
     assert "samesite=lax" in cookie.lower()
     assert "domain" not in attributes
+    assert response.headers["cache-control"] == "no-store"
     token = _token(response)
     assert token not in response.text
     with database_engine.connect() as connection:
         stored = connection.execute(select(user_sessions.c.token_hash)).scalar_one()
     assert stored == sha256_text(token)
+
+
+def test_signing_in_again_ends_the_session_the_browser_presented(api_anonymous) -> None:
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+    first = _token(_login(api_anonymous.client))
+
+    again = api_anonymous.client.post(
+        f"{API_PREFIX}/auth/login",
+        json={"email": EMAIL, "password": PASSWORD},
+        headers={**MUTATION_HEADERS, **_session(first)},
+    )
+
+    assert again.status_code == 200
+    assert _me(api_anonymous.client, first).status_code == 401
+    assert _me(api_anonymous.client, _token(again)).status_code == 200
+
+
+def test_a_hash_from_weaker_parameters_is_replaced_at_sign_in(
+    api_anonymous, database_engine
+) -> None:
+    user = api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+    weak = PasswordHasher(time_cost=1, memory_cost=8, parallelism=1).hash(PASSWORD)
+    with database_engine.begin() as connection:
+        connection.execute(update(users).values(password_hash=weak))
+
+    assert _login(api_anonymous.client).status_code == 200
+
+    with database_engine.connect() as connection:
+        stored = connection.execute(
+            select(users.c.password_hash).where(users.c.id == user.id)
+        ).scalar_one()
+    assert stored != weak
+    assert not PasswordHasher().check_needs_rehash(stored)
+    assert _login(api_anonymous.client).status_code == 200
 
 
 def test_unknown_email_and_wrong_password_get_the_same_answer_and_log_no_credentials(
@@ -217,7 +253,15 @@ def test_logout_ends_this_session_and_logout_all_ends_every_one(api_anonymous) -
     assert f"{SESSION_COOKIE}=" in response.headers["set-cookie"]
     assert _me(api_anonymous.client, first).status_code == 401
     assert _me(api_anonymous.client, second).status_code == 200
-    assert _post(api_anonymous.client, "logout", first).status_code == 401
+    # Signing out of a session that already ended still answers 204 and clears the
+    # cookie: the reader asked to leave, and a stale cookie must not stay behind.
+    for headers in (_session(first), {}):
+        stale = api_anonymous.client.post(
+            f"{API_PREFIX}/auth/logout", headers={**MUTATION_HEADERS, **headers}
+        )
+        assert stale.status_code == 204
+        assert f"{SESSION_COOKIE}=" in stale.headers["set-cookie"]
+        assert stale.headers["cache-control"] == "no-store"
 
     third = _token(_login(api_anonymous.client))
     assert _post(api_anonymous.client, "logout-all", third).status_code == 204

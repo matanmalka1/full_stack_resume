@@ -7032,7 +7032,7 @@
             "description": "The request did not match the API contract."
           }
         },
-        "summary": "End the current session",
+        "summary": "End the current session, if there is one, and clear its cookie",
         "tags": [
           "auth"
         ]

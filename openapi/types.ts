@@ -613,7 +613,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** End the current session */
+        /** End the current session, if there is one, and clear its cookie */
         post: operations["logout_api_v1_auth_logout_post"];
         delete?: never;
         options?: never;
