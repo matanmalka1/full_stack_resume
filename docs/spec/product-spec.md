@@ -158,8 +158,9 @@ The product includes:
 - Explicit content check, explicit approval of the exact current content, rendering with
   browser/PDF/ATS validation, and a derived Ready state.
 - A candidate-facts surface ("מאגר העובדות"): list and inspect facts and their history,
-  create pending facts (including corrections that `replaces` a canonical fact),
-  confirm to canonical, delete, and attach to existing Profile sections. Contextual fact
+  create pending facts, confirm to canonical, edit a fact in place with explicit
+  confirmation (§17; *designed, not built* — today a correction is a new fact carrying
+  `replaces`), delete, and attach to existing Profile sections. Contextual fact
   resolution from the editor: create a fact from a claim and `Confirm and use`.
 - A Dashboard (application list) with search, filters, presets, facets, and sorting;
   Application Detail with preparation state, blockers, next action, notes, unified
@@ -706,7 +707,7 @@ mutation is then one database transaction — fact row and fact events commit
 together — and the mutation journal, its recovery, and
 quarantine are retired. Hand edits to Knowledge files are no longer an input; `base/`
 is import input for an existing installation only. The lifecycle rules below (statuses,
-create, confirm, delete, attach, confirm and use, from a claim) are unchanged. Until
+create, confirm, edit, delete, attach, confirm and use, from a claim) are unchanged. Until
 then, the implemented mechanism is:
 
 Knowledge stays file-based and version-controlled. A fact mutation from the Web runs:
@@ -723,11 +724,18 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
 
 - **Create.** New facts enter `pending` with a generated UUIDv4 ID; the UI never creates
   IDs, and existing semantic IDs stay valid. `en` rendering is required, `he` optional;
-  meaning, tags, provenance, and dates are explicit input. A correction is a new fact
-  carrying `replaces`; the original is never edited.
-- **Confirm.** `pending -> canonical` on one explicit confirmation. Confirming a
-  replacement marks the original superseded (`FACT_SUPERSEDED` warning); it rewrites
-  neither the original nor any Submission.
+  meaning, tags, provenance, and dates are explicit input.
+- **Confirm.** `pending -> canonical` on one explicit confirmation.
+- **Edit.** *Designed, not built* (`../decisions/editable-facts.md`): a correction
+  changes the fact in place — meaning, renderings, tags, provenance, dates, style, link
+  target; never its ID or its source. A pending fact stays pending; a canonical fact
+  needs an explicit confirmation, stays canonical, and is confirmed as of the edit. A
+  deleted fact is not edited. Every edit is a lifecycle event holding the fact as it now
+  is. It writes no document and no Submission: a dependent document's basis moves, so it
+  is no longer approved, and wording reviewed against the earlier content must be
+  reviewed again. `replaces` is history carried by imported facts; no command sets it.
+  Until this ships, a correction is a new fact carrying `replaces`, and confirming it
+  raises `FACT_SUPERSEDED` on documents that use the original.
 - **Delete.** An explicitly confirmed, one-way soft delete from `pending` or `canonical`.
   Always allowed, even for a fact in use; it writes nothing to any document, whose basis
   moves and which then reports `FACT_DELETED_REQUIRES_RESOLUTION`. Submissions are

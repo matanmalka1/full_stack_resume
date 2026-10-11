@@ -172,6 +172,9 @@ Evidence: `tests/operations/`.
 - Journal crash windows (before/after file activation, hash mismatch, audit failure) end in deterministic recovery or explicit quarantine.
   Under quarantine, history stays readable and approval is blocked.
 - A hand edit to a dependent fact moves the basis without a document write.
+- *Designed, not built:* `edit_fact` changes content in place with one event, refuses a
+  canonical edit without confirmation and any edit of a deleted fact, moves a dependent
+  document's basis without writing it, and leaves every Submission byte-identical.
 - Canonical IDs are unique and stable; profiles reference existing facts; seed and
   repository knowledge agree.
 
