@@ -12,6 +12,7 @@ The cross-store journal this replaced (§7.2) is retired, and its table is dropp
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
@@ -50,15 +51,19 @@ from ...ports.documents import DocumentStore
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.transactions import ReadTransaction, TransactionManager, WriteTransaction
 from ...ports.user_knowledge import StoredKnowledge, UserKnowledgeRepository, UserKnowledgeSource
+from ..documents import load_knowledge
 
 __all__ = ["FactLifecycleService", "InfrastructureFailure", "KnowledgeQueryService"]
 
 
-def _load(source: UserKnowledgeSource, actor: Actor) -> Knowledge:
+def _transition(store: FactStore, fact_id: str, change: Callable[[str], Fact]) -> tuple[Fact, Fact]:
+    """The fact before and after `change`, with the store's refusals mapped."""
     try:
-        return source.load(actor.user_id)
-    except OSError as exc:
-        raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
+        return store.get(fact_id), change(fact_id)
+    except FactStoreError as exc:
+        if fact_id not in store.facts:
+            raise UnknownRecord(f"Unknown fact: {fact_id}") from exc
+        raise KnowledgeRejected(str(exc)) from exc
     except ValueError as exc:
         raise KnowledgeRejected(str(exc)) from exc
 
@@ -93,16 +98,6 @@ class FactLifecycleService:
         self._repo = repository
         self.documents = documents
         self._sources = sources
-
-    def load_knowledge(self, actor: Actor) -> Knowledge:
-        return _load(self._knowledge, actor)
-
-    def knowledge(self, actor: Actor) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
-        loaded = self.load_knowledge(actor)
-        return loaded.facts, loaded.profiles, loaded.policies
-
-    def fact_store(self, actor: Actor) -> FactStore:
-        return self.load_knowledge(actor).facts
 
     # The one write path.
 
@@ -207,15 +202,14 @@ class FactLifecycleService:
         source: str,
         payload: dict[str, Any],
         *,
-        canonical: bool = False,
         reason: str = "",
         application_id: str | None = None,
         claim_id: str | None = None,
     ) -> FactMutationResult:
-        """Create a new fact in its source and record the event.
+        """Create a new `pending` fact in its source and record the event.
 
-        Without `canonical`, the fact lands as `pending` and cannot reach a CV:
-        every rendering path resolves facts with `canonical_only=True`.
+        A pending fact cannot reach a CV: every rendering path resolves facts with
+        `canonical_only=True`; it becomes canonical only through `confirm_fact`.
         """
         with self.transactions.write() as tx:
             if application_id is not None:
@@ -224,7 +218,7 @@ class FactLifecycleService:
             current = self._state(tx, actor)
             store = self._build(current).facts
             try:
-                record = build_new_fact(store, source, payload, canonical=canonical)
+                record = build_new_fact(store, source, payload, canonical=False)
             except (FactStoreError, ValueError) as exc:
                 raise KnowledgeRejected(str(exc)) from exc
             source_id = source_id_of_name(source)
@@ -243,10 +237,7 @@ class FactLifecycleService:
                         fact,
                         event_type="fact_created",
                         from_status=None,
-                        reason=reason
-                        or (
-                            "explicitly confirmed on creation" if canonical else "new pending fact"
-                        ),
+                        reason=reason or "new pending fact",
                         application_id=application_id,
                         claim_id=claim_id,
                     )
@@ -270,7 +261,6 @@ class FactLifecycleService:
             actor,
             source,
             {**payload, "fact_id": new_id()},
-            canonical=False,
             reason=reason,
             application_id=application_id,
             claim_id=claim_id,
@@ -279,15 +269,9 @@ class FactLifecycleService:
     @staticmethod
     def _confirmed(store: FactStore, fact_id: str) -> tuple[Fact, Fact]:
         """§17: `pending -> canonical`; the date of confirmation unless one is recorded."""
-        try:
-            before = store.get(fact_id)
-            confirmed = store.confirm(fact_id, explicitly_confirmed=True)
-        except FactStoreError as exc:
-            if fact_id not in store.facts:
-                raise UnknownRecord(f"Unknown fact: {fact_id}") from exc
-            raise KnowledgeRejected(str(exc)) from exc
-        except ValueError as exc:
-            raise KnowledgeRejected(str(exc)) from exc
+        before, confirmed = _transition(
+            store, fact_id, lambda fid: store.confirm(fid, explicitly_confirmed=True)
+        )
         return before, confirmed.model_copy(
             update={"confirmed_at": before.confirmed_at or utc_now()[:10]}
         )
@@ -341,15 +325,7 @@ class FactLifecycleService:
         with self.transactions.write() as tx:
             current = self._state(tx, actor)
             store = self._build(current).facts
-            try:
-                before = store.get(fact_id)
-                after = store.delete(fact_id)
-            except FactStoreError as exc:
-                if fact_id not in store.facts:
-                    raise UnknownRecord(f"Unknown fact: {fact_id}") from exc
-                raise KnowledgeRejected(str(exc)) from exc
-            except ValueError as exc:
-                raise KnowledgeRejected(str(exc)) from exc
+            before, after = _transition(store, fact_id, store.delete)
             knowledge, event_ids = self._commit(
                 tx,
                 current,
@@ -365,14 +341,13 @@ class FactLifecycleService:
             )
         return self._result(after, knowledge, event_ids)
 
-    def capture_claim_fact(
+    def create_fact_from_claim(
         self,
         actor: Actor,
         application_id: str,
         claim_id: str,
         *,
         source: str,
-        fact_id: str,
         meaning: str,
         tags: list[str],
         english: str | None = None,
@@ -380,7 +355,6 @@ class FactLifecycleService:
         provenance: str | None = None,
         effective_dates: str | None = None,
         replaces: str | None = None,
-        canonical: bool = False,
         reason: str = "",
     ) -> FactMutationResult:
         """Turn an unsupported manual claim into a tracked fact.
@@ -426,7 +400,7 @@ class FactLifecycleService:
             actor,
             source,
             {
-                "fact_id": fact_id,
+                "fact_id": new_id(),
                 "meaning": meaning,
                 "renderings": renderings,
                 "tags": tags,
@@ -439,43 +413,9 @@ class FactLifecycleService:
                 "replaces": replaces,
                 "resume_style": claim.style,
             },
-            canonical=canonical,
             reason=reason or f"captured from claim {claim_id}",
             application_id=application_id,
             claim_id=claim_id,
-        )
-
-    def create_fact_from_claim(
-        self,
-        actor: Actor,
-        application_id: str,
-        claim_id: str,
-        *,
-        source: str,
-        meaning: str,
-        tags: list[str],
-        english: str | None = None,
-        hebrew: str | None = None,
-        provenance: str | None = None,
-        effective_dates: str | None = None,
-        replaces: str | None = None,
-        reason: str = "",
-    ) -> FactMutationResult:
-        return self.capture_claim_fact(
-            actor,
-            application_id,
-            claim_id,
-            source=source,
-            fact_id=new_id(),
-            meaning=meaning,
-            tags=tags,
-            english=english,
-            hebrew=hebrew,
-            provenance=provenance,
-            effective_dates=effective_dates,
-            replaces=replaces,
-            canonical=False,
-            reason=reason,
         )
 
     @staticmethod
@@ -561,9 +501,8 @@ class FactLifecycleService:
         with self.transactions.write() as tx:
             self._sources.require_owned(tx, application_id, actor.user_id)
             document = self.documents.document(tx, application_id)
+            # Another Application's analysis is `UnknownRecord` here.
             analysis_record = self.store.get_analysis(tx, job_analysis_id, application_id)
-            if analysis_record["application_id"] != application_id:
-                raise KnowledgeRejected("job analysis belongs to another application")
             if document is None:
                 raise KnowledgeRejected(f"application {application_id} has no CV document yet")
             if document.analysis_id != job_analysis_id:
@@ -630,7 +569,7 @@ class KnowledgeQueryService:
         self._knowledge = knowledge
 
     def load_knowledge(self, actor: Actor) -> Knowledge:
-        return _load(self._knowledge, actor)
+        return load_knowledge(self._knowledge, actor)
 
     def knowledge(self, actor: Actor) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
         loaded = self.load_knowledge(actor)

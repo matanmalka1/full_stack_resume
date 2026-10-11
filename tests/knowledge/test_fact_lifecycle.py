@@ -99,7 +99,7 @@ def test_attachment_target_projection_exposes_sections_without_profile_documents
     assert development.sections
     assert all(not section.attached and not section.pinned for section in development.sections)
 
-    knowledge = services.knowledge_lifecycle.load_knowledge(
+    knowledge = services.knowledge_queries.load_knowledge(
         actor_of(services),
     )
     source_profile = knowledge.profiles.get("development")
@@ -499,33 +499,31 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     assert claim.claim_id in edited.pending_claim_ids
     assert not validate_active_draft(services, app_id).passed
 
-    captured = services.knowledge_lifecycle.capture_claim_fact(
+    captured = services.knowledge_lifecycle.create_fact_from_claim(
         actor_of(services),
         app_id,
         claim.claim_id,
         source="sales.json",
-        fact_id="sales.leadership.pipeline_review",
         meaning="Introduced a weekly pipeline review with the Sales team.",
         tags=["sales", "leadership", "pipeline"],
     )
     assert captured.fact.status is FactStatus.PENDING
     assert captured.fact.renderings["en"] == text
     assert captured.fact.resume_style == claim.style
+    fact_id = captured.fact.fact_id
 
     services.knowledge_lifecycle.confirm_fact(
-        actor_of(services), "sales.leadership.pipeline_review", explicitly_confirmed=True
+        actor_of(services), fact_id, explicitly_confirmed=True
     )
 
-    edit_document_claim(
-        services, app_id, claim.claim_id, ["sales.leadership.pipeline_review"], text=text
-    )
+    edit_document_claim(services, app_id, claim.claim_id, [fact_id], text=text)
     checked = validate_active_draft(services, app_id)
     assert not checked.passed
     assert any(issue.code == "fact-outside-profile-section" for issue in checked.report.issues)
 
     services.knowledge_lifecycle.attach_fact(
         actor_of(services),
-        "sales.leadership.pipeline_review",
+        fact_id,
         "account-manager",
         "Work Experience",
         pin=True,
@@ -547,12 +545,10 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     )
     seed_draft(services, app_id)
     assert validate_active_draft(services, app_id).passed
-    selected = _working_claim(services, app_id, "sales.leadership.pipeline_review")
+    selected = _working_claim(services, app_id, fact_id)
     assert selected.claim_type == "canonical"
     assert selected.text == text
-    events = services.knowledge_queries.fact_history(
-        actor_of(services), "sales.leadership.pipeline_review"
-    ).events
+    events = services.knowledge_queries.fact_history(actor_of(services), fact_id).events
     assert [event.event_type for event in events] == [
         "fact_created",
         "fact_confirmed",
