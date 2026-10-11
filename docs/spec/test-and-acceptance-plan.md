@@ -171,7 +171,6 @@ Evidence: `tests/operations/`.
   command that confirms and attaches or changes nothing.
 - A mutation is one transaction: an audit failure writes no part of it, and a mutation
   from a stale read is refused before it writes a row.
-- The retired journal's table keeps its transition and immutability trigger.
 - A direct change to a dependent fact's row moves the basis without a document write.
 - Imported Knowledge read back against the installation's template-only `profiles/` is
   the Knowledge the files held.

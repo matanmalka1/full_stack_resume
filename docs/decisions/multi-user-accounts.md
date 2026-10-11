@@ -143,8 +143,8 @@ one user. For an existing installation, in delivery order (§5):
    `fact_events` rows get their owner through a *permitted transition*: the guard allows
    exactly `user_id: NULL → value`, once, with no other column changing — the pattern
    that already guards terminal Operation rows (architecture §6.1), not a trigger
-   bypass. Existing `knowledge_mutation_journal` rows stay read-only history; nothing
-   reads them once Knowledge is in the database.
+   bypass. The `knowledge_mutation_journal` is retired once Knowledge is in the
+   database; migration `0008` drops its table and refuses while it holds a row.
 3. **Ownership step:** add `applications.user_id`, assign every existing row to the one
    user, then make it `NOT NULL`. The revision refuses when rows exist and the user count
    is not exactly one. The owner is derived from the fact that the installation had one

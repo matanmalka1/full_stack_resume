@@ -705,8 +705,8 @@ React -> FastAPI -> FactLifecycleService -> read rows -> validate the whole Know
       -> fact rows, bindings, fact-store version, fact events: one transaction
 ```
 
-The cross-store mutation journal, its recovery, and quarantine are retired; its rows
-stay as history (architecture.md §7.2). Hand edits to Knowledge files are no longer an
+The cross-store mutation journal, its recovery, and quarantine are retired, and its
+table is dropped (architecture.md §7.2). Hand edits to Knowledge files are no longer an
 input; `base/` is import input for an existing installation only. Profile templates and
 policy files stay version-controlled, and the application never runs a Git commit.
 

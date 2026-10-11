@@ -7,8 +7,7 @@ the candidate context as loading always has - and only then writes the rows that
 changed, advances the user's `fact_store_version`, and appends the fact events. A
 proposal that does not build is refused and nothing is written.
 
-The cross-store journal this replaced (§7.2) is retired; its table stays as history and
-nothing reads it.
+The cross-store journal this replaced (§7.2) is retired, and its table is dropped.
 """
 
 from __future__ import annotations

@@ -230,7 +230,7 @@ projection and their job text (locked by the first Submission, by trigger
 mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
 the AI call log (`ai_calls`, §11), Submissions, Operations,
 fact events, users and sessions, per-user facts, CandidateContext and Profile bindings
-(§18.2), the retired Knowledge mutation journal's history (§7.2), and safe settings.
+(§18.2), and safe settings.
 This also includes rate-limit buckets and per-user settings. Single-use tokens and
 account events remain deferred.
 
@@ -379,8 +379,8 @@ is conditional on the version the mutation read, so of two mutations from the sa
 the later is refused (`StateConflict`) before it writes a row.
 
 The cross-store journal (`knowledge_mutation_journal`) that guarded file-backed
-Knowledge is retired. Its table stays as read-only history, still guarded by its
-trigger; no code reads or writes it.
+Knowledge is retired. Migration `0008` drops its table, and refuses while the table
+holds a row, so no history is discarded.
 
 ## 8. Domain lineage and provenance
 

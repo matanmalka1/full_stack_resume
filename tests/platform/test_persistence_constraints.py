@@ -37,7 +37,6 @@ from cv_engine.infrastructure.persistence.tables import (
     applications,
     cv_documents,
     job_analyses,
-    knowledge_mutation_journal,
     metadata,
     submissions,
     user_settings,
@@ -55,7 +54,6 @@ MUTABLE_TABLES = frozenset(
         "applications",  # the current recruitment projection and tracking fields
         "cv_documents",  # the one mutable resume document (product invariant 3)
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
-        "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "user_settings",  # safe mutable Web preferences, guarded by edit_version
         "users",  # a password changes
         "user_sessions",  # a session is revoked
@@ -65,15 +63,14 @@ MUTABLE_TABLES = frozenset(
         "profile_bindings",  # pools and pins grow through attach_fact
     }
 )
-DELETE_ONLY_TABLES = frozenset({"operations", "knowledge_mutation_journal", "facts"})
+DELETE_ONLY_TABLES = frozenset({"operations", "facts"})
 
 IMMUTABLE_MESSAGE = "immutable record"
 
 # Tables that intentionally have no candidate owner. `users` is identity itself;
-# rate-limit keys are hashed pre-authentication inputs; the retired journal is legacy
-# installation recovery state. The guard below proves this list is both necessary and
-# exhaustive, so an exception that becomes owned also fails.
-SYSTEM_OWNERSHIP_TABLES = frozenset({"users", "rate_limit_buckets", "knowledge_mutation_journal"})
+# rate-limit keys are hashed pre-authentication inputs. The guard below proves this
+# list is both necessary and exhaustive, so an exception that becomes owned also fails.
+SYSTEM_OWNERSHIP_TABLES = frozenset({"users", "rate_limit_buckets"})
 
 
 def test_every_table_has_a_derived_owner_path_or_is_a_named_system_table() -> None:
@@ -520,47 +517,6 @@ def test_concurrent_writers_do_not_silently_overwrite(database_engine) -> None:
     with transactions.read() as tx:
         user_id = _one_user_id(transactions, tx)
         assert applications_reader.applications(tx, user_id)[0]["notes"] in {"first", "second"}
-
-
-def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(database_engine) -> None:
-    """The retired journal is history: nothing writes it, and its trigger still guards it."""
-    mutation_id = new_id()
-    with database_engine.begin() as connection:
-        connection.execute(
-            insert(knowledge_mutation_journal).values(
-                id=mutation_id,
-                mutation_type="fact_confirmed",
-                state="PREPARED",
-                source_reference="base/sales.json",
-                staged_reference=f"temp/knowledge/{mutation_id}.json",
-                old_sha256="a" * 64,
-                new_sha256="b" * 64,
-                db_mutation_type="fact_event",
-                db_mutation_id="event-1",
-                db_mutation_json={"fact_id": "fact-1", "to_status": "canonical"},
-                recovery_strategy="finish_or_restore",
-                prepared_at="2026-08-19T10:00:00+00:00",
-            )
-        )
-        connection.execute(
-            update(knowledge_mutation_journal)
-            .where(knowledge_mutation_journal.c.id == mutation_id)
-            .values(state="COMMITTED", committed_at="2026-08-19T10:01:00+00:00")
-        )
-    with pytest.raises(ProgrammingError, match="invalid knowledge mutation transition"):
-        with database_engine.begin() as connection:
-            connection.execute(
-                update(knowledge_mutation_journal)
-                .where(knowledge_mutation_journal.c.id == mutation_id)
-                .values(mutation_type="attach_fact")
-            )
-    with pytest.raises(ProgrammingError, match="immutable record"):
-        with database_engine.begin() as connection:
-            connection.execute(
-                delete(knowledge_mutation_journal).where(
-                    knowledge_mutation_journal.c.id == mutation_id
-                )
-            )
 
 
 def test_every_product_table_is_immutable_unless_explicitly_exempt(database_engine) -> None:

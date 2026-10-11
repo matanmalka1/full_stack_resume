@@ -723,8 +723,7 @@ dependent facts, and stored content report. Writes nothing.
 ## 17. Knowledge commands
 
 Facts are the user's, in PostgreSQL, and every fact mutation is one transaction
-(architecture.md §7.2). The cross-store journal is retired: its rows are history that
-nothing reads. Attachment targets are the user's Profile binding over the shared
+(architecture.md §7.2). The cross-store journal is retired and its table dropped. Attachment targets are the user's Profile binding over the shared
 templates. Facts belong to the signed-in user; a `fact_id` is
 unique per user, and another user's fact is 404.
 
