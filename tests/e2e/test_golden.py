@@ -121,6 +121,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
             "sections": [section.name for section in draft.sections],
         }
         assert snapshot == case["snapshot"], fixture.stem
+        assert "script-src 'none'" in html_text
         assert "<ul>" not in html_text
         assert html_text.count('class="bullet claim"') == sum(
             claim.style == "bullet" for section in draft.sections for claim in section.claims

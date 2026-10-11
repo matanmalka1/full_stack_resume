@@ -11,7 +11,7 @@
   },
   "snapshot": {
     "markdown_body_sha256": "25e2adb77c491784b7aa04dd6eb488fbd1515372d3d1dce8c6afe50e5c3330e5",
-    "html_sha256": "583720e4fb6191fcc2955c25e2bb7ca0e9231fbbe3d380669ae887a5e9bb741b",
+    "html_sha256": "c63b04f20eb5ffbb0797f1f2c8955f3322a39fa650cffb083a4d89b3d670402d",
     "fact_ids": [
       "common.contact.email",
       "common.contact.linkedin",
@@ -51,5 +51,5 @@
       "שפות"
     ]
   },
-  "snapshot_note": "markdown_body_sha256 replaces markdown_sha256: the front matter carries knowledge versions, which the test now asserts against the live fact store instead of freezing. The body bytes are unchanged from the v1.0.0 baseline."
+  "snapshot_note": "The HTML hash changed only for the renderer-isolation CSP meta tag; the Markdown body and document content remain unchanged."
 }
