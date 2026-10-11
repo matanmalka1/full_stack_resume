@@ -869,10 +869,7 @@ export interface paths {
         };
         /**
          * Instance identity and versions
-         * @description The instance answers whether or not anyone has Knowledge yet.
-         *
-         *     Knowledge is a user's rows, so an installation with no user, or one not yet
-         *     imported, is healthy and reports no Knowledge versions rather than failing.
+         * @description Instance identity and versions. Anonymous, so it names no user's Knowledge.
          */
         get: operations["health_api_v1_health_get"];
         put?: never;
@@ -997,14 +994,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read safe application settings */
+        /** Read the signed-in user's safe settings */
         get: operations["read_settings_api_v1_settings_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update safe application settings */
+        /** Update the signed-in user's safe settings */
         patch: operations["update_settings_api_v1_settings_patch"];
         trace?: never;
     };
@@ -2205,7 +2202,6 @@ export interface components {
         HealthResponse: {
             /** Api Version */
             api_version: string;
-            knowledge: components["schemas"]["KnowledgeVersions"] | null;
             /** Product Version */
             product_version: string;
             /** Schema Version */
@@ -2265,23 +2261,6 @@ export interface components {
             locked: boolean;
             /** Source Url */
             source_url?: string | null;
-        };
-        /** KnowledgeVersions */
-        KnowledgeVersions: {
-            /** Candidate Context */
-            candidate_context: string;
-            /** Emphasis Policies */
-            emphasis_policies: string;
-            /** Facts */
-            facts: string;
-            /** Facts Lifecycle */
-            facts_lifecycle: string;
-            /** Presentations */
-            presentations: string;
-            /** Profiles */
-            profiles: string;
-            /** Requirement Concepts */
-            requirement_concepts: string;
         };
         /** LoginRequest */
         LoginRequest: {
