@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 from api_harness import sign_in
+from helpers import actor_of
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
@@ -75,7 +76,7 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
     # Runtime identity is versioned product state, not a selectable root ID.
     assert "workspace_id" not in body
     assert body["api_version"] == "1"
-    assert body["knowledge"] == services.knowledge_queries.knowledge_versions().model_dump()
+    assert "knowledge" not in body
 
 
 def test_logs_summarise_requests_keep_tracebacks_in_file_and_redact_secrets(
@@ -154,9 +155,10 @@ def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api
     from cv_engine.application.commands import IngestCommand
 
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company="Inventory Co", target_role="Engineer", job_text="Stored posting", client="web"
-        )
+        ),
     )
     orphan = services.payloads.commit_submission_file(
         "unregistered", "submission", suffix=".pdf", payload=b"pending payload"

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from helpers import actor_of
+
 from contextlib import nullcontext
 
 from cv_engine.application.commands import (
@@ -42,6 +44,7 @@ def _enqueue_operation(services, request, *, operation_id=None, created_at=None)
         return services.operation_submissions.operations.enqueue(
             tx,
             request,
+            actor_of(services).user_id,
             operation_id=operation_id or new_id(),
             created_at=created_at,
         )
@@ -103,13 +106,14 @@ def _ingest_for_operation(services, company: str):
     not duplicate detection.
     """
     return services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company=company,
             target_role="Developer",
             job_text="Python role",
             acknowledged_duplicates=True,
             client="web",
-        )
+        ),
     )
 
 

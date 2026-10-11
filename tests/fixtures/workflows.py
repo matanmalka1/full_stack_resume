@@ -9,6 +9,7 @@ from fake_provider import FakeOpenAI
 from foreground import foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
+    actor_of,
     analysis_proposal,
     approve_active_draft,
     seed_document,
@@ -33,16 +34,19 @@ from fixtures.models import WorkflowSetup
 def analyzed_application(ai_services: Services, fake_openai: FakeOpenAI):
     def build(company: str, role="Account Manager", job_text=ACCOUNT_MANAGER_JOB):
         fake_openai.script("propose_analysis", analysis_proposal())
+        actor = actor_of(ai_services)
         ingested = ai_services.applications.ingest(
+            actor,
             IngestCommand(
                 company=company,
                 target_role=role,
                 job_text=job_text,
                 acknowledged_duplicates=True,
                 client="web",
-            )
+            ),
         )
         queued = ai_services.operation_submissions.submit_analysis(
+            actor,
             AnalyzeCommand(
                 application_id=ingested.application_id,
                 job_text_hash=ingested.job_text_hash,
@@ -121,17 +125,19 @@ def artifact_approved_application(approved_application):
 def ready_application(approved_application, deterministic_renderer):
     def build(company="Ready Co", role="Account Manager", job_text=ACCOUNT_MANAGER_JOB):
         setup = approved_application(company, role, job_text)
+        actor = actor_of(setup.services)
         rendered = setup.services.rendering.render(
+            actor,
             RenderCommand(
                 application_id=setup.application_id,
                 expected_document_hash=setup.document_hash,
-            )
+            ),
         )
         assert rendered.validation.passed, rendered.validation
         document = stored_document(setup.services, setup.application_id)
         assert document.pdf_path is not None
         assert (
-            setup.services.queries.application_detail(setup.application_id).preparation_state
+            setup.services.queries.application_detail(actor, setup.application_id).preparation_state
             is PreparationState.READY
         )
         return replace(
@@ -148,12 +154,13 @@ def submitted_application(ready_application):
     def build(company="Submitted Co"):
         setup = ready_application(company)
         setup.services.submission.submit_application(
+            actor_of(setup.services),
             SubmissionCommand(
                 application_id=setup.application_id,
                 expected_document_hash=setup.document_hash,
                 submitted_at=utc_now(),
                 client="web",
-            )
+            ),
         )
         return setup
 

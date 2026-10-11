@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from api_harness import MUTATION_HEADERS, analyze_offline
 from fake_provider import FakeOpenAI
-from helpers import ACCOUNT_MANAGER_JOB, stored_document
+from helpers import ACCOUNT_MANAGER_JOB, actor_of, stored_document
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import IngestCommand
@@ -35,13 +35,14 @@ def _document(harness, application_id: str) -> dict:
 
 def _application(services, company: str) -> str:
     return services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company=company,
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             acknowledged_duplicates=True,
             client="web",
-        )
+        ),
     ).application_id
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from helpers import stored_document, stored_submissions
+from helpers import actor_of, stored_document, stored_submissions
 from sqlalchemy import delete, update
 from sqlalchemy.exc import ProgrammingError
 
@@ -44,17 +44,19 @@ def test_render_and_submission_refuse_unapproved_content_before_copy(
     monkeypatch.setattr(DocumentFiles, "copy_for_submission", forbidden)
     with pytest.raises(PreconditionFailed) as error:
         services.rendering.render(
-            RenderCommand(application_id=app_id, expected_document_hash=setup.document_hash)
+            actor_of(services),
+            RenderCommand(application_id=app_id, expected_document_hash=setup.document_hash),
         )
     assert error.value.code == DOCUMENT_NOT_APPROVED
     with pytest.raises(PreconditionFailed) as error:
         services.submission.submit_application(
+            actor_of(services),
             SubmissionCommand(
                 application_id=app_id,
                 expected_document_hash=setup.document_hash,
                 submitted_at=utc_now(),
                 client="web",
-            )
+            ),
         )
     assert error.value.code == DOCUMENT_NOT_READY
     assert stored_submissions(services, app_id) == []
@@ -78,16 +80,20 @@ def test_submission_rechecks_ready_under_lock(ready_application, monkeypatch, da
     monkeypatch.setattr(DocumentFiles, "copy_for_submission", move_after_copy)
     with pytest.raises(PreconditionFailed) as error:
         services.submission.submit_application(
+            actor_of(services),
             SubmissionCommand(
                 application_id=app_id,
                 expected_document_hash=setup.document_hash,
                 submitted_at=utc_now(),
                 client="web",
-            )
+            ),
         )
     assert error.value.code == DOCUMENT_NOT_READY
     assert stored_submissions(services, app_id) == []
-    assert services.queries.application_detail(app_id).application.current_status == "saved"
+    assert (
+        services.queries.application_detail(actor_of(services), app_id).application.current_status
+        == "saved"
+    )
 
 
 def test_submission_copies_survive_edits_and_database_triggers_refuse_mutation(
@@ -105,17 +111,21 @@ def test_submission_copies_survive_edits_and_database_triggers_refuse_mutation(
         if path
     }
     services.draft_editing.update_document(
+        actor_of(services),
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=document.document_hash,
             claim_additions=[
                 ClaimAddition(section=document.content.sections[0].name, text="unsupported")
             ],
-        )
+        ),
     )
-    assert services.queries.application_detail(app_id).preparation_state is PreparationState.DRAFT_IN_PROGRESS
+    assert (
+        services.queries.application_detail(actor_of(services), app_id).preparation_state
+        is PreparationState.DRAFT_IN_PROGRESS
+    )
     with pytest.raises(PreconditionFailed) as error:
-        services.rendering.export_recruiter_pdf(app_id)
+        services.rendering.export_recruiter_pdf(actor_of(services), app_id)
     assert error.value.code == DOCUMENT_NOT_READY
     assert stored_submissions(services, app_id) == [sent]
     assert all(
@@ -141,12 +151,13 @@ def test_generic_status_transition_to_applied_is_always_blocked(
     services, app_id = ready_application("Direct Applied With PDF")
     with pytest.raises(WorkflowError, match="submission-owned"):
         services.recruitment.transition_status(
+            actor_of(services),
             RecruitmentStatusCommand(
                 application_id=app_id,
                 target_status="applied",
                 reason="direct bypass attempt",
                 client="web",
-            )
+            ),
         )
     with transaction_manager.read() as tx:
         assert (
@@ -162,19 +173,21 @@ def test_external_submission_never_fabricates_document_or_files(
 ) -> None:
     services, app_id = analyzed_application("External Submission")
     first = services.submission.record_external_submission(
+        actor_of(services),
         ExternalSubmissionCommand(
             application_id=app_id,
             submitted_at="2026-08-19T10:00:00+00:00",
             metadata={"source": "email confirmation"},
             client="web",
-        )
+        ),
     )
     second = services.submission.record_external_submission(
+        actor_of(services),
         ExternalSubmissionCommand(
             application_id=app_id,
             submitted_at="2026-08-19T11:00:00+00:00",
             client="web",
-        )
+        ),
     )
     assert first.current_status == second.current_status == "applied"
     with transaction_manager.read() as tx:
@@ -201,26 +214,29 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
 ) -> None:
     services, app_id = analyzed_application("Correction History")
     withdrawn = services.recruitment.transition_status(
+        actor_of(services),
         RecruitmentStatusCommand(
             application_id=app_id,
             target_status="withdrawn",
             reason="mistaken entry",
             occurred_at="2026-08-19T10:00:00+00:00",
             client="web",
-        )
+        ),
     )
     assert withdrawn.terminal_outcome == "withdrawn"
     with pytest.raises(WorkflowError, match="reason is required"):
         services.recruitment.correct_recruitment_status(
+            actor_of(services),
             RecruitmentCorrectionCommand(
                 application_id=app_id,
                 target_status="interview",
                 corrects_event_id=withdrawn.event_id or "",
                 reason=" ",
                 client="web",
-            )
+            ),
         )
     corrected = services.recruitment.correct_recruitment_status(
+        actor_of(services),
         RecruitmentCorrectionCommand(
             application_id=app_id,
             target_status="interview",
@@ -228,7 +244,7 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
             reason="status was entered on the wrong application",
             occurred_at="2026-08-19T10:05:00+00:00",
             client="web",
-        )
+        ),
     )
     assert corrected.current_status == "interview"
     assert corrected.terminal_outcome is None
@@ -244,7 +260,8 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
 
     for target in ("offer", "accepted", "closed"):
         closed = services.recruitment.transition_status(
-            RecruitmentStatusCommand(application_id=app_id, target_status=target, client="web")
+            actor_of(services),
+            RecruitmentStatusCommand(application_id=app_id, target_status=target, client="web"),
         )
     assert closed.current_status == "closed"
     assert closed.terminal_outcome == "accepted"

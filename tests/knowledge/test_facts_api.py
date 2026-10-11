@@ -8,6 +8,8 @@ those previously lacked an API surface.
 
 from __future__ import annotations
 
+from helpers import actor_of
+
 from api_harness import MUTATION_HEADERS
 
 from cv_engine.api.app import API_PREFIX
@@ -103,4 +105,9 @@ def test_fact_http_refusals_preserve_the_pending_fact(api_worker) -> None:
     ]
     for response, expected_status in refusals:
         assert response.status_code == expected_status, response.text
-    assert api_worker.services.knowledge_queries.show_fact(fact_id).fact.status.value == "pending"
+    assert (
+        api_worker.services.knowledge_queries.show_fact(
+            actor_of(api_worker.services), fact_id
+        ).fact.status.value
+        == "pending"
+    )

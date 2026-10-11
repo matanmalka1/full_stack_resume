@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from helpers import edit_document_claim, stored_document
+from helpers import actor_of, edit_document_claim, stored_document
 from pypdf import PdfWriter
 
 from cv_engine.application.commands import RenderCommand
@@ -110,6 +110,7 @@ def test_render_refuses_a_document_edited_after_approval_before_browser(
     monkeypatch.setattr("cv_engine.infrastructure.rendering.render_pdf", forbidden)
     with pytest.raises(PreconditionFailed) as refused:
         services.rendering.render(
-            RenderCommand(application_id=app_id, expected_document_hash=edited.document_hash)
+            actor_of(services),
+            RenderCommand(application_id=app_id, expected_document_hash=edited.document_hash),
         )
     assert refused.value.code == DOCUMENT_NOT_APPROVED

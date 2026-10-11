@@ -4,7 +4,7 @@ import threading
 import time
 
 import pytest
-from helpers import seed_document, stored_document
+from helpers import actor_of, seed_document, stored_document
 from pydantic import ValidationError
 from sqlalchemy import create_engine, delete, func, insert, inspect, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
@@ -41,13 +41,14 @@ from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
 from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from cv_engine.infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from cv_engine.infrastructure.persistence.tables import (
-    app_settings,
     applications,
     cv_documents,
     job_analyses,
     knowledge_mutation_journal,
     metadata,
     submissions,
+    user_settings,
+    users,
 )
 from cv_engine.util import new_id, normalized_text, sha256_text, utc_now
 
@@ -62,7 +63,7 @@ MUTABLE_TABLES = frozenset(
         "cv_documents",  # the one mutable resume document (product invariant 3)
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
-        "app_settings",  # safe mutable Web preferences, guarded by edit_version
+        "user_settings",  # safe mutable Web preferences, guarded by edit_version
         "users",  # a password changes
         "user_sessions",  # a session is revoked
         "facts",  # edited in place; its identity is guarded by its own trigger
@@ -88,13 +89,13 @@ def test_analysis_plan_adapter_rejects_read_closed_and_foreign_tokens(
 ) -> None:
     with transaction_manager.read() as tx:
         with pytest.raises(TypeError, match="write transaction"):
-            analysis_plan_store.lock_application(tx, "application")
+            analysis_plan_store.lock_application(tx, "application", "user")
     with pytest.raises(RuntimeError, match="transaction is closed"):
-        analysis_plan_store.lock_application(tx, "application")
+        analysis_plan_store.lock_application(tx, "application", "user")
     foreign = SqlAlchemyTransactionManager(database_engine)
     with foreign.write() as tx:
         with pytest.raises(TypeError, match="another transaction manager"):
-            analysis_plan_store.lock_application(tx, "application")
+            analysis_plan_store.lock_application(tx, "application", "user")
 
 
 def _create_application(
@@ -112,9 +113,11 @@ def _create_application(
     recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
 
     def insert_records(transaction) -> None:
+        user_id = _one_user_id(transactions, transaction)
         application_store.insert_application(
             transaction,
             application_id=application_id,
+            user_id=user_id,
             company=company,
             target_role=target_role,
             notes="",
@@ -140,17 +143,38 @@ def _create_application(
     return application_id, digest
 
 
+def _one_user_id(transactions, tx) -> str:
+    connection = transactions.connection_for(tx)
+    user_id = connection.execute(select(users.c.id)).scalar_one_or_none()
+    if user_id is not None:
+        return user_id
+    connection = transactions.connection_for(tx, access="write")
+    user_id = new_id()
+    connection.execute(
+        insert(users).values(
+            id=user_id,
+            email="persistence@example.com",
+            password_hash="test-only-hash",
+            created_at=utc_now(),
+        )
+    )
+    return user_id
+
+
 def test_non_3_analysis_documents_are_rejected_without_an_adapter() -> None:
     for document in ({"analysis_version": "2.0"}, {}):
         with pytest.raises(UnknownRecord, match="only 3.0 can be read"):
             _analysis_record({"id": "historical-analysis", "structured_json": document})
 
 
-def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
+def test_user_settings_schema_rejects_invalid_values(
     database_engine,
 ) -> None:
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    with transactions.write() as tx:
+        user_id = _one_user_id(transactions, tx)
     valid = {
-        "singleton_id": 1,
+        "user_id": user_id,
         "edit_version": 1,
         "auto_generate_when_review_not_required": False,
         "default_ai_model": "gpt-5.6-terra",
@@ -161,7 +185,6 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
         "updated_at": "2026-01-01T00:00:00+00:00",
     }
     invalid_values = (
-        {**valid, "singleton_id": 2},
         {**valid, "edit_version": 0},
         {**valid, "default_ai_model": "arbitrary-model"},
         {**valid, "default_reasoning_effort": "maximum"},
@@ -169,21 +192,22 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
         {**valid, "ui_text_size": "huge"},
         {**valid, "ui_theme": "sepia"},
     )
-    transactions = SqlAlchemyTransactionManager(database_engine)
     for values in invalid_values:
         with pytest.raises(IntegrityError):
             with transactions.write() as tx:
                 connection = transactions.connection_for(tx, access="write")
-                connection.execute(insert(app_settings).values(**values))
+                connection.execute(insert(user_settings).values(**values))
 
 
-def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic(
+def test_user_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic(
     database_engine, monkeypatch
 ) -> None:
     transactions = SqlAlchemyTransactionManager(database_engine)
     settings = SqlAlchemySettingsStore(transactions)
+    with transactions.write() as tx:
+        user_id = _one_user_id(transactions, tx)
     with transactions.read() as tx:
-        stored = settings.settings(tx)
+        stored = settings.settings(tx, user_id)
     assert stored.model_dump(mode="python") == {
         "edit_version": 0,
         "auto_generate_when_review_not_required": False,
@@ -195,11 +219,12 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
         "updated_at": None,
     }
     with database_engine.connect() as connection:
-        assert connection.execute(select(func.count()).select_from(app_settings)).scalar_one() == 0
+        assert connection.execute(select(func.count()).select_from(user_settings)).scalar_one() == 0
 
     with transactions.write() as tx:
         first = settings.update_settings(
             tx,
+            user_id,
             0,
             UpdateSettings(
                 auto_generate_when_review_not_required=True,
@@ -212,11 +237,14 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
         )
     assert first.edit_version == 1
     assert first.ui_density == "compact"
+    with database_engine.connect() as connection:
+        assert connection.execute(select(user_settings.c.user_id)).scalar_one() == user_id
 
     with pytest.raises(StateConflict, match="changed from version 0 to 1"):
         with transactions.write() as tx:
             settings.update_settings(
                 tx,
+                user_id,
                 0,
                 UpdateSettings(
                     auto_generate_when_review_not_required=False,
@@ -228,7 +256,7 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
                 ),
             )
     with transactions.read() as tx:
-        assert settings.settings(tx) == first
+        assert settings.settings(tx, user_id) == first
 
     def refuse_post_commit_reread() -> None:
         raise AssertionError("an update response must describe its own committed write")
@@ -237,6 +265,7 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
     with transactions.write() as tx:
         second = settings.update_settings(
             tx,
+            user_id,
             1,
             UpdateSettings(
                 auto_generate_when_review_not_required=False,
@@ -250,7 +279,7 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
     assert second.edit_version == 2
     verification = SqlAlchemySettingsStore(transactions)
     with transactions.read() as tx:
-        assert verification.settings(tx) == second
+        assert verification.settings(tx, user_id) == second
 
 
 def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> None:
@@ -288,6 +317,8 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
     app_id, job_text_hash = _create_application(
         transactions, company="Constraint Matrix", target_role="Developer", text="Python role"
     )
+    with transactions.read() as tx:
+        user_id = _one_user_id(transactions, tx)
     recruitment = SqlAlchemyRecruitmentRepository(transactions)
     submission_store = SqlAlchemyDocumentSubmissionStore(transactions)
 
@@ -340,7 +371,9 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
     with transactions.read() as tx:
         assert len(submission_store.submissions(tx, app_id)) == 2
         assert (
-            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)["current_status"]
+            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id, user_id)[
+                "current_status"
+            ]
             == "saved"
         )
 
@@ -351,6 +384,7 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
             SqlAlchemyApplicationStore(transactions).update_job_text(
                 tx,
                 app_id,
+                user_id,
                 job_text="Edited role",
                 job_text_hash=sha256_text("Edited role"),
                 job_normalized_hash=sha256_text(normalized_text("Edited role")),
@@ -399,7 +433,12 @@ def test_connection_policy_transaction_scope_and_foreign_keys(database_engine) -
             tx=tx,
         )
     with transactions.read() as tx:
-        assert application_store.get_application(tx, app_id)["company"] == "Committed"
+        user_id = _one_user_id(transactions, tx)
+        assert application_store.get_application(tx, app_id, user_id)["company"] == "Committed"
+        with pytest.raises(UnknownRecord):
+            application_store.get_application(tx, app_id, new_id())
+        with pytest.raises(UnknownRecord):
+            SqlAlchemyApplicationProjectionReader(transactions).application(tx, app_id, new_id())
 
     with pytest.raises(RuntimeError, match="force rollback"):
         with transactions.write() as tx:
@@ -413,7 +452,7 @@ def test_connection_policy_transaction_scope_and_foreign_keys(database_engine) -
             raise RuntimeError("force rollback")
     with pytest.raises(UnknownRecord):
         with transactions.read() as tx:
-            application_store.get_application(tx, rolled_back_id)
+            application_store.get_application(tx, rolled_back_id, user_id)
 
 
 def test_concurrent_writers_do_not_silently_overwrite(database_engine) -> None:
@@ -458,7 +497,8 @@ def test_concurrent_writers_do_not_silently_overwrite(database_engine) -> None:
     assert len(results) + len(failures) == 1
     applications_reader = SqlAlchemyApplicationProjectionReader(transactions)
     with transactions.read() as tx:
-        assert applications_reader.applications(tx)[0]["notes"] in {"first", "second"}
+        user_id = _one_user_id(transactions, tx)
+        assert applications_reader.applications(tx, user_id)[0]["notes"] in {"first", "second"}
 
 
 def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
@@ -649,7 +689,8 @@ def test_immutability_triggers_refuse_real_repository_writes(
         text="immutable application source",
     )
     with transaction_manager.read() as tx:
-        application_id = application_projection_reader.applications(tx)[0]["id"]
+        user_id = _one_user_id(transaction_manager, tx)
+        application_id = application_projection_reader.applications(tx, user_id)[0]["id"]
     transactions = transaction_manager
     external_submission_id = new_id()
     with transactions.write() as tx:

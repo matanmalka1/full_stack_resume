@@ -12,7 +12,7 @@ from __future__ import annotations
 import inspect
 
 import pytest
-from helpers import seed_document, seed_draft, services_transactions, stored_document
+from helpers import actor_of, seed_document, seed_draft, services_transactions, stored_document
 
 from cv_engine.application.errors import DOCUMENT_CHANGED, StateConflict
 from cv_engine.application.ports.documents import DocumentBody, DocumentStore, RenderedFiles
@@ -78,18 +78,19 @@ def test_first_analysis_and_document_commit_together_or_not_at_all(
     services, monkeypatch, database_engine
 ):
     """§13 atomicity moved from the obsolete analysis/selection-plan HTTP scenario."""
-    from helpers import persisted_counts, seed_existing_analysis
+        from helpers import persisted_counts, seed_existing_analysis
 
     from cv_engine.application.commands import IngestCommand
     from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
 
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company="Atomic Analysis Co",
             target_role="Account Manager",
             job_text="Account management and portfolio growth",
             client="web",
-        )
+        ),
     )
     before = persisted_counts(database_engine)
     create_document = SqlAlchemyDocumentStore.create_document
@@ -115,9 +116,9 @@ def test_first_analysis_and_document_commit_together_or_not_at_all(
     assert document.analysis_id == result.analysis_id
     assert document.application_id == ingested.application_id
     assert document.content is None
-    assert services.queries.application_detail(ingested.application_id).preparation_state is (
-        PreparationState.READY_TO_DRAFT
-    )
+    assert services.queries.application_detail(
+        actor_of(services), ingested.application_id
+    ).preparation_state is (PreparationState.READY_TO_DRAFT)
     seed_draft(services, ingested.application_id)
     assert stored_document(services, ingested.application_id).content is not None
 
@@ -145,61 +146,71 @@ def test_application_commands_refuse_stale_hash_before_work(ready_application):
     claim = section.claims[0]
     commands = [
         lambda: services.drafts.prepare(
+            actor_of(services),
             DraftCommand(application_id=application_id, expected_document_hash=MOVED),
             operation_id="stale-draft",
         ),
         lambda: services.draft_editing.update_document(
+            actor_of(services),
             UpdateDocumentCommand(
                 application_id=application_id,
                 expected_document_hash=MOVED,
                 claim_removals=[claim.claim_id],
-            )
+            ),
         ),
         lambda: services.draft_editing.build_from_analysis(
+            actor_of(services),
             BuildFromAnalysisCommand(
                 application_id=application_id,
                 expected_document_hash=MOVED,
                 analysis_id=document.analysis_id,
-            )
+            ),
         ),
         lambda: services.analysis.apply_analysis_decisions(
+            actor_of(services),
             ApplyAnalysisDecisionsCommand(
                 application_id=application_id,
                 expected_document_hash=MOVED,
                 job_analysis_id=document.analysis_id,
                 expected_analysis_id=document.analysis_id,
-            )
+            ),
         ),
         lambda: services.draft_review.check_document(
-            CheckDocumentCommand(application_id=application_id, expected_document_hash=MOVED)
+            actor_of(services),
+            CheckDocumentCommand(application_id=application_id, expected_document_hash=MOVED),
         ),
         lambda: services.draft_review.approve_document(
+            actor_of(services),
             ApproveDocumentCommand(
                 application_id=application_id, expected_document_hash=MOVED, client="web"
-            )
+            ),
         ),
         lambda: services.drafts.prepare_section_regeneration(
+            actor_of(services),
             RegenerateSectionCommand(
                 application_id=application_id, expected_document_hash=MOVED, section=section.name
             ),
             operation_id="stale-section",
         ),
         lambda: services.drafts.prepare_claim_regeneration(
+            actor_of(services),
             RegenerateClaimCommand(
                 application_id=application_id, expected_document_hash=MOVED, claim_id=claim.claim_id
             ),
             operation_id="stale-claim",
         ),
         lambda: services.rendering.render(
-            RenderCommand(application_id=application_id, expected_document_hash=MOVED)
+            actor_of(services),
+            RenderCommand(application_id=application_id, expected_document_hash=MOVED),
         ),
         lambda: services.submission.submit_application(
+            actor_of(services),
             SubmissionCommand(
                 application_id=application_id,
                 expected_document_hash=MOVED,
                 submitted_at=utc_now(),
                 client="web",
-            )
+            ),
         ),
     ]
     for command in commands:

@@ -21,6 +21,7 @@ from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_env
 from foreground import foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
+    actor_of,
     analysis_proposal,
     composed_content,
     edit_document_claim,
@@ -80,13 +81,14 @@ INJECTIONS = [
 
 def _ingested(services, company: str, job_text: str = ACCOUNT_MANAGER_JOB):
     return services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company=company,
             target_role="Account Manager",
             job_text=job_text,
             acknowledged_duplicates=True,
             client="web",
-        )
+        ),
     )
 
 
@@ -159,6 +161,7 @@ def _analysis_operation(
     if fake_openai is not None and not fake_openai.scripts.get("propose_analysis"):
         fake_openai.script("propose_analysis", analysis_proposal())
     return services.operation_submissions.submit_analysis(
+        actor_of(services),
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_text_hash=ingested.job_text_hash,
@@ -198,6 +201,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
     ai_services, fake_openai: FakeOpenAI
 ) -> None:
     ai_services.settings.update(
+        actor_of(ai_services),
         0,
         UpdateSettings(
             auto_generate_when_review_not_required=True,
@@ -216,6 +220,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
     assert queued.reasoning_effort == "high"
 
     ai_services.settings.update(
+        actor_of(ai_services),
         1,
         UpdateSettings(
             auto_generate_when_review_not_required=False,
@@ -242,7 +247,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
     # §9 automatic generation was on when the analysis was submitted: its activation
     # queued `create_draft` for the document it created, in the same commit, with the
     # preferences of that moment rather than the ones Settings hold now.
-    detail = ai_services.queries.application_detail(ingested.application_id)
+    detail = ai_services.queries.application_detail(actor_of(ai_services), ingested.application_id)
     continued = detail.active_operation
     assert continued is not None
     assert continued.operation_type is OperationType.CREATE_DRAFT
@@ -257,7 +262,9 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
     fake_openai.script("propose_analysis", ANALYSIS)
     manual = _ingested(ai_services, "Manual Draft Co")
     _run(ai_services, _analysis_operation(ai_services, manual, model=None, fake_openai=fake_openai))
-    manual_detail = ai_services.queries.application_detail(manual.application_id)
+    manual_detail = ai_services.queries.application_detail(
+        actor_of(ai_services), manual.application_id
+    )
     assert manual_detail.document_id is not None
     assert manual_detail.active_operation is None
 
@@ -296,7 +303,9 @@ def test_draft_resume_commits_wording_its_facts_support(
     )
     if change_composite:
         changed_text = composite.text + " Consistently exceeded every quota by 400%."
-        facts = ai_services.drafts.load_knowledge().facts
+        facts = ai_services.drafts.load_knowledge(
+            actor_of(ai_services),
+        ).facts
         fake_openai.script(
             "assess_claim_support",
             ClaimSupportProposal(
@@ -340,6 +349,7 @@ def test_draft_resume_commits_wording_its_facts_support(
     )
 
     queued = ai_services.operation_submissions.submit_draft(
+        actor_of(ai_services),
         DraftCommand(
             application_id=ingested.application_id,
             expected_document_hash=stored_document(
@@ -362,7 +372,7 @@ def test_draft_resume_commits_wording_its_facts_support(
         assert withheld.text == changed_text
         assert withheld.verdict == "unsupported"
         assert (
-            ai_services.operation_lifecycle.get(completed.id).withheld_claims
+            ai_services.operation_lifecycle.get(actor_of(ai_services), completed.id).withheld_claims
             == completed.withheld_claims
         )
     else:
@@ -433,6 +443,7 @@ def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
     completed = _run(
         ai_services,
         ai_services.operation_submissions.submit_draft(
+            actor_of(ai_services),
             DraftCommand(
                 application_id=application_id, expected_document_hash=document.document_hash
             ),
@@ -442,8 +453,10 @@ def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
     )
 
     payload = fake_openai.calls_for("draft_resume")[-1].payload
-    profile = ai_services.drafts.load_knowledge().profiles.get(
-        ai_services.drafts.document_source(application_id).analysis.profile
+    profile = ai_services.drafts.load_knowledge(
+        actor_of(ai_services),
+    ).profiles.get(
+        ai_services.drafts.document_source(actor_of(ai_services), application_id).analysis.profile
     )
     budgets = {spec.name_en: spec.max_claims for spec in profile.sections}
     assert [len(section["claims"]) for section in payload["sections"]] == [
@@ -554,6 +567,7 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
         ),
     )
     queued = ai_services.operation_submissions.submit_draft(
+        actor_of(ai_services),
         DraftCommand(
             application_id=ingested.application_id,
             expected_document_hash=stored_document(
@@ -609,7 +623,7 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     assert reviewed.text == wording
     assert reviewed.claim_type == "reviewed"
     assert reviewed.review_evidence is not None
-    public = ai_services.queries.document(ingested.application_id)
+    public = ai_services.queries.document(actor_of(ai_services), ingested.application_id)
     public_reviewed = next(
         item
         for section in public.outline.sections
@@ -625,6 +639,7 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
 
 def _regenerate_section(services, ingested, analysed, working, section, claims):
     return services.operation_submissions.submit_regeneration(
+        actor_of(services),
         RegenerateSectionCommand(
             application_id=ingested.application_id,
             expected_document_hash=working.document_hash,
@@ -637,6 +652,7 @@ def _regenerate_section(services, ingested, analysed, working, section, claims):
 
 def _regenerate_claim(services, ingested, analysed, working, claim):
     return services.operation_submissions.submit_regeneration(
+        actor_of(services),
         RegenerateClaimCommand(
             application_id=ingested.application_id,
             expected_document_hash=working.document_hash,
@@ -752,6 +768,7 @@ def test_the_users_own_wording_is_reviewed_as_written_and_nothing_else(
         ),
     )
     queued = ai_services.operation_submissions.submit_regeneration(
+        actor_of(ai_services),
         RegenerateClaimCommand(
             application_id=ingested.application_id,
             expected_document_hash=working.document_hash,
@@ -852,13 +869,16 @@ def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
     assert rejected.problems == expected_problems
     assert rejected.rationale == "The supplied fact does not support the strengthened quota claim."
     assert [source.fact_id for source in rejected.sources] == claim.fact_ids
-    facts = ai_services.drafts.load_knowledge().facts
+    facts = ai_services.drafts.load_knowledge(
+        actor_of(ai_services),
+    ).facts
     for source in rejected.sources:
         assert source.meaning == facts.get(source.fact_id).meaning
         assert source.rendering == facts.rendering(source.fact_id, working.content.language)
     # A fresh lifecycle read must round-trip the stored context, not reconstruct it.
     assert (
-        ai_services.operation_lifecycle.get(completed.id).failure_reason == completed.failure_reason
+        ai_services.operation_lifecycle.get(actor_of(ai_services), completed.id).failure_reason
+        == completed.failure_reason
     )
     unchanged = stored_document(ai_services, ingested.application_id)
     assert unchanged.document_hash == working.document_hash
@@ -1109,7 +1129,7 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
 
     def prepare_then_cancel(command, *, operation_id=None, still_owned=None):
         prepared = original(command, operation_id=operation_id, still_owned=still_owned)
-        ai_services.operation_lifecycle.cancel(operation_id)
+        ai_services.operation_lifecycle.cancel(actor_of(ai_services), operation_id)
         return prepared
 
     fake_openai.script("propose_analysis", ANALYSIS)
@@ -1139,12 +1159,13 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
     def prepare_then_move_the_source(command, *, operation_id=None, still_owned=None):
         prepared = original(command, operation_id=operation_id, still_owned=still_owned)
         ai_services.applications.update_job_text(
+            actor_of(ai_services),
             UpdateJobTextCommand(
                 application_id=ingested.application_id,
                 job_text=f"{ACCOUNT_MANAGER_JOB}\nNew territory ownership.",
                 expected_job_text_hash=ingested.job_text_hash,
                 client="web",
-            )
+            ),
         )
         return prepared
 
@@ -1185,6 +1206,7 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
     ingested, analysed = _analyzed(ai_services, "Pool Co")
     fake_openai.script_draft()
     queued = ai_services.operation_submissions.submit_draft(
+        actor_of(ai_services),
         DraftCommand(
             application_id=ingested.application_id,
             expected_document_hash=stored_document(
@@ -1198,7 +1220,10 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
 
     payload = fake_openai.calls_for("draft_resume")[-1].payload
     supplied = {fact["fact_id"] for fact in payload["allowed_facts"]}
-    every_fact = {fact.fact_id for fact in ai_services.knowledge.facts().by_status()}
+    every_fact = {
+        fact.fact_id
+        for fact in ai_services.knowledge.facts(actor_of(ai_services).user_id).by_status()
+    }
     assert supplied
     assert supplied < every_fact
     # Nothing about lifecycle, provenance, or where a fact is stored.
@@ -1225,7 +1250,12 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
     # issue instead of sending it as a denominator.
     assert set(payload) == {"job_text", "candidate_facts", "overrides"}
     supplied = {fact["fact_id"] for fact in payload["candidate_facts"]}
-    canonical = {fact.fact_id for fact in ai_services.knowledge.facts().by_status("canonical")}
+    canonical = {
+        fact.fact_id
+        for fact in ai_services.knowledge.facts(actor_of(ai_services).user_id).by_status(
+            "canonical"
+        )
+    }
     assert supplied == canonical
     assert set(payload["candidate_facts"][0]) == {
         "fact_id",
@@ -1356,7 +1386,7 @@ def test_a_due_retry_is_not_started_once_the_operation_is_cancelled(
     fake_openai.scripts["propose_analysis"] = [UNDELIVERED, ANALYSIS]
 
     def cancel_while_waiting(_seconds: float) -> None:
-        ai_services.operation_lifecycle.cancel(queued.id)
+        ai_services.operation_lifecycle.cancel(actor_of(ai_services), queued.id)
 
     monkeypatch.setattr(ai_services.analysis.ai_calls, "sleeper", cancel_while_waiting)
     completed = _run(ai_services, queued)
@@ -1410,7 +1440,9 @@ def _analysis_of(completed, ai_services, transaction_manager, application_projec
         output.output_id for output in completed.outputs if output.output_type == "job_analysis"
     )
     with transaction_manager.read() as tx:
-        return application_projection_reader.analysis(tx, analysis_id)["analysis"]
+        return application_projection_reader.analysis(tx, analysis_id, completed.application_id)[
+            "analysis"
+        ]
 
 
 def test_an_override_reaches_the_provider_and_is_applied_to_the_result(
@@ -1608,7 +1640,7 @@ def test_a_retried_operation_logs_its_own_attempts_and_never_rewrites_the_first(
 
     def prepare_then_cancel(command, *, operation_id=None, still_owned=None):
         value = prepare(command, operation_id=operation_id, still_owned=still_owned)
-        ai_services.operation_lifecycle.cancel(queued.id)
+        ai_services.operation_lifecycle.cancel(actor_of(ai_services), queued.id)
         return value
 
     monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
@@ -1618,7 +1650,9 @@ def test_a_retried_operation_logs_its_own_attempts_and_never_rewrites_the_first(
     assert original["operation_id"] == queued.id
 
     monkeypatch.setattr(ai_services.analysis, "prepare", prepare)
-    retried = ai_services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
+    retried = ai_services.operation_lifecycle.retry(
+        actor_of(ai_services), queued.id, idempotency_key=new_id()
+    )
     completed = _run(ai_services, retried)
     assert completed.status.value == "succeeded", completed.safe_failure_detail
 
@@ -1629,4 +1663,4 @@ def test_a_retried_operation_logs_its_own_attempts_and_never_rewrites_the_first(
     ]
     assert logged[0] == original
     assert logged[0]["response_id"] == logged[1]["response_id"] == "resp_fake_1"
-    assert ai_services.operation_lifecycle.get(queued.id).outputs == []
+    assert ai_services.operation_lifecycle.get(actor_of(ai_services), queued.id).outputs == []

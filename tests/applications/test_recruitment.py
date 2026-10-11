@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 from api_harness import MUTATION_HEADERS
-from helpers import stored_document, stored_submissions
+from helpers import actor_of, stored_document, stored_submissions
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import SubmissionCommand
@@ -161,13 +161,17 @@ def test_an_internal_submission_records_the_exact_document_and_files(ready_appli
     )
     with pytest.raises(StateConflict) as refused:
         services.submission.submit_application(
-            command.model_copy(update={"expected_document_hash": "0" * 64})
+            actor_of(services), command.model_copy(update={"expected_document_hash": "0" * 64})
         )
     assert refused.value.code == DOCUMENT_CHANGED
     assert stored_submissions(services, application_id) == []
-    assert services.queries.application_detail(application_id).application.current_status == "saved"
+    actor = actor_of(services)
+    assert (
+        services.queries.application_detail(actor, application_id).application.current_status
+        == "saved"
+    )
 
-    result = services.submission.submit_application(command)
+    result = services.submission.submit_application(actor, command)
     assert result.submission_id
     assert result.document_hash == document.document_hash
     assert result.current_status == "applied"
@@ -187,7 +191,7 @@ def test_an_internal_submission_records_the_exact_document_and_files(ready_appli
         assert destination.read_bytes() == source.read_bytes()
         assert sha256_file(destination) == checksum == sha256_file(source)
     assert stored_document(services, application_id) == document
-    detail = services.queries.application_detail(application_id)
+    detail = services.queries.application_detail(actor, application_id)
     assert detail.allowed_recruitment_transitions == [
         "recruiter_screen",
         "interview",

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from helpers import (
+    actor_of,
     persisted_counts,
     seed_document,
     seed_draft,
@@ -42,7 +43,7 @@ from cv_engine.util import sha256_file, utc_now
 
 
 def _detail(services: Services, application_id: str):
-    return services.queries.application_detail(application_id)
+    return services.queries.application_detail(actor_of(services), application_id)
 
 
 def _draft(services: Services, application_id: str) -> str:
@@ -51,26 +52,29 @@ def _draft(services: Services, application_id: str) -> str:
 
 def _approve(services: Services, application_id: str, document_hash: str):
     return services.draft_review.approve_document(
+        actor_of(services),
         ApproveDocumentCommand(
             application_id=application_id, expected_document_hash=document_hash, client="web"
-        )
+        ),
     )
 
 
 def _render(services: Services, application_id: str, document_hash: str):
     return services.rendering.render(
-        RenderCommand(application_id=application_id, expected_document_hash=document_hash)
+        actor_of(services),
+        RenderCommand(application_id=application_id, expected_document_hash=document_hash),
     )
 
 
 def _submit(services: Services, application_id: str, document_hash: str):
     return services.submission.submit_application(
+        actor_of(services),
         SubmissionCommand(
             application_id=application_id,
             expected_document_hash=document_hash,
             submitted_at=utc_now(),
             client="web",
-        )
+        ),
     )
 
 
@@ -114,13 +118,16 @@ def test_document_journey_from_analysis_to_submission(
 
     # The preview needs no approval and writes nothing anywhere.
     before = persisted_counts(database_engine)
-    preview = services.rendering.preview_document(application_id)
+    preview = services.rendering.preview_document(actor_of(services), application_id)
     assert preview.document_hash == document_hash and preview.html
-    assert services.rendering.preview_document_pdf(application_id).pdf.startswith(b"%PDF")
+    assert services.rendering.preview_document_pdf(
+        actor_of(services), application_id
+    ).pdf.startswith(b"%PDF")
     assert persisted_counts(database_engine) == before
 
     checked = services.draft_review.check_document(
-        CheckDocumentCommand(application_id=application_id, expected_document_hash=document_hash)
+        actor_of(services),
+        CheckDocumentCommand(application_id=application_id, expected_document_hash=document_hash),
     )
     assert checked.passed and checked.content_check is ContentCheck.PASSED
     assert checked.document_hash == document_hash
@@ -147,7 +154,7 @@ def test_document_journey_from_analysis_to_submission(
     assert detail.preparation_state is PreparationState.READY
     assert detail.recommended_action == "submit"
     assert "download_pdf" in detail.available_actions
-    delivery = services.rendering.export_recruiter_pdf(application_id)
+    delivery = services.rendering.export_recruiter_pdf(actor_of(services), application_id)
     assert delivery.document_hash == document_hash and delivery.size == pdf.stat().st_size
 
     first = _submit(services, application_id, document_hash)
@@ -173,7 +180,9 @@ def test_document_journey_from_analysis_to_submission(
     assert stored_document(services, application_id) == document
     assert _detail(services, application_id).preparation_state is PreparationState.READY
 
-    reconciled = services.maintenance.reconcile()
+    reconciled = services.maintenance.reconcile(
+        actor_of(services),
+    )
     assert reconciled.problems == []
     # Each immutable Submission file; AI calls are counted apart.
     # Mutable document render attempts are not part of this inventory.
@@ -204,11 +213,12 @@ def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
     section = content.sections[0].name
 
     edited = services.draft_editing.update_document(
+        actor_of(services),
         UpdateDocumentCommand(
             application_id=application_id,
             expected_document_hash=document_hash,
             claim_additions=[ClaimAddition(section=section, text="Invented a claim nobody made.")],
-        )
+        ),
     )
     assert edited.document_hash != document_hash
     assert edited.preparation_state is PreparationState.DRAFT_IN_PROGRESS
@@ -225,7 +235,7 @@ def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
         claim_removals=edited.pending_claim_ids,
     )
     with pytest.raises(StateConflict) as conflict:
-        services.draft_editing.update_document(stale)
+        services.draft_editing.update_document(actor_of(services), stale)
     assert conflict.value.code == DOCUMENT_CHANGED
     current = stored_document(services, application_id)
     assert persisted_counts(database_engine) == before
@@ -240,7 +250,8 @@ def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
     assert detail.recommended_action is None
 
     resolved = services.draft_editing.update_document(
-        stale.model_copy(update={"expected_document_hash": edited.document_hash})
+        actor_of(services),
+        stale.model_copy(update={"expected_document_hash": edited.document_hash}),
     )
     assert resolved.content_check is ContentCheck.OUTDATED
     approved = _approve(services, application_id, resolved.document_hash)
@@ -302,13 +313,15 @@ def test_a_deleted_fact_before_drafting_blocks_nothing(services: Services) -> No
     application_id = ingested.application_id
     document = stored_document(services, application_id)
     assert document.content is None
-    profile = services.knowledge.load().profiles.get(analysis.analysis.profile)
+    profile = services.knowledge.load(actor_of(services).user_id).profiles.get(
+        analysis.analysis.profile
+    )
     pool = {fact_id for spec in profile.sections for fact_id in spec.fact_ids}
-    store = services.knowledge.facts()
+    store = services.knowledge.facts(actor_of(services).user_id)
     fact_id = next(
         fact_id for fact_id in sorted(pool) if store.get(fact_id).resume_style == "bullet"
     )
-    services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=True)
+    services.knowledge_lifecycle.delete_fact(actor_of(services), fact_id, explicitly_confirmed=True)
 
     detail = _detail(services, application_id)
     assert detail.review_reasons == []
@@ -328,7 +341,9 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     """
     application_id, document_hash = _ready(services, "Newer Co")
     ready = stored_document(services, application_id)
-    job_text_hash = services.analysis.document_source(application_id).job_text_hash
+    job_text_hash = services.analysis.document_source(
+        actor_of(services), application_id
+    ).job_text_hash
     newer = seed_existing_analysis(
         services,
         IngestedApplication(application_id=application_id, job_text_hash=job_text_hash),
@@ -347,11 +362,12 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     assert submitted.warnings == ["DOCUMENT_ON_OLDER_ANALYSIS"]
 
     rebuilt = services.draft_editing.build_from_analysis(
+        actor_of(services),
         BuildFromAnalysisCommand(
             application_id=application_id,
             analysis_id=newer.analysis_id,
             expected_document_hash=document_hash,
-        )
+        ),
     )
     assert rebuilt.preparation_state is PreparationState.READY_TO_DRAFT
     document = stored_document(services, application_id)
@@ -388,14 +404,14 @@ def test_profile_changes_warn_and_policy_changes_do_not(approved_application, pr
     setup = approved_application("Build Warnings")
     services, app_id = setup
     document = stored_document(services, app_id)
-    before = current_basis(document, services.knowledge.load())
+    before = current_basis(document, services.knowledge.load(actor_of(services).user_id))
     profile = project_root / "profiles/sales/account-manager.yaml"
     payload = json.loads(profile.read_text())
     payload["version"] = "wave2-profile-change"
     profile.write_text(json.dumps(payload))
-    knowledge = services.knowledge.load()
+    knowledge = services.knowledge.load(actor_of(services).user_id)
     assert current_basis(document, knowledge) == before
-    detail = services.queries.application_detail(app_id)
+    detail = services.queries.application_detail(actor_of(services), app_id)
     assert "PROFILE_CHANGED" in {w.code for w in detail.warnings}
     assert detail.preparation_state is PreparationState.APPROVED
     assert stored_document(services, app_id) == document
@@ -403,8 +419,8 @@ def test_profile_changes_warn_and_policy_changes_do_not(approved_application, pr
     payload = json.loads(policy.read_text())
     payload["policy_version"] = "wave2-policy-change"
     policy.write_text(json.dumps(payload))
-    assert current_basis(document, services.knowledge.load()) == before
-    detail = services.queries.application_detail(app_id)
+    assert current_basis(document, services.knowledge.load(actor_of(services).user_id)) == before
+    detail = services.queries.application_detail(actor_of(services), app_id)
     codes = {w.code for w in detail.warnings}
     assert "PROFILE_CHANGED" in codes and "POLICY_CHANGED" not in codes
     assert detail.preparation_state is PreparationState.APPROVED
@@ -415,7 +431,7 @@ def test_an_emphasis_decision_creates_an_analysis_and_keeps_manual_wording(
     drafted_application,
 ):
     """§13: Emphasis is classification, so the document and its wording stay as they are."""
-    from helpers import edit_document_claim
+        from helpers import edit_document_claim
 
     from cv_engine.application.commands import ApplyAnalysisDecisionsCommand
 
@@ -428,21 +444,22 @@ def test_an_emphasis_decision_creates_an_analysis_and_keeps_manual_wording(
         services, app_id, claim.claim_id, list(claim.fact_ids), text="Unsupported wording"
     )
     before = stored_document(services, app_id)
-    analysis = services.analysis.document_source(app_id).analysis
-    profile = services.knowledge.load().profiles.get(analysis.profile)
+    analysis = services.analysis.document_source(actor_of(services), app_id).analysis
+    profile = services.knowledge.load(actor_of(services).user_id).profiles.get(analysis.profile)
     other = next(emphasis for emphasis in profile.allowed_emphases if emphasis != analysis.emphasis)
 
     result = services.analysis.apply_analysis_decisions(
+        actor_of(services),
         ApplyAnalysisDecisionsCommand(
             application_id=app_id,
             job_analysis_id=document.analysis_id,
             expected_analysis_id=document.analysis_id,
             expected_document_hash=edited.document_hash,
             emphasis_override=other.value,
-        )
+        ),
     )
 
     assert result.analysis.emphasis is other
     assert stored_document(services, app_id) == before
-    detail = services.queries.application_detail(app_id)
+    detail = services.queries.application_detail(actor_of(services), app_id)
     assert "DOCUMENT_ON_OLDER_ANALYSIS" in {w.code for w in detail.warnings}

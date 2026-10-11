@@ -5,6 +5,7 @@ from typing import cast
 
 from sqlalchemy import func, select
 
+from cv_engine.application.actor import Actor
 from cv_engine.application.commands import (
     AnalyzeCommand,
     ApproveDocumentCommand,
@@ -23,7 +24,7 @@ from cv_engine.infrastructure.persistence.documents import (
     SqlAlchemyDocumentStore,
     SqlAlchemyDocumentSubmissionStore,
 )
-from cv_engine.infrastructure.persistence.tables import metadata
+from cv_engine.infrastructure.persistence.tables import metadata, users
 from cv_engine.runtime.composition import Services
 from cv_engine.util import utc_now
 
@@ -59,7 +60,8 @@ def seed_existing_analysis(
     The first analysis of an Application also creates its CV document, pinned to it
     with no content (§13).
     """
-    knowledge = services.analysis.load_knowledge()
+    actor = actor_of(services)
+    knowledge = services.analysis.load_knowledge(actor)
     profile_name = ProfileName(overrides.pop("profile_override", "account-manager"))
     profile = knowledge.profiles.get(profile_name)
     requirements = overrides.pop("requirements", [])
@@ -74,6 +76,7 @@ def seed_existing_analysis(
         **overrides,
     )
     return services.analysis.activate(
+        actor,
         activation_command
         or AnalyzeCommand(
             application_id=ingested.application_id,
@@ -91,7 +94,9 @@ def seed_existing_analysis(
 
 def seed_analysis_for_command(services: Services, command: AnalyzeCommand, **analysis_values):
     """Seed an existing analysis explicitly for a downstream test scenario."""
-    services.analysis.job_text_source(command.application_id, command.job_text_hash)
+    services.analysis.job_text_source(
+        actor_of(services), command.application_id, command.job_text_hash
+    )
     return seed_existing_analysis(
         services,
         command,
@@ -175,6 +180,13 @@ def services_transactions(services: Services) -> SqlAlchemyTransactionManager:
     return cast(SqlAlchemyTransactionManager, services.operation_runner.transactions)
 
 
+def actor_of(services: Services) -> Actor:
+    """Return the one provisioned test user as an application-layer Actor."""
+    with services_transactions(services).engine.connect() as connection:
+        user_id = connection.execute(select(users.c.id)).scalar_one()
+    return Actor(user_id=user_id)
+
+
 def stored_document(services: Services, application_id: str):
     transactions = services_transactions(services)
     with transactions.read() as tx:
@@ -192,13 +204,14 @@ def seed_document(
     **analysis_values,
 ):
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company=company,
             target_role=role,
             job_text=job_text,
             acknowledged_duplicates=True,
             client="web",
-        )
+        ),
     )
     return ingested, seed_existing_analysis(services, ingested, **analysis_values)
 
@@ -210,14 +223,15 @@ def composed_content(services: Services, application_id: str, chosen=None):
     whole pool. With `chosen` (section English name -> fact IDs), what the engine lays
     out once a writer kept those facts.
     """
-    source = services.drafts.document_source(application_id)
+    actor = actor_of(services)
+    source = services.drafts.document_source(actor, application_id)
     document = source.document
     return compose_content(
         application_id,
         document.analysis_id,
         source.job_text_hash,
         source.analysis,
-        services.drafts.load_knowledge(),
+        services.drafts.load_knowledge(actor),
         chosen,
     )
 
@@ -245,21 +259,23 @@ def seed_draft(services: Services, application_id: str, chosen=None):
 def validate_active_draft(services: Services, application_id: str):
     document = stored_document(services, application_id)
     return services.draft_review.check_document(
+        actor_of(services),
         CheckDocumentCommand(
             application_id=application_id,
             expected_document_hash=document.document_hash,
-        )
+        ),
     )
 
 
 def approve_active_draft(services: Services, application_id: str):
     document = stored_document(services, application_id)
     return services.draft_review.approve_document(
+        actor_of(services),
         ApproveDocumentCommand(
             application_id=application_id,
             expected_document_hash=document.document_hash,
             client="web",
-        )
+        ),
     )
 
 
@@ -312,9 +328,10 @@ def edit_document_claim(
     from cv_engine.application.commands import ClaimPatch, UpdateDocumentCommand
 
     return services.draft_editing.update_document(
+        actor_of(services),
         UpdateDocumentCommand(
             application_id=application_id,
             expected_document_hash=stored_document(services, application_id).document_hash,
             claim_edits=[ClaimPatch(claim_id=claim_id, fact_ids=fact_ids, text=text)],
-        )
+        ),
     )

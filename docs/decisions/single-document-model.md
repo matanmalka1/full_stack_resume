@@ -81,7 +81,7 @@ the numbers stay because §4–§6 below cite them.
 - `applications`: Application identity, recruitment status, soft delete.
 - `recruitment_events`: recruitment status history.
 - `fact_events`: fact lifecycle audit.
-- `app_settings`: user settings.
+- `user_settings`: settings keyed by their owning user.
 
 ## 5. SelectionPlan allocation
 

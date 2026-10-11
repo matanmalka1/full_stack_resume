@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from helpers import stored_document
+from helpers import actor_of, stored_document
 from pydantic import ValidationError
 
 from cv_engine.application.commands import UpdateDocumentCommand
@@ -27,19 +27,21 @@ def test_reorder_preserves_claims_and_exact_undo_restores_the_hash(drafted_appli
     section = next(s for s in before.content.sections if len(s.claims) > 1)
     order = [c.claim_id for c in section.claims]
     changed = services.draft_editing.update_document(
+        actor_of(services),
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=before.document_hash,
             claim_orders={section.name: list(reversed(order))},
-        )
+        ),
     )
     assert changed.document_hash != before.document_hash
     restored = services.draft_editing.update_document(
+        actor_of(services),
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=changed.document_hash,
             claim_orders={section.name: order},
-        )
+        ),
     )
     assert restored.document_hash == before.document_hash
     assert stored_document(services, app_id).content == before.content

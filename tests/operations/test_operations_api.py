@@ -8,7 +8,7 @@ report and steer those rows without becoming an execution host.
 from __future__ import annotations
 
 from api_harness import MUTATION_HEADERS
-from helpers import ACCOUNT_MANAGER_JOB
+from helpers import ACCOUNT_MANAGER_JOB, actor_of
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import AnalyzeCommand, IngestCommand
@@ -18,15 +18,17 @@ from cv_engine.application.operations import OperationFailureCode
 def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-analysis"):
     """One real queued analysis Operation, submitted through the application service."""
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company=company,
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             acknowledged_duplicates=True,
             client="web",
-        )
+        ),
     )
     return services.operation_submissions.submit_analysis(
+        actor_of(services),
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_text_hash=ingested.job_text_hash,
@@ -87,7 +89,10 @@ def test_cancel_and_retry_steer_the_durable_row_without_executing_it(
     assert retried.json()["available_actions"] == ["cancel"]
     assert followed.status_code == 200
     assert followed.json() == retried.json()
-    assert services.operation_lifecycle.get(operation.id).status.value == "cancelled"
+    assert (
+        services.operation_lifecycle.get(actor_of(services), operation.id).status.value
+        == "cancelled"
+    )
     assert services.operation_runner.operation(operation.id).payload == original_record.payload
 
     replayed = api.post(f"{API_PREFIX}/operations/{operation.id}/retry", headers=headers)

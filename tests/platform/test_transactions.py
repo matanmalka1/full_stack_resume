@@ -10,13 +10,14 @@ from cv_engine.application.transactions import (
 )
 from cv_engine.infrastructure.payloads import PayloadStore
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
-from cv_engine.infrastructure.persistence.tables import applications
-from cv_engine.util import new_id
+from cv_engine.infrastructure.persistence.tables import applications, users
+from cv_engine.util import new_id, utc_now
 
 
-def _application(application_id: str) -> dict[str, str]:
+def _application(application_id: str, user_id: str) -> dict[str, str]:
     return {
         "id": application_id,
+        "user_id": user_id,
         "company": "Transaction Co",
         "target_role": "Engineer",
         "current_status": "saved",
@@ -35,9 +36,18 @@ def test_write_scope_commits_once_rolls_back_on_exception_and_closes(database_en
 
     committed_id = new_id()
     rolled_back_id = new_id()
+    user_id = new_id()
     with transactions.write() as committed:
         connection = transactions.connection_for(committed, access="write")
-        connection.execute(insert(applications).values(**_application(committed_id)))
+        connection.execute(
+            insert(users).values(
+                id=user_id,
+                email="transactions@example.com",
+                password_hash="test-only-hash",
+                created_at=utc_now(),
+            )
+        )
+        connection.execute(insert(applications).values(**_application(committed_id, user_id)))
         assert committed.active
 
     assert not committed.active
@@ -46,7 +56,7 @@ def test_write_scope_commits_once_rolls_back_on_exception_and_closes(database_en
     with pytest.raises(RuntimeError, match="stop"):
         with transactions.write() as rolled_back:
             transactions.connection_for(rolled_back, access="write").execute(
-                insert(applications).values(**_application(rolled_back_id))
+                insert(applications).values(**_application(rolled_back_id, user_id))
             )
             raise RuntimeError("stop")
 

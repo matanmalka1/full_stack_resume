@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from helpers import actor_of
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT
 from cv_engine.application.commands import (
@@ -36,18 +37,20 @@ def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
     edit writes nothing; a failed audit insert rolls the edit back; a Submission
     locks the text; and a failed initial event rolls back the whole ingest.
     """
+    actor = actor_of(services)
     initial_text = "עברית  English\r\n<script>x</script>\n"
     created = services.applications.ingest(
+        actor,
         IngestCommand(
             company="Job Text Co",
             target_role="Developer",
             job_text=initial_text,
             source_url="https://jobs.example/first",
             client="web",
-        )
+        ),
     )
     assert created.job_text_hash == sha256_text(initial_text)
-    detail = services.queries.application_detail(created.application_id)
+    detail = services.queries.application_detail(actor, created.application_id)
     assert detail.job_posting.job_text == initial_text
     assert detail.job_posting.source_url == "https://jobs.example/first"
     assert detail.job_posting.locked is False
@@ -58,12 +61,13 @@ def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
 
     def edit(text: str, expected: str, **values) -> UpdatedJobText:
         return services.applications.update_job_text(
+            actor,
             UpdateJobTextCommand(
                 application_id=created.application_id,
                 job_text=text,
                 expected_job_text_hash=expected,
                 **{"client": "web", **values},
-            )
+            ),
         )
 
     with pytest.raises(StateConflict, match="expected_job_text_hash"):
@@ -76,7 +80,7 @@ def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
         client="worker",
     )
     assert replacement.job_text_hash == sha256_text(replacement_text)
-    detail = services.queries.application_detail(created.application_id)
+    detail = services.queries.application_detail(actor, created.application_id)
     assert detail.job_posting.job_text == replacement_text
     assert detail.job_posting.source_url == "https://jobs.example/second"
     assert detail.job_posting.job_text_updated_at == replacement.job_text_updated_at
@@ -107,27 +111,29 @@ def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
         with pytest.raises(InfrastructureFailure, match="injected audit failure"):
             edit("Rolled back", replacement.job_text_hash)
     assert (
-        services.queries.application_detail(created.application_id).job_posting.job_text
+        services.queries.application_detail(actor, created.application_id).job_posting.job_text
         == replacement_text
     )
     assert audit_count() == 1
 
     services.submission.record_external_submission(
+        actor,
         ExternalSubmissionCommand(
             application_id=created.application_id, submitted_at=utc_now(), client="web"
-        )
+        ),
     )
-    assert services.queries.application_detail(created.application_id).job_posting.locked
+    assert services.queries.application_detail(actor, created.application_id).job_posting.locked
     with pytest.raises(StateConflict, match="locked"):
         edit("After submission", replacement.job_text_hash)
     with pytest.raises(UnknownRecord):
         services.applications.update_job_text(
+            actor,
             UpdateJobTextCommand(
                 application_id=new_id(),
                 job_text="Nobody's",
                 expected_job_text_hash=replacement.job_text_hash,
                 client="web",
-            )
+            ),
         )
 
     def refuse_initial_event(*args, **kwargs):
@@ -141,15 +147,16 @@ def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
         )
         with pytest.raises(RuntimeError, match="event refused"):
             services.applications.ingest(
+                actor,
                 IngestCommand(
                     company="Atomic Intake",
                     target_role="Developer",
                     job_text="Python and PostgreSQL",
                     client="web",
-                )
+                ),
             )
     with transaction_manager.read() as tx:
-        rows = application_projection_reader.applications(tx)
+        rows = application_projection_reader.applications(tx, actor.user_id)
     assert all(row["company"] != "Atomic Intake" for row in rows)
 
 
