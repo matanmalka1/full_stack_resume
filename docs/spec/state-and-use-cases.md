@@ -213,7 +213,8 @@ NEXT_ACTION_OVERDUE
   Application's current one (`job_text_hash` differs).
 - `PROFILE_CHANGED`: `built_with` differs from the current Profile version.
 - `FACT_SUPERSEDED`: a canonical fact `replaces` a dependent fact. It never rewrites a
-  Submission.
+  Submission. *Designed, not built:* removed with `edit_fact` (§17), which corrects a
+  fact in place; the dependent document's basis moves instead.
 - `NEXT_ACTION_OVERDUE`: `next_action_date` is before today and the recruitment status
   is not `accepted`, `rejected`, `withdrawn`, or `closed`.
 
@@ -756,6 +757,7 @@ Creates a pending fact with a generated ID (a client-supplied ID is refused). In
 source file, meaning, renderings (`en` required, `he` optional), tags, provenance,
 `resume_style`, optional effective dates, optional `replaces`, reason. With `replaces`
 naming a canonical fact it is a pending correction; the original is not changed.
+*Designed, not built:* `replaces` is no longer accepted; a correction is `edit_fact`.
 
 ### `confirm_fact(fact_id)`
 
@@ -763,7 +765,22 @@ Moves exactly `pending -> canonical`. It needs an explicit `confirm: true` attes
 in the request; `false` is refused, not ignored. Any other source status is refused.
 It sets `confirmed_at` when the fact has none and advances the source file's version.
 Confirming a replacement makes the original superseded for warning purposes (§8); it
-rewrites neither the original nor any Submission.
+rewrites neither the original nor any Submission. *Designed, not built:* with
+`edit_fact` there are no replacements, and confirming affects only the fact itself.
+
+### `edit_fact(fact_id, changes, confirm)`
+
+*Designed, not built* (`../decisions/editable-facts.md`). Changes a fact's content in
+place: any of meaning, renderings (`en` stays required), tags, provenance, effective
+dates, `resume_style`, and link target. `fact_id` and the fact's source are not
+editable. A `pending` fact stays `pending`. A `canonical` fact needs `confirm: true` —
+`false` is refused, not ignored — stays `canonical`, and its `confirmed_at` becomes the
+edit's date. A `deleted` fact is refused. An edit that changes nothing is refused.
+
+It appends one `fact_edited` event with the fact as it now is and writes no document and
+no Submission. A dependent document's basis changes: it is no longer approved or Ready,
+and the content check refuses claim wording whose review evidence names the earlier
+content until that wording is reviewed again or regenerated.
 
 ### `delete_fact(fact_id)`
 
@@ -806,7 +823,9 @@ become a fact. The claim is not authorized until the fact completes its lifecycl
 is in its section's pool.
 
 Canonical correction always creates a replacement fact carrying `replaces`; it never
-mutates the old fact. `delete_fact` is the only removal. Archive, withdrawal,
+mutates the old fact. *Designed, not built:* correction is `edit_fact`, in place, and
+`replaces` is history only — kept on facts that carry it, set by no command.
+`delete_fact` is the only removal. Archive, withdrawal,
 retirement, and known-incorrect transitions do not exist; a client must not present
 them.
 

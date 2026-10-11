@@ -757,11 +757,13 @@ templates, `config/`, `ai/`, `rendering/`) stays in files.
   `ordinal` (order within `source`, kept from the file on import, appended for new
   facts), content — `meaning`, `renderings` (`en` required, `he` optional),
   `tags`, `provenance`, `effective_dates`, `resume_style`, `link_target` — and lifecycle
-  — `replaces` (a `fact_id` of the same user, enforced by a composite foreign key),
-  `confirmed_at`, `created_at`, `updated_at`.
-  Content columns never change once written: a correction is a new fact that
-  `replaces` the old one (product-spec.md §17). A guard trigger permits only `status`,
-  `confirmed_at`, and `updated_at` to change.
+  — `replaces` (history only: the `fact_id` a fact was recorded as correcting, kept as
+  imported, with no foreign key, since imported facts may name v1 ids that exist in no
+  source), `confirmed_at`, `created_at`, `updated_at`.
+  A fact is edited in place (`../decisions/editable-facts.md`), so content and status
+  change through commands; a guard trigger refuses a change to its identity — `id`,
+  `user_id`, `fact_id`, `source`, `ordinal`, `created_at` — and refuses every delete,
+  since deletion is a status.
 - **`fact_events`** (immutable, existing): gains `user_id`, `NOT NULL` for every new
   row. It stays the lifecycle history, with the fact as it was in `fact_json`.
 - **`candidate_contexts`** (mutable): `user_id` is the primary key; `name_fact_id`,

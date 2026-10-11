@@ -168,7 +168,8 @@ so no step before it can expose one user's data to another.
    the screen ship together so `main` never has one without the other.
 4. **Per-user Knowledge:** `facts`, `candidate_contexts`, `profile_bindings`
    (architecture §18.2); `import-knowledge`; the journal retired; the Profile
-   template/binding split. The riskiest step for fact semantics.
+   template/binding split. The riskiest step for fact semantics. `edit_fact` follows it
+   (`editable-facts.md` §3).
 5. **Ownership and isolation:** `applications.user_id` and `user_settings` with the
    existing installation assigned to its one user (§4); every service resolving through
    the `Actor` (architecture §18.3), every list, count, and duplicate check scoped; the
