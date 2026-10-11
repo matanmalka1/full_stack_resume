@@ -128,9 +128,11 @@ one user. For an existing installation, in delivery order (§5):
    `create-user --email <real address>`, which prompts for a password. Once enforcement
    ships (§5, step 3), every route but sign-in and health needs a session.
 2. **Knowledge step:** the revision creates the per-user Knowledge tables. The operator
-   runs `import-knowledge --user <id> --from base/`, which reads `base/*.json`,
+   runs `import-knowledge --email <address>`, which reads `base/*.json`,
    `base/candidate.json`, and the candidate-specific parts of `profiles/*.yaml` into that
-   user's Knowledge in one transaction, and refuses when the user already has facts.
+   user's Knowledge in one transaction, and refuses when the user already has Knowledge.
+   `fact_events` ownership below is part of the switch to database Knowledge, not of the
+   import.
    Existing semantic fact IDs (`common.contact.email`, …) keep their exact spelling for
    that user, so every existing document, Submission, and fact event still resolves.
    `fact_events` rows get their owner through a *permitted transition*: the guard allows

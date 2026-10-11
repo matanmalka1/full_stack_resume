@@ -262,7 +262,7 @@ def test_cli_creates_the_user_from_stdin_or_a_twice_entered_prompt(services, api
     out, err = io.StringIO(), io.StringIO()
     code = admin(
         ["create-user", "--email", EMAIL, "--password-stdin"],
-        accounts=services.accounts,
+        services=services,
         stdin=io.StringIO(PASSWORD + "\n"),
         out=out,
         err=err,
@@ -275,7 +275,7 @@ def test_cli_creates_the_user_from_stdin_or_a_twice_entered_prompt(services, api
     answers = iter([OTHER_PASSWORD, OTHER_PASSWORD])
     code = admin(
         ["set-password", "--email", EMAIL],
-        accounts=services.accounts,
+        services=services,
         prompt=lambda _label: next(answers),
         out=io.StringIO(),
         err=io.StringIO(),
@@ -289,7 +289,7 @@ def test_cli_refuses_a_mismatched_prompt_and_a_second_user(services) -> None:
     err = io.StringIO()
     code = admin(
         ["create-user", "--email", EMAIL],
-        accounts=services.accounts,
+        services=services,
         prompt=lambda _label: next(answers),
         out=io.StringIO(),
         err=err,
@@ -301,7 +301,7 @@ def test_cli_refuses_a_mismatched_prompt_and_a_second_user(services) -> None:
     err = io.StringIO()
     code = admin(
         ["create-user", "--email", "second@example.com", "--password-stdin"],
-        accounts=services.accounts,
+        services=services,
         stdin=io.StringIO(PASSWORD),
         out=io.StringIO(),
         err=err,

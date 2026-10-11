@@ -1,4 +1,9 @@
-"""Knowledge/facts tables: fact lifecycle audit and the mutation journal."""
+"""Knowledge/facts tables: fact lifecycle audit, the mutation journal, and per-user Knowledge.
+
+`facts`, `candidate_contexts` and `profile_bindings` are the per-user Knowledge of
+architecture §18.2. They are written by `import-knowledge`; the application still reads
+Knowledge from files until the step that switches it over.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,7 @@ from sqlalchemy import (
     Column,
     ForeignKey,
     Index,
+    Integer,
     String,
     Table,
     Text,
@@ -15,7 +21,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-from ._helpers import IsoTimestamp, sequence_column
+from ....domain.knowledge_import import FACT_SOURCES
+from ._helpers import IsoTimestamp, sequence_column, sql_values
 from ._metadata import metadata
 
 fact_events = Table(
@@ -90,4 +97,77 @@ Index(
     knowledge_mutation_journal.c.state,
     knowledge_mutation_journal.c.prepared_at,
     knowledge_mutation_journal.c.id,
+)
+
+
+FACT_STATUSES = ("pending", "canonical", "deleted")
+RESUME_STYLES = ("paragraph", "heading", "date", "bullet", "item", "contact")
+
+#: One row per fact of a user, at its current status and content. A fact is edited in
+#: place (docs/decisions/editable-facts.md), so a trigger guards only its identity - `id`,
+#: `user_id`, `fact_id`, `source`, `ordinal`, `created_at` - and refuses every delete:
+#: deletion is a status.
+facts = Table(
+    "facts",
+    metadata,
+    Column("id", UUID(as_uuid=False), primary_key=True),
+    Column("user_id", UUID(as_uuid=False), ForeignKey("users.id"), nullable=False),
+    Column("fact_id", String, nullable=False),
+    Column("status", Text, nullable=False),
+    Column("source", Text, nullable=False),
+    Column("ordinal", Integer, nullable=False),
+    Column("meaning", Text, nullable=False),
+    Column("renderings", JSONB, nullable=False),
+    Column("tags", JSONB, nullable=False),
+    Column("provenance", Text, nullable=False),
+    Column("effective_dates", Text),
+    Column("resume_style", Text, nullable=False),
+    Column("link_target", Text),
+    # History only: the fact this one was recorded as correcting, as imported. No foreign
+    # key: imported facts may name v1 ids that exist in no fact source.
+    Column("replaces", String),
+    # As the fact carried it (a date string, or none): never re-derived.
+    Column("confirmed_at", Text),
+    Column("created_at", IsoTimestamp(), nullable=False),
+    Column("updated_at", IsoTimestamp(), nullable=False),
+    UniqueConstraint("user_id", "fact_id"),
+    UniqueConstraint("user_id", "source", "ordinal"),
+    CheckConstraint(f"status IN ({sql_values(FACT_STATUSES)})", name="status"),
+    CheckConstraint(f"source IN ({sql_values(FACT_SOURCES)})", name="source"),
+    CheckConstraint(f"resume_style IN ({sql_values(RESUME_STYLES)})", name="resume_style"),
+    CheckConstraint("ordinal > 0", name="ordinal_positive"),
+)
+
+#: The declared candidate context, one per user; what is resolved from facts is not stored.
+candidate_contexts = Table(
+    "candidate_contexts",
+    metadata,
+    Column("user_id", UUID(as_uuid=False), ForeignKey("users.id"), primary_key=True),
+    Column("context_version", Text, nullable=False),
+    Column("name_fact_id", String, nullable=False),
+    Column("filename_name", Text),
+    Column("filename_language", Text, nullable=False),
+    Column("locale", Text, nullable=False),
+    Column("timezone", Text, nullable=False),
+    Column("contact_fact_ids", JSONB, nullable=False),
+    Column("track_contact_fact_ids", JSONB, nullable=False),
+    Column("link_schemes", JSONB, nullable=False),
+    # Advanced by every fact mutation once Knowledge lives here (architecture §18.2).
+    Column("fact_store_version", Integer, nullable=False),
+    Column("updated_at", IsoTimestamp(), nullable=False),
+    CheckConstraint("filename_language IN ('en', 'he')", name="filename_language"),
+    CheckConstraint("fact_store_version >= 0", name="fact_store_version"),
+)
+
+#: A user's part of one Profile template: section pools and pins, safe headlines, and
+#: omitted roles (`domain.knowledge_import.split_profile`).
+profile_bindings = Table(
+    "profile_bindings",
+    metadata,
+    Column("user_id", UUID(as_uuid=False), ForeignKey("users.id"), primary_key=True),
+    Column("profile_id", Text, primary_key=True),
+    Column("binding", JSONB, nullable=False),
+    Column("binding_version", Integer, nullable=False),
+    Column("updated_at", IsoTimestamp(), nullable=False),
+    CheckConstraint("binding_version > 0", name="binding_version"),
 )

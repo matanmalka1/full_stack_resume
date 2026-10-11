@@ -715,9 +715,11 @@ The product version does not substitute for any of them.
 ## 18. Identity, sessions, and isolation
 
 *Partly built.* Built: `users` and `user_sessions` (§18.1), sessions and passwords
-(§18.4), `create-user` and `set-password` (§18.7), and the session requirement on every
-route but sign-in and health (`../decisions/multi-user-accounts.md` §5, steps 2 and 3).
-Everything else here is designed, not built. Product rules: product-spec.md §22. Commands and codes:
+(§18.4), `create-user`, `set-password` and `import-knowledge` (§18.7), the session
+requirement on every route but sign-in and health, and the per-user Knowledge tables of
+§18.2, which `import-knowledge` writes but the application does not read yet
+(`../decisions/multi-user-accounts.md` §5, steps 2 to 4). Everything else here is
+designed, not built. Product rules: product-spec.md §22. Commands and codes:
 state-and-use-cases.md §23. Why, the migration of an existing installation, and the
 delivery order: `../decisions/multi-user-accounts.md`.
 
@@ -888,7 +890,13 @@ Passwords are read from a prompt that does not echo, entered twice, or with
 - `create-user --email` creates a user. A second user is refused by
   `users_single_user` (§18.1) until isolation is complete.
 - `set-password --email` sets a new password and revokes every session.
-- `import-knowledge --user --from <dir>` reads facts, CandidateContext, and Profile
-  bindings in the `base/` format into one user's Knowledge (§18.2) in one transaction,
-  and refuses when that user already has facts.
+- `import-knowledge --email [--from <dir>]` reads the Knowledge files under `<dir>` (a
+  directory holding `base/` and `profiles/`; the installation itself by default) through
+  the application's own validated loader, and writes facts, CandidateContext, and
+  Profile bindings into that user's Knowledge (§18.2) in one transaction. It refuses an
+  unknown user, a user who already has Knowledge, and an unresolved Knowledge mutation.
+  Before committing it reads the rows back and rebuilds every fact, Profile, and the
+  candidate context; anything that differs from what it read refuses the import, and
+  nothing is written. Per-file `source_version`s are not imported: `fact_store_version`
+  starts at 0 and replaces them.
 - `reconcile` and `inspect-orphans` (state-and-use-cases.md §19b).
