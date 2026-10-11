@@ -9,6 +9,7 @@ the refusals and the database guards around it.
 from __future__ import annotations
 
 import io
+import json
 
 import pytest
 from fixtures.knowledge import SOURCE_ROOT
@@ -117,6 +118,60 @@ def test_import_runs_once_and_only_for_a_known_user(
         )
 
     assert _counts(database_engine) == before
+
+
+class _BlindRepository(SqlAlchemyUserKnowledgeRepository):
+    """Sees no Knowledge, as a concurrent import that has not committed yet would."""
+
+    def has_knowledge(self, tx, user_id):  # noqa: ANN001
+        return False
+
+
+def test_a_concurrent_second_import_is_refused_by_the_unique_keys(
+    user, project_root, transaction_manager, database_engine
+) -> None:
+    importer = KnowledgeImportService(
+        transaction_manager,
+        SqlAlchemyAccountRepository(transaction_manager),
+        SqlAlchemyKnowledgeLifecycleRepository(transaction_manager),
+        _BlindRepository(transaction_manager),
+    )
+    importer.import_knowledge(EMAIL, FileKnowledge(project_root))
+    before = _counts(database_engine)
+
+    with pytest.raises(StateConflict, match="runs once"):
+        importer.import_knowledge(EMAIL, FileKnowledge(project_root))
+
+    assert _counts(database_engine) == before
+
+
+class _ChangingKnowledge(FileKnowledge):
+    """Files edited by someone else between the import's first read and its commit."""
+
+    def __init__(self, root):  # noqa: ANN001
+        super().__init__(root)
+        self._root = root
+        self._loads = 0
+
+    def load(self):  # noqa: ANN201
+        self._loads += 1
+        if self._loads == 2:
+            path = self._root / "base/common.json"
+            source = json.loads(path.read_text(encoding="utf-8"))
+            source["facts"][0]["meaning"] += " (edited meanwhile)"
+            path.write_text(json.dumps(source, ensure_ascii=False), encoding="utf-8")
+        return super().load()
+
+
+def test_files_that_change_during_the_import_commit_nothing(
+    services, user, project_root, database_engine
+) -> None:
+    source = _ChangingKnowledge(project_root)
+
+    with pytest.raises(KnowledgeRejected, match="changed while it was being imported"):
+        services.knowledge_import.import_knowledge(EMAIL, source)
+
+    assert _counts(database_engine) == (0, 0, 0)
 
 
 def test_import_refuses_while_a_knowledge_mutation_is_unresolved(

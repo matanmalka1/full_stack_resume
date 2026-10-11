@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import exists, insert, select
+from sqlalchemy import Connection, exists, insert, select
+from sqlalchemy.exc import IntegrityError
 
+from ...application.errors import StateConflict
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import new_id
 from .connection import SqlAlchemyTransactionManager
@@ -62,6 +64,24 @@ class SqlAlchemyUserKnowledgeRepository:
         imported_at: str,
     ) -> None:
         connection = self._transactions.connection_for(tx, access="write")
+        try:
+            self._insert(connection, user_id, facts, candidate, bindings, imported_at)
+        except IntegrityError as error:
+            # A concurrent import got there first: past `has_knowledge`, the unique
+            # keys are what make the import run once.
+            if getattr(error.orig, "sqlstate", None) != "23505":
+                raise
+            raise StateConflict("This user already has Knowledge; import runs once.") from None
+
+    @staticmethod
+    def _insert(
+        connection: Connection,
+        user_id: str,
+        facts: list[dict[str, Any]],
+        candidate: dict[str, Any],
+        bindings: dict[str, dict[str, Any]],
+        imported_at: str,
+    ) -> None:
         if facts:
             connection.execute(
                 insert(facts_table),

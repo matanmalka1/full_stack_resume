@@ -58,16 +58,9 @@ class KnowledgeImportService:
             raise PreconditionFailed(str(error)) from None
         with self.transactions.read() as tx:
             user = self.accounts.user_by_email(tx, normalized)
-            unresolved = self.journal.prepared_mutations(tx) + self.journal.quarantined_mutations(
-                tx
-            )
+            self._refuse_unresolved_mutation(tx)
         if user is None:
             raise UnknownRecord("No user has this email.")
-        if unresolved:
-            # The files may hold content the lifecycle trail does not describe.
-            raise KnowledgeRejected(
-                "Knowledge has an unresolved mutation; resolve it before importing."
-            )
         try:
             knowledge = source.load()
             bindings = {
@@ -80,6 +73,8 @@ class KnowledgeImportService:
         candidate = candidate_payload(knowledge.candidate)
 
         with self.transactions.write() as tx:
+            # Again where the rows are written: a mutation may have begun since the read.
+            self._refuse_unresolved_mutation(tx)
             if self.repo.has_knowledge(tx, user.id):
                 raise StateConflict("This user already has Knowledge; import runs once.")
             self.repo.insert_knowledge(
@@ -96,7 +91,25 @@ class KnowledgeImportService:
                 knowledge,
                 templates={profile_id: template for profile_id, (template, _) in bindings.items()},
             )
+            # Nothing serializes a file mutation against the import, so the files are read
+            # again before committing: rows describing files that have since changed are
+            # refused, not committed.
+            try:
+                unchanged = source.load().versions() == knowledge.versions()
+            except ValueError:
+                unchanged = False
+            if not unchanged:
+                raise KnowledgeRejected(
+                    "Knowledge changed while it was being imported; run the import again."
+                )
         return KnowledgeImportResult(email=user.email, facts=len(rows), profiles=len(bindings))
+
+    def _refuse_unresolved_mutation(self, tx: ReadTransaction) -> None:
+        if self.journal.prepared_mutations(tx) or self.journal.quarantined_mutations(tx):
+            # The files may hold content the lifecycle trail does not describe.
+            raise KnowledgeRejected(
+                "Knowledge has an unresolved mutation; resolve it before importing."
+            )
 
     def _verify_round_trip(
         self,

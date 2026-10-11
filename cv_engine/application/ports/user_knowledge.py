@@ -21,7 +21,9 @@ class UserKnowledgeRepository(Protocol):
         candidate: dict[str, Any],
         bindings: dict[str, dict[str, Any]],
         imported_at: str,
-    ) -> None: ...
+    ) -> None:
+        """Raise `StateConflict` when the user's Knowledge was written concurrently."""
+        ...
 
     def stored_knowledge(
         self, tx: ReadTransaction, user_id: str
