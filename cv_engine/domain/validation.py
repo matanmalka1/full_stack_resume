@@ -263,15 +263,6 @@ def _claims_are_valid(context: _ValidationContext) -> None:
             rule(claim_context)
 
 
-def _fact_store_version_matches(context: _ValidationContext) -> None:
-    if context.draft.fact_store_version != context.facts.version:
-        context.add_issue(
-            "content",
-            "fact-store-version-mismatch",
-            "Draft was built from a different fact-store version.",
-        )
-
-
 def _claims_avoid_prohibited_wording(context: _ValidationContext) -> None:
     for pattern, code in STALE_OR_UNSUPPORTED.items():
         if re.search(pattern, context.markdown, re.IGNORECASE):
@@ -391,7 +382,6 @@ def _headline_is_safe(context: _ValidationContext) -> None:
 VALIDATION_RULES: tuple[DraftRule, ...] = (
     _manifest_matches,
     _claims_are_valid,
-    _fact_store_version_matches,
     _claims_avoid_prohibited_wording,
     _profile_matches,
     _sections_match_profile,

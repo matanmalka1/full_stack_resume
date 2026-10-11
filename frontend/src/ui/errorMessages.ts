@@ -226,7 +226,6 @@ const validationIssueMessages: Record<string, string> = {
   "invalid-fact-link": "אחד מקישורי העובדות אינו תקין.",
   "canonical-wording-mismatch": "ניסוח הטענה אינו תואם לניסוח המאושר של העובדה.",
   "canonical-style-mismatch": "סגנון הטענה אינו תואם לסגנון המאושר של העובדה.",
-  "fact-store-version-mismatch": "הטיוטה נבנתה מגרסה קודמת של מאגר העובדות.",
   "profile-mismatch": "הטיוטה אינה תואמת לפרופיל שנבחר.",
   "emphasis-not-allowed": "הדגש שנבחר אינו זמין בפרופיל הזה.",
   "section-order": "סדר הפרקים אינו תואם לפרופיל שנבחר.",
