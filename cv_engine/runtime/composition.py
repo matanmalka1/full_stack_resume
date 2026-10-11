@@ -15,6 +15,7 @@ from ..application.ports import (
     KnowledgeStore,
     Renderer,
 )
+from ..application.services.accounts import AccountService
 from ..application.services.ai_calls import AICallRunner
 from ..application.services.analysis.activation import AnalysisActivation
 from ..application.services.analysis.service import AnalysisService
@@ -47,12 +48,14 @@ from ..infrastructure.document_files import DocumentFiles
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3ObjectStore
 from ..infrastructure.operation_logging import OperationFailureLogger
+from ..infrastructure.passwords import Argon2PasswordHasher
 from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.persistence import (
     SqlAlchemyTransactionManager,
     create_database_engine,
     current_database_revision,
 )
+from ..infrastructure.persistence.accounts import SqlAlchemyAccountRepository
 from ..infrastructure.persistence.ai_calls import SqlAlchemyAICallLog
 from ..infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisContextSourceReader
@@ -126,6 +129,7 @@ class Services:
     operation_runner: OperationRunner
     operation_worker: OperationWorker
     settings: SettingsService
+    accounts: AccountService
 
 
 def build_object_store(paths: AppPaths, config: RuntimeConfig) -> ObjectStore:
@@ -396,6 +400,12 @@ def build_services(
         operation_runner=runner,
         operation_worker=worker,
         settings=settings_service,
+        accounts=AccountService(
+            transactions,
+            SqlAlchemyAccountRepository(transactions),
+            Argon2PasswordHasher(),
+            session_days=int(resolved_config.get("session_days")),
+        ),
     )
 
 
@@ -436,6 +446,7 @@ def build_api_services(
         operation_submissions=services.operation_submissions,
         operation_lifecycle=services.operation_lifecycle,
         settings=services.settings,
+        accounts=services.accounts,
         identity=InstanceIdentity(
             product_version=__version__,
             api_version=API_VERSION,

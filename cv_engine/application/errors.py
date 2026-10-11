@@ -119,6 +119,30 @@ class ProviderNotConfigured(DependencyUnavailable):
     """An AI task was requested and no AI provider is configured to run it."""
 
 
+class AuthenticationFailed(ApplicationError):
+    """Who is calling could not be established (state-and-use-cases.md §23).
+
+    Each subclass's derived code is the contracted one: `AUTHENTICATION_REQUIRED`,
+    `INVALID_CREDENTIALS`, `REAUTHENTICATION_FAILED`.
+    """
+
+
+class AuthenticationRequired(AuthenticationFailed):
+    """The request carries no valid session: none, unknown, expired, or revoked."""
+
+
+class InvalidCredentials(AuthenticationFailed):
+    """Sign-in failed. One answer for an unknown email and a wrong password."""
+
+
+class ReauthenticationFailed(AuthenticationFailed):
+    """The current password given to confirm an account change is wrong."""
+
+
+class PasswordPolicyFailed(ApplicationError):
+    """A new password is outside the policy; the message names only the rule."""
+
+
 class InfrastructureFailure(ApplicationError):
     """A configured persistence, provider, browser, or filesystem dependency failed."""
 

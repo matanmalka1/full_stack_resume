@@ -112,6 +112,9 @@ SETTINGS: dict[str, Setting] = {
         # endpoint from the region.
         Setting("s3_endpoint_url", "CV_S3_ENDPOINT_URL", default=None),
         Setting("s3_region", "CV_S3_REGION", default=None),
+        # How long a session lives from sign-in; no idle timeout, no refresh
+        # (architecture §18.4).
+        Setting("session_days", "CV_SESSION_DAYS", default=30, cast=int),
     )
 }
 

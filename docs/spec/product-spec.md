@@ -815,7 +815,9 @@ State as of this revision (details: `tailoring-decisions.md` §2–§3):
   (§22). Until they ship, the implementation is the single-candidate, loopback-only,
   unauthenticated tool, and every section marked *designed, not built* describes the
   target. Delivery order: `../decisions/multi-user-accounts.md` §5 — sign-in first,
-  with the database admitting one user until isolation is complete.
+  with the database admitting one user until isolation is complete. Built so far: the
+  sign-in routes and the operator commands that create the one user and set its
+  password; no other route requires a session yet.
 
 Executable evidence and the release matrix are defined only in
 `test-and-acceptance-plan.md`.

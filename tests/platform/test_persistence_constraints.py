@@ -63,6 +63,8 @@ MUTABLE_TABLES = frozenset(
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "app_settings",  # safe mutable Web preferences, guarded by edit_version
+        "users",  # a password changes
+        "user_sessions",  # a session is revoked
     }
 )
 DELETE_ONLY_TABLES = frozenset({"operations", "knowledge_mutation_journal"})
