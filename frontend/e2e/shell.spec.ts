@@ -109,3 +109,32 @@ test("applies the saved theme from Settings and follows system changes", async (
   await expect(page.getByRole("switch", { name: "ערכת נושא כהה", exact: true })).toBeChecked();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
+
+test.describe("signing in", () => {
+  test("a signed-out reader lands on sign-in and returns to the screen they asked for", async ({ api, page }) => {
+    const me = { id: "user-1", email: "candidate@example.com", created_at: "2026-10-11T12:00:00+00:00" };
+    const signedOut: Answer = (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/problem+json",
+        json: { type: "about:blank", title: "Unauthorized", status: 401, code: "AUTHENTICATION_REQUIRED", detail: "" },
+      });
+    api.stub("GET /api/v1/auth/me", signedOut);
+    api.stub("POST /api/v1/auth/login", async (route) => {
+      expect(route.request().postDataJSON()).toEqual({ email: "candidate@example.com", password: "a long password" });
+      api.stub("GET /api/v1/auth/me", json(me));
+      await json(me)(route);
+    });
+
+    await page.goto("/settings");
+
+    await expect(page).toHaveURL(/\/login\?next=%2Fsettings$/);
+    await expect(page.getByRole("heading", { level: 1, name: "התחברות" })).toBeVisible();
+    await page.getByLabel("אימייל").fill("candidate@example.com");
+    await page.getByLabel("סיסמה").fill("a long password");
+    await page.getByRole("button", { name: "התחברות" }).click();
+
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.getByRole("heading", { level: 1, name: "הגדרות המערכת" })).toBeVisible();
+  });
+});

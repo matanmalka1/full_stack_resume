@@ -64,6 +64,15 @@ REQUEST_VALIDATION_OPENAPI_RESPONSE: dict[str, Any] = {
     },
 }
 
+AUTHENTICATION_REQUIRED_OPENAPI_RESPONSE: dict[str, Any] = {
+    "description": "No valid session (`AUTHENTICATION_REQUIRED`).",
+    "content": {
+        PROBLEM_CONTENT_TYPE: {
+            "schema": {"$ref": "#/components/schemas/ProblemDetails"},
+        }
+    },
+}
+
 
 def install_problem_details_openapi(app: FastAPI) -> None:
     """Register the shared error component referenced by router responses."""

@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import { createBrowserRouter, type RouteObject } from "react-router-dom";
 
+import { SessionGate } from "@/features/auth";
 import { QueryState } from "@/ui/QueryState";
 import { AppLayout } from "./layout/AppLayout";
 import { NotFoundPage } from "./layout/NotFoundPage";
@@ -35,7 +36,11 @@ const screen =
 export const routes: RouteObject[] = [
   {
     path: "/",
-    element: <AppLayout />,
+    element: (
+      <SessionGate>
+        <AppLayout />
+      </SessionGate>
+    ),
     /* The shell's own failure. Nothing above it is left to render, so the boundary here
        stands alone and carries its own way out. */
     errorElement: <RootRouteErrorBoundary />,
@@ -126,6 +131,16 @@ export const routes: RouteObject[] = [
         ],
       },
     ],
+  },
+  /* Sign-in is the one screen outside the shell and its gate. */
+  {
+    path: "/login",
+    errorElement: <RootRouteErrorBoundary />,
+    hydrateFallbackElement: <QueryState loading loadingLabel="טוען…" />,
+    lazy: screen(
+      () => import("@/features/auth/pages/LoginPage"),
+      (module) => module.LoginPage,
+    ),
   },
 ];
 

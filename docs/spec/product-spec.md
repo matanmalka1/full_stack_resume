@@ -127,8 +127,8 @@ database details, or architecture. Those stay available in provenance views.
   the API already owns is not added.
 - The system is a hosted service: two processes (API and worker) over one PostgreSQL
   database (architecture.md §3.5), reached over HTTPS in production, with
-  authentication always on (§22). *Designed, not built:* today it binds to loopback with
-  no authentication.
+  authentication always on (§22). *Designed, not built:* today it binds to loopback;
+  authentication is on.
 - macOS is the official target. Portable code is preferred; Windows and Linux do not
   block release.
 - The UI supports current Chrome/Chromium only. PDFs always render with
@@ -648,8 +648,8 @@ sign-out are not Application events and are not audited here (§22).
 The product serves UI and API from one origin. Every route except sign-in and health
 requires a session (§22). It validates `Origin` on every
 mutation, accepts only its configured hosts, and uses an explicit CORS list with no
-wildcard (architecture.md §14). *Designed, not built:* today it binds to loopback and has
-no authentication.
+wildcard (architecture.md §14). *Designed, not built:* the host allowlist; today it binds
+to loopback.
 
 Safe settings are per-user, server-owned, and optimistic (a stale write is a conflict the user
 resolves; nothing is overwritten automatically):
@@ -815,9 +815,10 @@ State as of this revision (details: `tailoring-decisions.md` §2–§3):
   (§22). Until they ship, the implementation is the single-candidate, loopback-only,
   unauthenticated tool, and every section marked *designed, not built* describes the
   target. Delivery order: `../decisions/multi-user-accounts.md` §5 — sign-in first,
-  with the database admitting one user until isolation is complete. Built so far: the
-  sign-in routes and the operator commands that create the one user and set its
-  password; no other route requires a session yet.
+  with the database admitting one user until isolation is complete. Built so far:
+  sign-in for that one user — the Web sign-in screen, a session required on every
+  route but sign-in and health, and the operator commands that create the user and set
+  its password.
 
 Executable evidence and the release matrix are defined only in
 `test-and-acceptance-plan.md`.

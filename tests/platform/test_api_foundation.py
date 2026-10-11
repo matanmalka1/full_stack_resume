@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from api_harness import sign_in
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
@@ -59,7 +60,7 @@ def api(services):
     matching the two independent production processes.
     """
     with TestClient(create_app(build_api_services(services))) as client:
-        yield client
+        yield sign_in(client, services)
 
 
 # --- identity ---------------------------------------------------------------

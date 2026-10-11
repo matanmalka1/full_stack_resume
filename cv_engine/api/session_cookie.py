@@ -12,7 +12,8 @@ from typing import Annotated
 
 from fastapi import Depends, Request, Response
 
-from ..application.accounts import SessionGrant
+from ..application.accounts import SessionGrant, UserView
+from .dependencies import Services
 
 SESSION_COOKIE = "__Host-cv_session"
 
@@ -39,3 +40,8 @@ def set_session_cookie(response: Response, grant: SessionGrant) -> None:
 
 def clear_session_cookie(response: Response) -> None:
     response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
+
+
+def require_session(services: Services, token: SessionToken) -> UserView:
+    """Every route but sign-in and health: a valid session or `401 AUTHENTICATION_REQUIRED`."""
+    return services.accounts.current_user(token)

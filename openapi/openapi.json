@@ -5122,6 +5122,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5267,6 +5277,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5305,6 +5325,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -5347,6 +5377,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5388,6 +5428,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -5460,6 +5510,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5501,6 +5561,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -5545,6 +5615,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5587,6 +5667,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -5650,6 +5740,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5702,6 +5802,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -5756,6 +5866,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5809,6 +5929,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5850,6 +5980,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -5922,6 +6062,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5966,6 +6116,16 @@
             },
             "description": "The rendered PDF, when the document is Ready at request time."
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -6008,6 +6168,16 @@
               }
             },
             "description": "The content through the same composition the render uses."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -6052,6 +6222,16 @@
               }
             },
             "description": "The content through the same composition and browser the render uses, stamped as unapproved on every page. Nothing is stored."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -6124,6 +6304,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -6194,6 +6384,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -6266,6 +6466,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -6319,6 +6529,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -6370,6 +6590,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -6424,6 +6654,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -6475,6 +6715,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -6529,6 +6779,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -6582,6 +6842,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -6634,6 +6904,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -6838,6 +7118,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -6877,6 +7167,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -6928,6 +7228,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -6970,6 +7280,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -7001,6 +7321,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -7043,6 +7373,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -7097,6 +7437,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -7149,6 +7499,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -7203,6 +7563,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -7256,6 +7626,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -7297,6 +7677,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -7361,6 +7751,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -7392,6 +7792,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -7435,6 +7845,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -7477,6 +7897,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -7539,6 +7969,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -7577,6 +8017,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {
@@ -7637,6 +8087,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
           },
           "422": {
             "content": {

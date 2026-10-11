@@ -15,12 +15,20 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import pytest
-from api_harness import api_with_worker
+from api_harness import TEST_EMAIL, TEST_PASSWORD, api_with_worker, sign_in
 from fake_provider import FakeOpenAI
 from fastapi.testclient import TestClient
 from foreground import foreground_executor
 
 from cv_engine.api.app import API_PREFIX, create_app
+from cv_engine.api.session_cookie import SESSION_COOKIE
+from cv_engine.application.services.accounts import AccountService
+from cv_engine.infrastructure.passwords import Argon2PasswordHasher
+from cv_engine.infrastructure.persistence import (
+    SqlAlchemyTransactionManager,
+    create_database_engine,
+)
+from cv_engine.infrastructure.persistence.accounts import SqlAlchemyAccountRepository
 from cv_engine.runtime.composition import Services, build_api_services
 
 TESTS_DIR = Path(__file__).resolve().parent.parent
@@ -41,10 +49,23 @@ class LiveApiServer:
 
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url
+        self.session_cookie: str | None = None
+
+    def sign_in(self, database_url: str) -> None:
+        """Create the test user in the server's database and carry its session."""
+        engine = create_database_engine(database_url)
+        transactions = SqlAlchemyTransactionManager(engine)
+        AccountService(
+            transactions, SqlAlchemyAccountRepository(transactions), Argon2PasswordHasher()
+        ).create_user(TEST_EMAIL, TEST_PASSWORD)
+        reply = self._call("POST", "/auth/login", {"email": TEST_EMAIL, "password": TEST_PASSWORD})
+        assert reply.status == 200, reply.body
 
     def _call(self, method: str, path: str, body: Any = None) -> HttpReply:
         data = _json.dumps(body).encode() if body is not None else None
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        if self.session_cookie is not None:
+            headers["Cookie"] = self.session_cookie
         if method != "GET":
             headers["Origin"] = self.base_url
         request = Request(
@@ -52,6 +73,9 @@ class LiveApiServer:
         )
         try:
             with urlopen(request, timeout=30) as response:
+                cookie = response.headers.get("Set-Cookie")
+                if cookie and cookie.startswith(f"{SESSION_COOKIE}="):
+                    self.session_cookie = cookie.split(";", 1)[0]
                 return HttpReply(response.status, response.read().decode())
         except HTTPError as error:
             return HttpReply(error.code, error.read().decode())
@@ -122,6 +146,7 @@ def live_api_server(
             sleep(0.1)
         else:
             pytest.fail("API process did not become ready")
+        server.sign_in(database_url)
         yield server
     finally:
         process.terminate()
@@ -154,13 +179,22 @@ class PausedApiHarness:
 @pytest.fixture
 def api_paused(services: Services):
     with TestClient(create_app(build_api_services(services))) as client:
+        yield PausedApiHarness(client=sign_in(client, services), services=services)
+
+
+@pytest.fixture
+def api_anonymous(services: Services):
+    """The API with no user and no session, for what happens before sign-in."""
+    with TestClient(create_app(build_api_services(services))) as client:
         yield PausedApiHarness(client=client, services=services)
 
 
 @pytest.fixture
 def ai_api_paused(ai_services: Services, fake_openai: FakeOpenAI):
     with TestClient(create_app(build_api_services(ai_services))) as client:
-        yield PausedApiHarness(client=client, services=ai_services, fake_openai=fake_openai)
+        yield PausedApiHarness(
+            client=sign_in(client, ai_services), services=ai_services, fake_openai=fake_openai
+        )
 
 
 @pytest.fixture

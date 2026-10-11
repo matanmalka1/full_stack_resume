@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 
 import pytest
 from api_harness import MUTATION_HEADERS
@@ -126,11 +127,11 @@ def test_create_user_refuses_a_password_outside_the_policy(services) -> None:
 
 
 def test_login_sets_a_host_only_secure_http_only_lax_cookie_and_stores_only_its_hash(
-    api_paused, database_engine
+    api_anonymous, database_engine
 ) -> None:
-    api_paused.services.accounts.create_user(EMAIL, PASSWORD)
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
 
-    response = _login(api_paused.client)
+    response = _login(api_anonymous.client)
 
     assert response.status_code == 200, response.text
     assert response.json() == {
@@ -152,14 +153,14 @@ def test_login_sets_a_host_only_secure_http_only_lax_cookie_and_stores_only_its_
 
 
 def test_unknown_email_and_wrong_password_get_the_same_answer_and_log_no_credentials(
-    api_paused, caplog
+    api_anonymous, caplog
 ) -> None:
-    api_paused.services.accounts.create_user(EMAIL, PASSWORD)
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
     caplog.set_level(logging.DEBUG)
 
-    wrong_password = _login(api_paused.client, password="not the password")
-    unknown_email = _login(api_paused.client, email="nobody@example.com")
-    not_an_email = _login(api_paused.client, email="nobody")
+    wrong_password = _login(api_anonymous.client, password="not the password")
+    unknown_email = _login(api_anonymous.client, email="nobody@example.com")
+    not_an_email = _login(api_anonymous.client, email="nobody")
 
     for response in (wrong_password, unknown_email, not_an_email):
         assert response.status_code == 401
@@ -171,10 +172,10 @@ def test_unknown_email_and_wrong_password_get_the_same_answer_and_log_no_credent
         assert secret not in caplog.text
 
 
-def test_login_needs_an_allowed_origin(api_paused) -> None:
-    api_paused.services.accounts.create_user(EMAIL, PASSWORD)
+def test_login_needs_an_allowed_origin(api_anonymous) -> None:
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
 
-    response = api_paused.client.post(
+    response = api_anonymous.client.post(
         f"{API_PREFIX}/auth/login", json={"email": EMAIL, "password": PASSWORD}
     )
 
@@ -182,13 +183,13 @@ def test_login_needs_an_allowed_origin(api_paused) -> None:
     assert response.json()["code"] == "ORIGIN_NOT_ALLOWED"
 
 
-def test_me_requires_a_valid_session(api_paused, database_engine) -> None:
-    api_paused.services.accounts.create_user(EMAIL, PASSWORD)
-    token = _token(_login(api_paused.client))
+def test_me_requires_a_valid_session(api_anonymous, database_engine) -> None:
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+    token = _token(_login(api_anonymous.client))
 
-    assert _me(api_paused.client, token).json()["email"] == "candidate@example.com"
+    assert _me(api_anonymous.client, token).json()["email"] == "candidate@example.com"
     for headers in ({}, _session("not-a-session")):
-        response = api_paused.client.get(f"{API_PREFIX}/auth/me", headers=headers)
+        response = api_anonymous.client.get(f"{API_PREFIX}/auth/me", headers=headers)
         assert response.status_code == 401
         assert response.json()["code"] == "AUTHENTICATION_REQUIRED"
 
@@ -196,35 +197,35 @@ def test_me_requires_a_valid_session(api_paused, database_engine) -> None:
         connection.execute(
             update(user_sessions).values(expires_at=text("now() - interval '1 second'"))
         )
-    assert _me(api_paused.client, token).status_code == 401
+    assert _me(api_anonymous.client, token).status_code == 401
 
 
-def test_logout_ends_this_session_and_logout_all_ends_every_one(api_paused) -> None:
-    api_paused.services.accounts.create_user(EMAIL, PASSWORD)
-    first = _token(_login(api_paused.client))
-    second = _token(_login(api_paused.client))
+def test_logout_ends_this_session_and_logout_all_ends_every_one(api_anonymous) -> None:
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+    first = _token(_login(api_anonymous.client))
+    second = _token(_login(api_anonymous.client))
     assert first != second
 
-    response = _post(api_paused.client, "logout", first)
+    response = _post(api_anonymous.client, "logout", first)
     assert response.status_code == 204
     assert f"{SESSION_COOKIE}=" in response.headers["set-cookie"]
-    assert _me(api_paused.client, first).status_code == 401
-    assert _me(api_paused.client, second).status_code == 200
-    assert _post(api_paused.client, "logout", first).status_code == 401
+    assert _me(api_anonymous.client, first).status_code == 401
+    assert _me(api_anonymous.client, second).status_code == 200
+    assert _post(api_anonymous.client, "logout", first).status_code == 401
 
-    third = _token(_login(api_paused.client))
-    assert _post(api_paused.client, "logout-all", third).status_code == 204
-    assert _me(api_paused.client, second).status_code == 401
-    assert _me(api_paused.client, third).status_code == 401
+    third = _token(_login(api_anonymous.client))
+    assert _post(api_anonymous.client, "logout-all", third).status_code == 204
+    assert _me(api_anonymous.client, second).status_code == 401
+    assert _me(api_anonymous.client, third).status_code == 401
 
 
-def test_change_password_needs_the_current_one_and_rotates_every_session(api_paused) -> None:
-    api_paused.services.accounts.create_user(EMAIL, PASSWORD)
-    current = _token(_login(api_paused.client))
-    other = _token(_login(api_paused.client))
+def test_change_password_needs_the_current_one_and_rotates_every_session(api_anonymous) -> None:
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+    current = _token(_login(api_anonymous.client))
+    other = _token(_login(api_anonymous.client))
 
     wrong = _post(
-        api_paused.client,
+        api_anonymous.client,
         "change-password",
         current,
         {"current_password": "not the password", "new_password": OTHER_PASSWORD},
@@ -232,17 +233,17 @@ def test_change_password_needs_the_current_one_and_rotates_every_session(api_pau
     assert wrong.status_code == 401
     assert wrong.json()["code"] == "REAUTHENTICATION_FAILED"
     short = _post(
-        api_paused.client,
+        api_anonymous.client,
         "change-password",
         current,
         {"current_password": PASSWORD, "new_password": "short"},
     )
     assert short.status_code == 422
     assert short.json()["code"] == "PASSWORD_POLICY_FAILED"
-    assert _me(api_paused.client, other).status_code == 200
+    assert _me(api_anonymous.client, other).status_code == 200
 
     changed = _post(
-        api_paused.client,
+        api_anonymous.client,
         "change-password",
         current,
         {"current_password": PASSWORD, "new_password": OTHER_PASSWORD},
@@ -250,14 +251,14 @@ def test_change_password_needs_the_current_one_and_rotates_every_session(api_pau
 
     assert changed.status_code == 204
     rotated = _token(changed)
-    assert _me(api_paused.client, rotated).status_code == 200
-    assert _me(api_paused.client, current).status_code == 401
-    assert _me(api_paused.client, other).status_code == 401
-    assert _login(api_paused.client).status_code == 401
-    assert _login(api_paused.client, password=OTHER_PASSWORD).status_code == 200
+    assert _me(api_anonymous.client, rotated).status_code == 200
+    assert _me(api_anonymous.client, current).status_code == 401
+    assert _me(api_anonymous.client, other).status_code == 401
+    assert _login(api_anonymous.client).status_code == 401
+    assert _login(api_anonymous.client, password=OTHER_PASSWORD).status_code == 200
 
 
-def test_cli_creates_the_user_from_stdin_or_a_twice_entered_prompt(services, api_paused) -> None:
+def test_cli_creates_the_user_from_stdin_or_a_twice_entered_prompt(services, api_anonymous) -> None:
     out, err = io.StringIO(), io.StringIO()
     code = admin(
         ["create-user", "--email", EMAIL, "--password-stdin"],
@@ -269,7 +270,7 @@ def test_cli_creates_the_user_from_stdin_or_a_twice_entered_prompt(services, api
     assert code == 0, err.getvalue()
     assert "candidate@example.com" in out.getvalue()
     assert PASSWORD not in out.getvalue() + err.getvalue()
-    assert _login(api_paused.client).status_code == 200
+    assert _login(api_anonymous.client).status_code == 200
 
     answers = iter([OTHER_PASSWORD, OTHER_PASSWORD])
     code = admin(
@@ -280,7 +281,7 @@ def test_cli_creates_the_user_from_stdin_or_a_twice_entered_prompt(services, api
         err=io.StringIO(),
     )
     assert code == 0
-    assert _login(api_paused.client, password=OTHER_PASSWORD).status_code == 200
+    assert _login(api_anonymous.client, password=OTHER_PASSWORD).status_code == 200
 
 
 def test_cli_refuses_a_mismatched_prompt_and_a_second_user(services) -> None:
@@ -309,11 +310,47 @@ def test_cli_refuses_a_mismatched_prompt_and_a_second_user(services) -> None:
     assert "second one is refused" in err.getvalue()
 
 
-def test_set_password_ends_every_session(api_paused) -> None:
-    api_paused.services.accounts.create_user(EMAIL, PASSWORD)
-    token = _token(_login(api_paused.client))
+def test_set_password_ends_every_session(api_anonymous) -> None:
+    api_anonymous.services.accounts.create_user(EMAIL, PASSWORD)
+    token = _token(_login(api_anonymous.client))
 
-    api_paused.services.accounts.set_password(EMAIL, OTHER_PASSWORD)
+    api_anonymous.services.accounts.set_password(EMAIL, OTHER_PASSWORD)
 
-    assert _me(api_paused.client, token).status_code == 401
-    assert _login(api_paused.client, password=OTHER_PASSWORD).status_code == 200
+    assert _me(api_anonymous.client, token).status_code == 401
+    assert _login(api_anonymous.client, password=OTHER_PASSWORD).status_code == 200
+
+
+# Routes that answer without a session. Everything else in the schema must refuse.
+# A stale entry fails too, so the list cannot outlive the route it excuses.
+SESSIONLESS_ROUTES = frozenset(
+    {
+        ("get", "/api/v1/health"),
+        ("post", "/api/v1/auth/login"),
+        # The rest of `/auth` resolves its own session and answers 401 by itself.
+        ("post", "/api/v1/auth/logout"),
+        ("post", "/api/v1/auth/logout-all"),
+        ("get", "/api/v1/auth/me"),
+        ("post", "/api/v1/auth/change-password"),
+    }
+)
+
+
+def test_every_route_in_the_schema_requires_a_session_unless_excepted(api_anonymous) -> None:
+    """Derived from the published schema, not a hand list of what to protect."""
+    client = api_anonymous.client
+    schema = client.get(f"{API_PREFIX}/openapi.json").json()
+    routes = {
+        (method, path)
+        for path, operations in schema["paths"].items()
+        for method in operations
+        if method in {"get", "post", "patch", "put", "delete"}
+    }
+    assert SESSIONLESS_ROUTES <= routes, sorted(SESSIONLESS_ROUTES - routes)
+
+    open_routes = []
+    for method, path in sorted(routes - SESSIONLESS_ROUTES):
+        concrete = re.sub(r"\{[^}]+\}", "00000000-0000-4000-8000-000000000000", path)
+        response = client.request(method.upper(), concrete, headers=MUTATION_HEADERS)
+        if response.status_code != 401 or response.json()["code"] != "AUTHENTICATION_REQUIRED":
+            open_routes.append((method, path, response.status_code))
+    assert not open_routes, open_routes

@@ -10,6 +10,10 @@ const application = (applicationId: string): string => `/applications/${segment(
 
 export const routePaths = {
   home: "/",
+  /* Sign-in, with where to return afterwards. `next` is a path inside this app: the login
+     screen refuses anything else, so the address cannot send a reader off-site. */
+  login: (next?: string): string =>
+    next === undefined || next === "/" ? "/login" : `/login?next=${encodeURIComponent(next)}`,
   newApplication: "/applications/new",
   facts: "/facts",
   settings: "/settings",

@@ -97,6 +97,15 @@ const invalidServerResponse = (): ApiProblem =>
     clientProblem("INVALID_SERVER_RESPONSE", "Invalid server response", "The response body could not be read as JSON."),
   );
 
+/* What happens when the server says the session is gone - expired, revoked, or signed
+   out elsewhere. The app registers it once at startup; until then it does nothing, so a
+   test that renders one screen with a mocked API is not redirected anywhere. */
+let sessionLost: () => void = () => undefined;
+
+export const onSessionLost = (handler: () => void): void => {
+  sessionLost = handler;
+};
+
 export const apiRequest = async <T>(path: ApiPath, options: ApiRequestOptions = {}): Promise<ApiResponse<T>> => {
   const headers = new Headers({
     Accept: `${JSON_CONTENT_TYPE}, ${PROBLEM_CONTENT_TYPE}`,
@@ -143,7 +152,13 @@ export const apiRequest = async <T>(path: ApiPath, options: ApiRequestOptions = 
   }
 
   if (!response.ok) {
-    throw new ApiProblem(isProblemDetails(payload) ? payload : fallbackProblem(response));
+    const problem = isProblemDetails(payload) ? payload : fallbackProblem(response);
+    if (problem.code === "AUTHENTICATION_REQUIRED") sessionLost();
+    throw new ApiProblem(problem);
+  }
+  /* A command that answers 204 has nothing to read; any other success must carry JSON. */
+  if (response.status === 204) {
+    return { data: undefined as T, status: 204, etag: null, location: null };
   }
   if (payload === undefined) {
     throw invalidServerResponse();
