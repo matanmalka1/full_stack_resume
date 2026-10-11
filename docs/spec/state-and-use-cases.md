@@ -1007,7 +1007,7 @@ The status comes from the refusal's class, never its message:
 | `200` | query, synchronous update, or a successful outcome such as a failed check or reconciliation |
 | `201` | synchronous creation |
 | `202` | accepted Operation with `Location` |
-| `401` | *designed, not built:* no valid session (`AUTHENTICATION_REQUIRED`), failed sign-in (`INVALID_CREDENTIALS`), or a wrong current password (`REAUTHENTICATION_FAILED`) |
+| `401` | no valid session (`AUTHENTICATION_REQUIRED`), failed sign-in (`INVALID_CREDENTIALS`), or a wrong current password (`REAUTHENTICATION_FAILED`) |
 | `403` | refused Origin or Host (`ORIGIN_NOT_ALLOWED`). Never used for another user's record |
 | `404` | unknown record (`UNKNOWN_RECORD`), including a document not yet created, an unknown route, and — *designed, not built* — a record of another user |
 | `409` | state conflict: hash, notes, or settings mismatch; deleted Application; disallowed status transition; job text changed or locked; idempotency-key payload mismatch |
@@ -1039,8 +1039,11 @@ exceptions. They become a refusal only when a command they block is attempted.
 
 ## 23. Account commands
 
-*Designed, not built.* Product rules: product-spec.md §22. Mechanisms, tables, and
-default limits: architecture.md §18. Why: `../decisions/multi-user-accounts.md`.
+*Partly built.* `login`, `logout`, `logout_all`, `me`, `change_password`, and the
+operator commands `create-user` and `set-password` are built; the sign-in rate limit,
+`import-knowledge`, and the session requirement on every other route are not yet
+(`../decisions/multi-user-accounts.md` §5). Product rules: product-spec.md §22.
+Mechanisms, tables, and default limits: architecture.md §18. Why: `../decisions/multi-user-accounts.md`.
 
 Routes are under `/api/v1/auth`. Bodies are JSON; every mutation passes the Origin
 check (architecture.md §14). A session is an opaque cookie; no route returns a token in

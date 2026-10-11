@@ -843,6 +843,8 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "KnowledgeMutationEngine",
         "KnowledgeQueryService",
         "SettingsService",
+        # Hashes a password outside any scope, then writes in its own.
+        "AccountService",
         # Appends each provider attempt in its own short scope before deciding a retry.
         "AICallRunner",
         # Reads the Knowledge journal in its own read scope before a file read.

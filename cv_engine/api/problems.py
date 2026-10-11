@@ -23,11 +23,13 @@ from starlette.exceptions import HTTPException
 from ..application.errors import (
     ApplicationError,
     ApplicationIntakeInvalid,
+    AuthenticationFailed,
     DependencyUnavailable,
     DuplicateAcknowledgementRequired,
     InfrastructureFailure,
     KnowledgeRejected,
     LineageBroken,
+    PasswordPolicyFailed,
     PreconditionFailed,
     StateConflict,
     UnknownRecord,
@@ -81,6 +83,8 @@ def install_problem_details_openapi(app: FastAPI) -> None:
 # They share its 412 today; listing them explicitly means giving one of them a
 # different status later is an edit here rather than a rewrite of the lookup.
 STATUS_BY_ERROR: dict[type[ApplicationError], int] = {
+    AuthenticationFailed: 401,
+    PasswordPolicyFailed: 422,
     UnknownRecord: 404,
     StateConflict: 409,
     DuplicateAcknowledgementRequired: 412,
@@ -94,6 +98,7 @@ STATUS_BY_ERROR: dict[type[ApplicationError], int] = {
 
 TITLES: dict[int, str] = {
     400: "Bad Request",
+    401: "Unauthorized",
     403: "Forbidden",
     404: "Not Found",
     405: "Method Not Allowed",

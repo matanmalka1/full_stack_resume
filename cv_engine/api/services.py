@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..application.services.accounts import AccountService
 from ..application.services.analysis.service import AnalysisService
 from ..application.services.applications.intake import ApplicationService
 from ..application.services.applications.queries import ApplicationQueryService
@@ -72,5 +73,6 @@ class ApiServices:
     operation_submissions: OperationSubmissionService
     operation_lifecycle: OperationLifecycleService
     settings: SettingsService
+    accounts: AccountService
     identity: InstanceIdentity
     limits: ApiLimits

@@ -40,6 +40,7 @@ from .problems import (
 from .routers import (
     analyses,
     applications,
+    auth,
     documents,
     facts,
     health,
@@ -125,6 +126,7 @@ def create_app(
 
     for router in (
         health.router,
+        auth.router,
         applications.router,
         analyses.router,
         documents.router,
