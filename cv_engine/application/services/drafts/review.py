@@ -13,12 +13,11 @@ from ....domain.document import content_check, preparation_state
 from ....domain.knowledge import Knowledge
 from ....util import new_id, utc_now
 from ...commands import ApproveDocumentCommand, CheckDocumentCommand, DocumentCheckResult
-from ...errors import KNOWLEDGE_RECONCILIATION_REQUIRED, PreconditionFailed
+from ...errors import PreconditionFailed
 from ...ports import TransactionManager
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.application_intake import AuditLogWriter
 from ...ports.documents import DocumentStore
-from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ..documents import (
     current_basis,
     load_knowledge,
@@ -45,14 +44,12 @@ class DraftReviewService:
         documents: DocumentStore,
         sources: AnalysisContextSourceReader,
         knowledge: AnalysisKnowledgeSource,
-        journal: KnowledgeLifecycleStore,
         audit: AuditLogWriter,
     ):
         self.transactions = transactions
         self.documents = documents
         self.sources = sources
         self.knowledge = knowledge
-        self.journal = journal
         self.audit = audit
 
     @staticmethod
@@ -91,15 +88,6 @@ class DraftReviewService:
         ):
             return None
         return cls._result(document, approval_basis, report)
-
-    def _refuse_quarantined_knowledge(self) -> None:
-        with self.transactions.read() as tx:
-            quarantined = self.journal.quarantined_mutations(tx)
-        if quarantined:
-            raise PreconditionFailed(
-                f"approval blocked by quarantined Knowledge mutation {quarantined[0].id}",
-                code=KNOWLEDGE_RECONCILIATION_REQUIRED,
-            )
 
     def check_document(self, command: CheckDocumentCommand) -> DocumentCheckResult:
         """§15: run the validation contract and store `content_report`, `passed`, basis.
@@ -151,7 +139,6 @@ class DraftReviewService:
         existing = self._existing_approval(document, approval_basis)
         if existing is not None:
             return existing
-        self._refuse_quarantined_knowledge()
         refuse_review_reasons(document, knowledge)
         report = validate_document(source, knowledge)
         now = utc_now()

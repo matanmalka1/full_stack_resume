@@ -273,8 +273,8 @@ describe("DraftApprovalDialog", () => {
                   type: "about:blank",
                   title: "Precondition Failed",
                   status: 412,
-                  code: "KNOWLEDGE_RECONCILIATION_REQUIRED",
-                  detail: "reconcile first",
+                  code: "VALIDATION_BLOCKED",
+                  detail: "blocked",
                 },
                 412,
               ),
@@ -289,7 +289,7 @@ describe("DraftApprovalDialog", () => {
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" }));
     const dialog = await screen.findByRole("dialog");
     /* A known code, so the callout shows the client's own translation. */
-    expect(await within(dialog).findByText(/יש להשלים את התאמת מאגר העובדות לפני שממשיכים/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/הבדיקה מצאה בעיות שחוסמות את הפעולה/)).toBeInTheDocument();
     expect(dialog).toHaveAttribute("open");
   });
 

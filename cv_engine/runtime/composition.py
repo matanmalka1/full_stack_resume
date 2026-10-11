@@ -273,7 +273,6 @@ def build_services(
         documents=documents,
         sources=analysis_sources,
         knowledge=resolved_knowledge,
-        journal=knowledge_lifecycle_store,
         audit=intake_audit,
     )
     rendering_service = RenderingService(
