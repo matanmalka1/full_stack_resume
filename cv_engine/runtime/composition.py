@@ -409,7 +409,6 @@ def build_services(
         knowledge_import=KnowledgeImportService(
             transactions,
             account_repository,
-            knowledge_lifecycle_store,
             user_knowledge,
         ),
     )

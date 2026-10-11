@@ -6,12 +6,7 @@ load is refused before anything is written. The rows are then read back inside t
 transaction and rebuilt, and the import commits only if they reproduce every fact, every
 Profile, and the candidate context it read. A lossy import cannot be committed.
 
-Before the multi-user migration, the same transaction assigned legacy ownerless fact
-events to the only user. At the current schema the migration has already required every
-event to have an owner, so this compatibility step normally updates zero rows.
-
-The application keeps reading the files until the step that switches it over
-(docs/decisions/multi-user-accounts.md §5, step 4); nothing here changes what it reads.
+The application reads Knowledge from PostgreSQL only; the files are import input.
 """
 
 from __future__ import annotations
@@ -30,7 +25,6 @@ from ....util import utc_now
 from ...commands import BoundaryDTO
 from ...errors import KnowledgeRejected, PreconditionFailed, StateConflict, UnknownRecord
 from ...ports.accounts import AccountRepository
-from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.outbound import KnowledgeStore
 from ...ports.transactions import ReadTransaction, TransactionManager
 from ...ports.user_knowledge import UserKnowledgeRepository
@@ -40,7 +34,6 @@ class KnowledgeImportResult(BoundaryDTO):
     email: str
     facts: int
     profiles: int
-    fact_events: int
 
 
 class KnowledgeImportService:
@@ -48,12 +41,10 @@ class KnowledgeImportService:
         self,
         transactions: TransactionManager,
         accounts: AccountRepository,
-        journal: KnowledgeLifecycleStore,
         repository: UserKnowledgeRepository,
     ):
         self.transactions = transactions
         self.accounts = accounts
-        self.journal = journal
         self.repo = repository
 
     def import_knowledge(self, email: str, source: KnowledgeStore) -> KnowledgeImportResult:
@@ -63,7 +54,6 @@ class KnowledgeImportService:
             raise PreconditionFailed(str(error)) from None
         with self.transactions.read() as tx:
             user = self.accounts.user_by_email(tx, normalized)
-            self._refuse_unresolved_mutation(tx)
         if user is None:
             raise UnknownRecord("No user has this email.")
         try:
@@ -78,8 +68,6 @@ class KnowledgeImportService:
         candidate = candidate_payload(knowledge.candidate)
 
         with self.transactions.write() as tx:
-            # Again where the rows are written: a mutation may have begun since the read.
-            self._refuse_unresolved_mutation(tx)
             if self.repo.has_knowledge(tx, user.id):
                 raise StateConflict("This user already has Knowledge; import runs once.")
             self.repo.insert_knowledge(
@@ -107,19 +95,7 @@ class KnowledgeImportService:
                 raise KnowledgeRejected(
                     "Knowledge changed while it was being imported; run the import again."
                 )
-            # Compatibility for an import performed on the single-user schema before
-            # migration 0007. At the current schema no ownerless event can exist.
-            events = self.repo.assign_unowned_fact_events(tx, user.id)
-        return KnowledgeImportResult(
-            email=user.email, facts=len(rows), profiles=len(bindings), fact_events=events
-        )
-
-    def _refuse_unresolved_mutation(self, tx: ReadTransaction) -> None:
-        if self.journal.prepared_mutations(tx) or self.journal.quarantined_mutations(tx):
-            # The files may hold content the lifecycle trail does not describe.
-            raise KnowledgeRejected(
-                "Knowledge has an unresolved mutation; resolve it before importing."
-            )
+        return KnowledgeImportResult(email=user.email, facts=len(rows), profiles=len(bindings))
 
     def _verify_round_trip(
         self,

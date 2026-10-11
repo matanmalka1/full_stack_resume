@@ -1,46 +1,14 @@
-"""Persistence boundary for fact events and the durable Knowledge journal."""
+"""Persistence boundary for fact events."""
 
 from __future__ import annotations
 
 from typing import Any, Protocol
 
-from ..knowledge_mutations import KnowledgeMutation, PrepareKnowledgeMutation
 from .transactions import ReadTransaction, WriteTransaction
 
 
 class KnowledgeLifecycleStore(Protocol):
-    """The atomic database half of the cross-store Knowledge lifecycle."""
-
-    def prepare_mutation(
-        self,
-        tx: WriteTransaction,
-        request: PrepareKnowledgeMutation,
-        *,
-        prepared_at: str | None = ...,
-    ) -> KnowledgeMutation: ...
-
-    def mutation(self, tx: ReadTransaction, mutation_id: str) -> KnowledgeMutation: ...
-
-    def prepared_mutations(self, tx: ReadTransaction) -> list[KnowledgeMutation]: ...
-
-    def quarantined_mutations(self, tx: ReadTransaction) -> list[KnowledgeMutation]: ...
-
-    def commit_mutation(
-        self,
-        tx: WriteTransaction,
-        mutation_id: str,
-        *,
-        committed_at: str | None = ...,
-    ) -> KnowledgeMutation: ...
-
-    def quarantine_mutation(
-        self,
-        tx: WriteTransaction,
-        mutation_id: str,
-        reason: str,
-        *,
-        quarantined_at: str | None = ...,
-    ) -> KnowledgeMutation: ...
+    """The fact lifecycle trail and the analyses a fact event may cite."""
 
     def record_fact_event(self, tx: WriteTransaction, **event: Any) -> str: ...
 

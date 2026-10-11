@@ -12,11 +12,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.pool import NullPool
 
 from cv_engine.application.commands import IngestCommand
-from cv_engine.application.errors import PreconditionFailed, StateConflict, UnknownRecord
-from cv_engine.application.knowledge_mutations import (
-    KnowledgeMutationState,
-    PrepareKnowledgeMutation,
-)
+from cv_engine.application.errors import StateConflict, UnknownRecord
 from cv_engine.application.ports.documents import DocumentBody
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.contracts.document import DocumentSubmission
@@ -35,9 +31,6 @@ from cv_engine.infrastructure.persistence.initial_recruitment_events import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
 from cv_engine.infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
-from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
-    SqlAlchemyKnowledgeLifecycleRepository,
-)
 from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from cv_engine.infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from cv_engine.infrastructure.persistence.tables import (
@@ -81,11 +74,6 @@ IMMUTABLE_MESSAGE = "immutable record"
 # installation recovery state. The guard below proves this list is both necessary and
 # exhaustive, so an exception that becomes owned also fails.
 SYSTEM_OWNERSHIP_TABLES = frozenset({"users", "rate_limit_buckets", "knowledge_mutation_journal"})
-
-
-@pytest.fixture
-def knowledge_store(transaction_manager):
-    return SqlAlchemyKnowledgeLifecycleRepository(transaction_manager)
 
 
 def test_every_table_has_a_derived_owner_path_or_is_a_named_system_table() -> None:
@@ -534,109 +522,45 @@ def test_concurrent_writers_do_not_silently_overwrite(database_engine) -> None:
         assert applications_reader.applications(tx, user_id)[0]["notes"] in {"first", "second"}
 
 
-def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
-    database_engine,
-    transaction_manager,
-    knowledge_store,
-) -> None:
+def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(database_engine) -> None:
+    """The retired journal is history: nothing writes it, and its trigger still guards it."""
     mutation_id = new_id()
-    request = PrepareKnowledgeMutation(
-        mutation_id=mutation_id,
-        mutation_type="fact_confirmed",
-        source_reference="base/sales.json",
-        staged_reference=f"temp/knowledge/{mutation_id}.json",
-        old_sha256="a" * 64,
-        new_sha256="b" * 64,
-        db_mutation_type="fact_event",
-        db_mutation_id="event-1",
-        db_mutation={"fact_id": "fact-1", "to_status": "canonical"},
-        recovery_strategy="finish_or_restore",
-    )
-
-    with transaction_manager.write() as tx:
-        prepared = knowledge_store.prepare_mutation(
-            tx, request, prepared_at="2026-08-19T10:00:00+00:00"
+    with database_engine.begin() as connection:
+        connection.execute(
+            insert(knowledge_mutation_journal).values(
+                id=mutation_id,
+                mutation_type="fact_confirmed",
+                state="PREPARED",
+                source_reference="base/sales.json",
+                staged_reference=f"temp/knowledge/{mutation_id}.json",
+                old_sha256="a" * 64,
+                new_sha256="b" * 64,
+                db_mutation_type="fact_event",
+                db_mutation_id="event-1",
+                db_mutation_json={"fact_id": "fact-1", "to_status": "canonical"},
+                recovery_strategy="finish_or_restore",
+                prepared_at="2026-08-19T10:00:00+00:00",
+            )
         )
-    assert prepared.state is KnowledgeMutationState.PREPARED
-    with transaction_manager.read() as tx:
-        assert knowledge_store.prepared_mutations(tx) == [prepared]
-    assert prepared.db_mutation == {"fact_id": "fact-1", "to_status": "canonical"}
-
-    with transaction_manager.write() as tx:
-        committed = knowledge_store.commit_mutation(
-            tx, prepared.id, committed_at="2026-08-19T10:01:00+00:00"
+        connection.execute(
+            update(knowledge_mutation_journal)
+            .where(knowledge_mutation_journal.c.id == mutation_id)
+            .values(state="COMMITTED", committed_at="2026-08-19T10:01:00+00:00")
         )
-        assert knowledge_store.mutation(tx, prepared.id) == committed
-
-    assert committed.state is KnowledgeMutationState.COMMITTED
-    with transaction_manager.read() as tx:
-        assert knowledge_store.prepared_mutations(tx) == []
-    with pytest.raises(PreconditionFailed, match="not prepared"):
-        with transaction_manager.write() as tx:
-            knowledge_store.commit_mutation(tx, prepared.id)
     with pytest.raises(ProgrammingError, match="invalid knowledge mutation transition"):
         with database_engine.begin() as connection:
             connection.execute(
                 update(knowledge_mutation_journal)
-                .where(knowledge_mutation_journal.c.id == prepared.id)
+                .where(knowledge_mutation_journal.c.id == mutation_id)
                 .values(mutation_type="attach_fact")
             )
     with pytest.raises(ProgrammingError, match="immutable record"):
         with database_engine.begin() as connection:
             connection.execute(
                 delete(knowledge_mutation_journal).where(
-                    knowledge_mutation_journal.c.id == prepared.id
+                    knowledge_mutation_journal.c.id == mutation_id
                 )
             )
-
-
-def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
-    transaction_manager,
-    knowledge_store,
-) -> None:
-    mutation_id = new_id()
-    request = PrepareKnowledgeMutation(
-        mutation_id=mutation_id,
-        mutation_type="attach_fact",
-        source_reference="profiles/sales.json",
-        staged_reference=f"temp/knowledge/{mutation_id}.json",
-        old_sha256="a" * 64,
-        new_sha256="b" * 64,
-        db_mutation_type="fact_attachment",
-        db_mutation_id="attachment-1",
-        db_mutation={"fact_id": "fact-1"},
-        recovery_strategy="finish_or_restore",
-    )
-    with transaction_manager.write() as tx:
-        knowledge_store.prepare_mutation(tx, request)
-
-    with pytest.raises(PreconditionFailed, match="requires a reason"):
-        with transaction_manager.write() as tx:
-            knowledge_store.quarantine_mutation(tx, request.mutation_id, " ")
-    with pytest.raises(IntegrityError, match="uq_knowledge_mutation_journal"):
-        with transaction_manager.write() as tx:
-            knowledge_store.prepare_mutation(
-                tx,
-                PrepareKnowledgeMutation(
-                    **{
-                        **request.__dict__,
-                        "mutation_id": new_id(),
-                        "staged_reference": f"temp/knowledge/{new_id()}.json",
-                    }
-                ),
-            )
-
-    with transaction_manager.write() as tx:
-        quarantined = knowledge_store.quarantine_mutation(
-            tx,
-            request.mutation_id,
-            "staged bytes no longer match",
-            quarantined_at="2026-08-19T10:02:00+00:00",
-        )
-    assert quarantined.state is KnowledgeMutationState.QUARANTINED
-    assert quarantined.quarantine_reason == "staged bytes no longer match"
-    with transaction_manager.read() as tx:
-        assert knowledge_store.quarantined_mutations(tx) == [quarantined]
 
 
 def test_every_product_table_is_immutable_unless_explicitly_exempt(database_engine) -> None:

@@ -7,8 +7,8 @@ the candidate context as loading always has - and only then writes the rows that
 changed, advances the user's `fact_store_version`, and appends the fact events. A
 proposal that does not build is refused and nothing is written.
 
-The cross-store journal this replaced (§7.2) is retired; its rows stay as history and
-block nothing.
+The cross-store journal this replaced (§7.2) is retired; its table stays as history and
+nothing reads it.
 """
 
 from __future__ import annotations
@@ -748,17 +748,6 @@ class KnowledgeQueryService:
         problems.extend(
             f"non-canonical fact has no lifecycle event: {fact_id}" for fact_id in untracked
         )
-        # The retired journal's rows are history; one left unresolved is still reported.
-        with self.transactions.read() as tx:
-            prepared = self.store.prepared_mutations(tx)
-            quarantined = self.store.quarantined_mutations(tx)
-        problems.extend(
-            f"Knowledge mutation still requires recovery: {mutation.id}" for mutation in prepared
-        )
-        problems.extend(
-            f"Knowledge mutation is quarantined: {mutation.id} ({mutation.quarantine_reason})"
-            for mutation in quarantined
-        )
         counts = {status.value: len(facts.by_status(status)) for status in FactStatus}
         return FactReconciliationResult(
             passed=not problems,
@@ -767,6 +756,4 @@ class KnowledgeQueryService:
             facts_version=facts.version,
             lifecycle_version=facts.lifecycle_version,
             problems=problems,
-            journal_prepared=len(prepared),
-            journal_quarantined=len(quarantined),
         )

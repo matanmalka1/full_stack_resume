@@ -103,8 +103,6 @@ class FactReconciliationResult(BoundaryDTO):
     facts_version: str
     lifecycle_version: str
     problems: list[str]
-    journal_prepared: int = 0
-    journal_quarantined: int = 0
 
 
 def fact_event_view(record: dict[str, Any]) -> FactEventView:

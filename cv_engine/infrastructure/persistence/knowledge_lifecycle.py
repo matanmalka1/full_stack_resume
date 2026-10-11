@@ -4,166 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import insert, select
 
-from ...application.errors import PreconditionFailed, StateConflict, UnknownRecord
-from ...application.knowledge_mutations import (
-    KnowledgeMutation,
-    KnowledgeMutationState,
-    PrepareKnowledgeMutation,
-)
+from ...application.errors import StateConflict, UnknownRecord
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import canonical_json, new_id, sha256_text, utc_now
 from .analysis_sql import _analysis_record
 from .connection import SqlAlchemyTransactionManager
-from .tables import fact_events, job_analyses, knowledge_mutation_journal
+from .tables import fact_events, job_analyses
 
 
 class SqlAlchemyKnowledgeLifecycleRepository:
-    """Own fact events and mutation-journal state behind explicit tokens."""
+    """Own fact events behind explicit transaction tokens."""
 
     def __init__(self, transactions: SqlAlchemyTransactionManager):
         self._transactions = transactions
-
-    @staticmethod
-    def _record(row: Any) -> KnowledgeMutation:
-        if row is None:
-            raise UnknownRecord("knowledge mutation does not exist")
-        return KnowledgeMutation(
-            id=row["id"],
-            mutation_type=row["mutation_type"],
-            state=KnowledgeMutationState(row["state"]),
-            source_reference=row["source_reference"],
-            staged_reference=row["staged_reference"],
-            old_sha256=row["old_sha256"],
-            new_sha256=row["new_sha256"],
-            db_mutation_type=row["db_mutation_type"],
-            db_mutation_id=row["db_mutation_id"],
-            db_mutation=row["db_mutation_json"],
-            recovery_strategy=row["recovery_strategy"],
-            prepared_at=row["prepared_at"],
-            committed_at=row["committed_at"],
-            quarantined_at=row["quarantined_at"],
-            quarantine_reason=row["quarantine_reason"],
-        )
-
-    def prepare_mutation(
-        self,
-        tx: WriteTransaction,
-        request: PrepareKnowledgeMutation,
-        *,
-        prepared_at: str | None = None,
-    ) -> KnowledgeMutation:
-        connection = self._transactions.connection_for(tx, access="write")
-        connection.execute(
-            insert(knowledge_mutation_journal).values(
-                id=request.mutation_id,
-                mutation_type=request.mutation_type,
-                state="PREPARED",
-                source_reference=request.source_reference,
-                staged_reference=request.staged_reference,
-                old_sha256=request.old_sha256,
-                new_sha256=request.new_sha256,
-                db_mutation_type=request.db_mutation_type,
-                db_mutation_id=request.db_mutation_id,
-                db_mutation_json=request.db_mutation,
-                recovery_strategy=request.recovery_strategy,
-                prepared_at=prepared_at or utc_now(),
-            )
-        )
-        return self.mutation(tx, request.mutation_id)
-
-    def mutation(self, tx: ReadTransaction, mutation_id: str) -> KnowledgeMutation:
-        row = (
-            self._transactions.connection_for(tx)
-            .execute(
-                select(knowledge_mutation_journal).where(
-                    knowledge_mutation_journal.c.id == mutation_id
-                )
-            )
-            .mappings()
-            .one_or_none()
-        )
-        return self._record(row)
-
-    def prepared_mutations(self, tx: ReadTransaction) -> list[KnowledgeMutation]:
-        rows = (
-            self._transactions.connection_for(tx)
-            .execute(
-                select(knowledge_mutation_journal)
-                .where(knowledge_mutation_journal.c.state == "PREPARED")
-                .order_by(
-                    knowledge_mutation_journal.c.prepared_at,
-                    knowledge_mutation_journal.c.id,
-                )
-            )
-            .mappings()
-            .all()
-        )
-        return [self._record(row) for row in rows]
-
-    def quarantined_mutations(self, tx: ReadTransaction) -> list[KnowledgeMutation]:
-        rows = (
-            self._transactions.connection_for(tx)
-            .execute(
-                select(knowledge_mutation_journal)
-                .where(knowledge_mutation_journal.c.state == "QUARANTINED")
-                .order_by(
-                    knowledge_mutation_journal.c.quarantined_at,
-                    knowledge_mutation_journal.c.id,
-                )
-            )
-            .mappings()
-            .all()
-        )
-        return [self._record(row) for row in rows]
-
-    def commit_mutation(
-        self,
-        tx: WriteTransaction,
-        mutation_id: str,
-        *,
-        committed_at: str | None = None,
-    ) -> KnowledgeMutation:
-        connection = self._transactions.connection_for(tx, access="write")
-        cursor = connection.execute(
-            update(knowledge_mutation_journal)
-            .where(
-                knowledge_mutation_journal.c.id == mutation_id,
-                knowledge_mutation_journal.c.state == "PREPARED",
-            )
-            .values(state="COMMITTED", committed_at=committed_at or utc_now())
-        )
-        if cursor.rowcount != 1:
-            raise PreconditionFailed("knowledge mutation is not prepared")
-        return self.mutation(tx, mutation_id)
-
-    def quarantine_mutation(
-        self,
-        tx: WriteTransaction,
-        mutation_id: str,
-        reason: str,
-        *,
-        quarantined_at: str | None = None,
-    ) -> KnowledgeMutation:
-        if not reason.strip():
-            raise PreconditionFailed("knowledge mutation quarantine requires a reason")
-        connection = self._transactions.connection_for(tx, access="write")
-        cursor = connection.execute(
-            update(knowledge_mutation_journal)
-            .where(
-                knowledge_mutation_journal.c.id == mutation_id,
-                knowledge_mutation_journal.c.state == "PREPARED",
-            )
-            .values(
-                state="QUARANTINED",
-                quarantined_at=quarantined_at or utc_now(),
-                quarantine_reason=reason,
-            )
-        )
-        if cursor.rowcount != 1:
-            raise PreconditionFailed("knowledge mutation is not prepared")
-        return self.mutation(tx, mutation_id)
 
     def record_fact_event(self, tx: WriteTransaction, **event: Any) -> str:
         connection = self._transactions.connection_for(tx, access="write")
@@ -183,11 +38,9 @@ class SqlAlchemyKnowledgeLifecycleRepository:
             "facts_version": event["facts_version"],
             "lifecycle_version": event["lifecycle_version"],
             "created_at": event.get("created_at") or utc_now(),
+            "user_id": event["user_id"],
         }
-        owner = event.get("user_id")
-        # An event written before Knowledge had an owner gets one later (migration 0005),
-        # so the owner is not part of the content a replay of the same event must match.
-        visible = [column for column in fact_events.c if column.name not in {"seq", "user_id"}]
+        visible = [column for column in fact_events.c if column.name != "seq"]
         existing = (
             connection.execute(select(*visible).where(fact_events.c.id == event_id))
             .mappings()
@@ -197,7 +50,7 @@ class SqlAlchemyKnowledgeLifecycleRepository:
             if dict(existing) != values:
                 raise StateConflict("fact event identity already has different content")
             return event_id
-        connection.execute(insert(fact_events).values(**values, user_id=owner))
+        connection.execute(insert(fact_events).values(**values))
         return event_id
 
     @staticmethod
