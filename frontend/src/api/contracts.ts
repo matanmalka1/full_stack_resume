@@ -33,7 +33,6 @@ export type OperationFailureCode = ApiSchemas["OperationFailureCode"];
 export type ValidationReport = ApiSchemas["ValidationReportResponse"];
 export type Settings = ApiSchemas["SettingsResponse"];
 export type UpdateSettingsRequest = ApiSchemas["UpdateSettingsRequest"];
-export type ReconciliationReport = ApiSchemas["ReconciliationResponse"];
 export type Me = ApiSchemas["MeResponse"];
 export type LoginRequest = ApiSchemas["LoginRequest"];
 export type ChangePasswordRequest = ApiSchemas["ChangePasswordRequest"];

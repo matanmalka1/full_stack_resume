@@ -105,30 +105,17 @@ def test_imported_knowledge_reads_back_through_the_installations_templates(
     }
 
 
-def test_import_gives_the_existing_fact_events_their_owner(
-    services, user, project_root, transaction_manager, database_engine
+def test_import_leaves_no_ownerless_fact_events(
+    services, user, project_root, database_engine
 ) -> None:
-    """An event written before Knowledge had an owner, as every pre-import event was."""
-    fact = FileKnowledge(project_root).facts().get("common.contact.email")
-    with transaction_manager.write() as tx:
-        SqlAlchemyKnowledgeLifecycleRepository(transaction_manager).record_fact_event(
-            tx,
-            fact_id=fact.fact_id,
-            source_file=fact.source_file,
-            event_type="fact_confirmed",
-            from_status="pending",
-            to_status="canonical",
-            fact=fact.model_dump(mode="json"),
-            facts_version="before",
-            lifecycle_version="before",
-        )
-
     result = services.knowledge_import.import_knowledge(EMAIL, FileKnowledge(project_root))
 
     with database_engine.connect() as connection:
-        owners = connection.execute(select(fact_events.c.user_id)).scalars().all()
-    assert result.fact_events == len(owners) == 1
-    assert set(owners) == {user.id}
+        ownerless = connection.execute(
+            select(func.count()).select_from(fact_events).where(fact_events.c.user_id.is_(None))
+        ).scalar_one()
+    assert result.fact_events == 0
+    assert ownerless == 0
 
 
 def test_rows_carry_each_fact_its_source_order_and_the_split_profiles(

@@ -511,34 +511,6 @@ def test_lifecycle_events_are_immutable_and_carry_their_owner(services: Services
             connection = transactions.connection_for(tx, access="write")
             connection.execute(delete(fact_events))
 
-    # The one permitted change: an owner for an event written before there was one,
-    # NULL -> a user, with nothing else (migration 0005).
-    fact = result.fact
-    with transactions.write() as tx:
-        legacy = store.record_fact_event(
-            tx,
-            fact_id=fact.fact_id,
-            source_file=fact.source_file,
-            event_type="fact_created",
-            from_status=None,
-            to_status=fact.status.value,
-            fact=fact.model_dump(mode="json"),
-            facts_version="before",
-            lifecycle_version="before",
-        )
-    unowned = update(fact_events).where(fact_events.c.id == legacy)
-    with pytest.raises(ProgrammingError, match="immutable record"):
-        with transactions.write() as tx:
-            connection = transactions.connection_for(tx, access="write")
-            connection.execute(unowned.values(user_id=owner, reason="changed"))
-    with transactions.write() as tx:
-        connection = transactions.connection_for(tx, access="write")
-        connection.execute(unowned.values(user_id=owner))
-    with pytest.raises(ProgrammingError, match="immutable record"):
-        with transactions.write() as tx:
-            connection = transactions.connection_for(tx, access="write")
-            connection.execute(unowned.values(user_id=None))
-
 
 def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) -> None:
     """The full product path a new fact has to travel.

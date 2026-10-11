@@ -186,6 +186,13 @@ def build_services(
     engine = create_database_engine(resolved_database_url)
     schema_version = current_database_revision(engine) or ""
     transactions = SqlAlchemyTransactionManager(engine)
+    account_repository = SqlAlchemyAccountRepository(transactions)
+    account_service = AccountService(
+        transactions,
+        account_repository,
+        Argon2PasswordHasher(),
+        session_days=int(resolved_config.get("session_days")),
+    )
     intake_applications = SqlAlchemyApplicationStore(transactions)
     intake_recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
     intake_audit = SqlAlchemyAuditLog(transactions)
@@ -347,6 +354,7 @@ def build_services(
         runner,
         request_cancellation=cancel_for_its_owner,
         exclusive=lambda: worker_exclusivity(engine),
+        maintenance=account_service.cleanup_rate_limits,
     )
     knowledge_service = FactLifecycleService(
         transactions=transactions,
@@ -397,15 +405,10 @@ def build_services(
         operation_runner=runner,
         operation_worker=worker,
         settings=settings_service,
-        accounts=AccountService(
-            transactions,
-            SqlAlchemyAccountRepository(transactions),
-            Argon2PasswordHasher(),
-            session_days=int(resolved_config.get("session_days")),
-        ),
+        accounts=account_service,
         knowledge_import=KnowledgeImportService(
             transactions,
-            SqlAlchemyAccountRepository(transactions),
+            account_repository,
             knowledge_lifecycle_store,
             user_knowledge,
         ),
@@ -429,9 +432,11 @@ def build_api_services(
     """
     max_body_bytes = API_MAX_BODY_BYTES_DEFAULT
     dev_origin: str | None = None
+    trusted_proxy_hops = 0
     if config is not None:
         max_body_bytes = config.get("api_max_body_bytes")
         dev_origin = config.get("api_dev_origin")
+        trusted_proxy_hops = config.get("trusted_proxy_hops")
     return ApiServices(
         applications=services.applications,
         queries=services.queries,
@@ -445,7 +450,6 @@ def build_api_services(
         submission=services.submission,
         knowledge=services.knowledge_lifecycle,
         knowledge_queries=services.knowledge_queries,
-        maintenance=services.maintenance,
         operation_submissions=services.operation_submissions,
         operation_lifecycle=services.operation_lifecycle,
         settings=services.settings,
@@ -455,5 +459,9 @@ def build_api_services(
             api_version=API_VERSION,
             schema_version=services.schema_version,
         ),
-        limits=ApiLimits(max_body_bytes=max_body_bytes, dev_origin=dev_origin),
+        limits=ApiLimits(
+            max_body_bytes=max_body_bytes,
+            dev_origin=dev_origin,
+            trusted_proxy_hops=trusted_proxy_hops,
+        ),
     )

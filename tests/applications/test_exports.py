@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from helpers import actor_of
 
 from cv_engine.application.commands import (

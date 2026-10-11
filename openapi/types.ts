@@ -880,48 +880,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/maintenance/orphans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Inspect unreferenced immutable payload candidates
-         * @description Read-only; a candidate has no database reference and was stored over an hour ago.
-         *
-         *     This endpoint neither repairs nor deletes payloads.
-         */
-        get: operations["inspect_orphans_api_v1_maintenance_orphans_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/maintenance/reconciliations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reconcile stored evidence and the fact lifecycle
-         * @description Check database references, artifact hashes, and the fact lifecycle.
-         */
-        post: operations["reconcile_api_v1_maintenance_reconciliations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/operations/{operation_id}": {
         parameters: {
             query?: never;
@@ -2067,30 +2025,6 @@ export interface components {
             events: components["schemas"]["FactEventResponse"][];
         };
         /**
-         * FactLifecycleReportResponse
-         * @description The fact lifecycle checked against its audit trail.
-         */
-        FactLifecycleReportResponse: {
-            /** Fact Counts */
-            fact_counts: {
-                [key: string]: number;
-            };
-            /** Facts Version */
-            facts_version: string;
-            /** Journal Prepared */
-            journal_prepared: number;
-            /** Journal Quarantined */
-            journal_quarantined: number;
-            /** Lifecycle Version */
-            lifecycle_version: string;
-            /** Passed */
-            passed: boolean;
-            /** Problems */
-            problems: string[];
-            /** Tracked Facts */
-            tracked_facts: number;
-        };
-        /**
          * FactListItemResponse
          * @description One fact, beside the status its audit trail last recorded.
          *
@@ -2429,14 +2363,6 @@ export interface components {
          */
         OperationType: "analyze_job" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_document";
         /**
-         * OrphanInventoryResponse
-         * @description Observed candidates have no database reference and were stored over an hour ago.
-         */
-        OrphanInventoryResponse: {
-            /** Candidates */
-            candidates: string[];
-        };
-        /**
          * PdfPageLimitReason
          * @description The rendered PDF ran past the profile's page limit.
          */
@@ -2484,25 +2410,6 @@ export interface components {
             };
             /** Message */
             message: string;
-        };
-        /**
-         * ReconciliationResponse
-         * @description Whether stored evidence and the fact lifecycle agree.
-         *
-         *     `problems` describes stored payloads and logged AI calls; the lifecycle keeps its
-         *     own list, so
-         *     a reader can tell which half is broken instead of seeing one merged list.
-         */
-        ReconciliationResponse: {
-            /** Ai Calls Checked */
-            ai_calls_checked: number;
-            fact_lifecycle: components["schemas"]["FactLifecycleReportResponse"];
-            /** Passed */
-            passed: boolean;
-            /** Payloads Checked */
-            payloads_checked: number;
-            /** Problems */
-            problems: string[];
         };
         /**
          * RecruitmentTimelineItemResponse
@@ -4150,6 +4057,17 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description The shared sign-in limit was reached (`RATE_LIMITED`). */
+            429: {
+                headers: {
+                    /** @description Seconds until the current fixed window ends. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     logout_api_v1_auth_logout_post: {
@@ -4709,82 +4627,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    inspect_orphans_api_v1_maintenance_orphans_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrphanInventoryResponse"];
-                };
-            };
-            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    reconcile_api_v1_maintenance_reconciliations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReconciliationResponse"];
-                };
-            };
-            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description The request did not match the API contract. */

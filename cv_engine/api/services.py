@@ -22,7 +22,6 @@ from ..application.services.drafts import DraftAuthoringService, DraftEditingSer
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.review import DraftReviewService
 from ..application.services.knowledge import FactLifecycleService, KnowledgeQueryService
-from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
     OperationLifecycleService,
     OperationSubmissionService,
@@ -53,6 +52,7 @@ class ApiLimits:
 
     max_body_bytes: int
     dev_origin: str | None = None
+    trusted_proxy_hops: int = 0
 
 
 @dataclass(frozen=True)
@@ -69,7 +69,6 @@ class ApiServices:
     submission: SubmissionService
     knowledge: FactLifecycleService
     knowledge_queries: KnowledgeQueryService
-    maintenance: MaintenanceService
     operation_submissions: OperationSubmissionService
     operation_lifecycle: OperationLifecycleService
     settings: SettingsService

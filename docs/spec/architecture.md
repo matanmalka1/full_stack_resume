@@ -6,9 +6,9 @@ does: layer boundaries, storage, transactions, the Operation runner, security, a
 runtime. Where a topic is owned elsewhere it is linked, not restated. Section numbers are
 cited from code and other specifications; keep them stable.
 
-Accounts, per-user isolation, and per-user Knowledge are approved and not built (§18,
-[`../decisions/multi-user-accounts.md`](../decisions/multi-user-accounts.md)). Sections
-they change say *designed, not built* and describe the target next to what exists.
+Accounts, per-user isolation, and per-user Knowledge are implemented (§18,
+[`../decisions/multi-user-accounts.md`](../decisions/multi-user-accounts.md)). Hosted
+transport remains delivery step 7.
 
 ## 1. Architecture objective
 
@@ -52,7 +52,7 @@ Backend:
 - Alembic for explicit numbered schema revisions
 - Jinja2 for resume HTML; Playwright-managed Chromium for rendering and render
   validation; `pypdf` for PDF extraction and ATS checks
-- *Designed, not built (§18):* `argon2-cffi` for password hashing — it enforces the
+- `argon2-cffi` for password hashing — it enforces the
   password-storage contract, which the standard library cannot.
 - `boto3`, in the optional `s3` extra only, imported inside the adapter so the local
   path — which must reach Ready from an existing analysis with nothing configured —
@@ -201,7 +201,7 @@ path resolves inside the root.
 ## 5. CandidateContext
 
 Each user has one CandidateContext, a row in `candidate_contexts` referencing that
-user's facts (§18.2). *Designed, not built (§18):* Application rows then carry
+user's facts (§18.2). Application rows carry
 `user_id`, not a candidate ID: the user is the candidate.
 
 One CandidateContext is loaded from Knowledge. It references canonical name and contact
@@ -231,8 +231,8 @@ mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
 the AI call log (`ai_calls`, §11), Submissions, Operations,
 fact events, users and sessions, per-user facts, CandidateContext and Profile bindings
 (§18.2), the retired Knowledge mutation journal's history (§7.2), and safe settings.
-*Designed, not built (§18):* also single-use tokens, account events, rate-limit
-buckets, and per-user settings.
+This also includes rate-limit buckets and per-user settings. Single-use tokens and
+account events remain deferred.
 
 The database is addressed by `database_url` (`CV_DATABASE_URL`). Composition creates one
 `Engine` (`pool_pre_ping=True`) that owns pooling and connection health. Transaction
@@ -354,9 +354,9 @@ references it and it is an orphan.
 `PayloadStore` have no delete operation. That is what guarantees a registration can never
 reference a removed payload — there is no remover to race. The cost is that an orphan,
 a payload whose registration failed, stays in storage. Orphans arise only from failed
-registrations; their volume is assumed small for a single-user tool, not measured.
+registrations; their volume is currently assumed small, not measured.
 
-**Orphan inspection** (`MaintenanceService.inspect_orphans`; route in
+**Orphan inspection** (`MaintenanceService.inspect_orphans`; operator command in
 state-and-use-cases.md §19b) lists stored payloads that no database row references and
 that were stored longer than `ORPHAN_MIN_AGE` (one hour) ago, and deletes nothing. The
 one writer — `submit_application` — stores and registers within one
@@ -602,7 +602,7 @@ TanStack Query owns server state and polling. React Hook Form owns local forms.
 Component state owns transient editor dialogs and save-conflict UI. There is no Redux
 and no client-side workflow state machine.
 
-*Designed, not built (§18):* one auth state (`loading`, `authenticated`,
+One auth state (`loading`, `authenticated`,
 `unauthenticated`) from `GET /auth/me` gates every private route. A `401` clears it,
 clears the TanStack Query cache, and returns to `/login`. Sign-out also clears every
 per-user browser store, including the intake recovery copy (product-spec.md §8), so the
@@ -699,14 +699,9 @@ The product version does not substitute for any of them.
 
 ## 18. Identity, sessions, and isolation
 
-*Partly built.* Built: `users` and `user_sessions` (§18.1), sessions and passwords
-(§18.4), `create-user`, `set-password` and `import-knowledge` (§18.7), the session
-requirement on every route but sign-in and health, and per-user Knowledge (§18.2):
-the application reads and writes Knowledge as the installation's one user's rows, and
-`fact_events` carry their owner (`../decisions/multi-user-accounts.md` §5, steps 2 to
-4). Until the ownership step (§18.3) a request does not name its user; Knowledge is
-the one user's, which `users_single_user` guarantees. Everything else here is designed,
-not built. Product rules: product-spec.md §22. Commands and codes:
+Implemented through delivery step 6: identity, sessions, per-user Knowledge, ownership,
+cross-user isolation, shared sign-in throttling, and renderer isolation. Hosted
+transport in §18.5 remains step 7. Product rules: product-spec.md §22. Commands and codes:
 state-and-use-cases.md §23. Why, the migration of an existing installation, and the
 delivery order: `../decisions/multi-user-accounts.md`.
 
@@ -719,9 +714,8 @@ Mutable (they join the mutable exception set, §6.1): `users`, `user_sessions`,
 - `users`: `id`, `email` (normalized — NFC, trimmed, lowercased, nothing else —
   `UNIQUE`), `password_hash` (`NOT NULL`), `created_at`. Nothing else has a reader;
   a column arrives with the feature that reads it.
-- `users_single_user`: a unique index over a constant (`ON users ((true))`), so the
-  database admits one user. The step that completes isolation drops it in its own
-  migration (`../decisions/multi-user-accounts.md` §5, step 6).
+- Migration `0007` drops the former `users_single_user` guard only after the isolation,
+  persistence, rate-limit, and renderer guards are installed.
 - `user_sessions`: `id`, `user_id`, `token_hash` (`UNIQUE`), `created_at`, `expires_at`,
   `revoked_at`, with an index on `user_id` for revoking every session of a user.
 - `user_settings`: `user_id` is the primary key and a foreign key to `users`; the
@@ -834,15 +828,17 @@ analysis = analyses.get_for_application(tx, analysis_id, application.id)
 
 ### 18.5 Transport and rate limit
 
-Supersedes §14 once built.
+The sign-in limit and forwarding trust are built. Public-origin, Host, and HSTS rules
+below ship with hosted deployment in step 7 and then supersede §14.
 
-- One public origin (`CV_PUBLIC_ORIGIN`, HTTPS in production) replaces the host and
+- *Designed, not built (step 7):* one public origin (`CV_PUBLIC_ORIGIN`, HTTPS in
+  production) replaces the host and
   port the origin policy derives today. Allowed Origins are that origin plus, in
   development only, the one Vite origin. Allowed `Host` values are the public origin's
   host only; any other is refused before routing.
 - Every mutation must carry an allowed `Origin`, `login` included. With `SameSite=Lax`
   cookies that is the CSRF defence; there is no CSRF token.
-- HSTS when the public origin is HTTPS. The app shell sends `frame-ancestors 'none'`;
+- *Designed, not built (step 7):* HSTS when the public origin is HTTPS. The app shell sends `frame-ancestors 'none'`;
   previews keep their own CSP and allow framing only by the app's own origin.
 - Sign-in rate limit, in `rate_limit_buckets` (PostgreSQL, because two processes share
   it and there is no Redis, §2): a fixed 15-minute window, 5 failures per email and 20
@@ -877,8 +873,7 @@ same application layer.
 Passwords are read from a prompt that does not echo, entered twice, or with
 `--password-stdin` from standard input; never from an argument.
 
-- `create-user --email` creates a user. A second user is refused by
-  `users_single_user` (§18.1) until isolation is complete.
+- `create-user --email` creates a user; normalized email remains unique.
 - `set-password --email` sets a new password and revokes every session.
 - `import-knowledge --email [--from <dir>]` reads the Knowledge files under `<dir>` (a
   directory holding `base/` and `profiles/`; the installation itself by default) through

@@ -8,9 +8,8 @@ those previously lacked an API surface.
 
 from __future__ import annotations
 
-from helpers import actor_of
-
 from api_harness import MUTATION_HEADERS
+from helpers import actor_of
 
 from cv_engine.api.app import API_PREFIX
 

@@ -180,9 +180,7 @@ def test_document_journey_from_analysis_to_submission(
     assert stored_document(services, application_id) == document
     assert _detail(services, application_id).preparation_state is PreparationState.READY
 
-    reconciled = services.maintenance.reconcile(
-        actor_of(services),
-    )
+    reconciled = services.maintenance.reconcile()
     assert reconciled.problems == []
     # Each immutable Submission file; AI calls are counted apart.
     # Mutable document render attempts are not part of this inventory.

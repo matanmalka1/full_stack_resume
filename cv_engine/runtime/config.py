@@ -51,6 +51,13 @@ def positive_int(raw: str) -> int:
     return value
 
 
+def nonnegative_int(raw: str) -> int:
+    value = int(raw)
+    if value < 0:
+        raise ValueError("must be at least 0")
+    return value
+
+
 # The HTTP body limit lives here rather than in the API package because the
 # test plan (§10) requires the chosen value to be recorded in the config
 # contract and can be reported by diagnostics.
@@ -124,6 +131,12 @@ SETTINGS: dict[str, Setting] = {
         # (architecture §18.4).
         # A session of zero days would sign every user out as they sign in.
         Setting("session_days", "CV_SESSION_DAYS", default=30, cast=positive_int),
+        Setting(
+            "trusted_proxy_hops",
+            "CV_TRUSTED_PROXY_HOPS",
+            default=0,
+            cast=nonnegative_int,
+        ),
     )
 }
 

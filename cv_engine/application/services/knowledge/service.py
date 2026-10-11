@@ -283,7 +283,11 @@ class FactLifecycleService:
         try:
             before = store.get(fact_id)
             confirmed = store.confirm(fact_id, explicitly_confirmed=True)
-        except (FactStoreError, ValueError) as exc:
+        except FactStoreError as exc:
+            if fact_id not in store.facts:
+                raise UnknownRecord(f"Unknown fact: {fact_id}") from exc
+            raise KnowledgeRejected(str(exc)) from exc
+        except ValueError as exc:
             raise KnowledgeRejected(str(exc)) from exc
         return before, confirmed.model_copy(
             update={"confirmed_at": before.confirmed_at or utc_now()[:10]}
@@ -341,7 +345,11 @@ class FactLifecycleService:
             try:
                 before = store.get(fact_id)
                 after = store.delete(fact_id)
-            except (FactStoreError, ValueError) as exc:
+            except FactStoreError as exc:
+                if fact_id not in store.facts:
+                    raise UnknownRecord(f"Unknown fact: {fact_id}") from exc
+                raise KnowledgeRejected(str(exc)) from exc
+            except ValueError as exc:
                 raise KnowledgeRejected(str(exc)) from exc
             knowledge, event_ids = self._commit(
                 tx,
@@ -502,11 +510,11 @@ class FactLifecycleService:
             current = self._state(tx, actor)
             loaded = self._build(current)
             try:
-                fact = loaded.facts.get(fact_id, canonical_only=True)
+                fact = loaded.facts.get(fact_id)
             except FactStoreError as exc:
-                raise KnowledgeRejected(
-                    f"only canonical facts may enter a Profile pool: {exc}"
-                ) from exc
+                raise UnknownRecord(f"Unknown fact: {fact_id}") from exc
+            if fact.status is not FactStatus.CANONICAL:
+                raise KnowledgeRejected("only canonical facts may enter a Profile pool")
             proposed, updated, origin = self._attached(
                 loaded, current, fact_id, profile, section, pin=pin
             )
@@ -703,6 +711,11 @@ class KnowledgeQueryService:
         )
 
     def fact_history(self, actor: Actor, fact_id: str | None = None) -> FactHistoryResult:
+        if fact_id is not None:
+            try:
+                self.fact_store(actor).get(fact_id)
+            except FactStoreError as exc:
+                raise UnknownRecord(str(exc)) from exc
         with self.transactions.read() as tx:
             events = self.store.fact_events(tx, actor.user_id, fact_id)
         return FactHistoryResult(events=[fact_event_view(row) for row in events])

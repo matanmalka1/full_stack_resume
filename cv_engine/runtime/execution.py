@@ -40,6 +40,8 @@ class OperationWorker:
         concurrency: int = 2,
         poll_interval_seconds: float = 0.25,
         slot_check_interval_seconds: float = 5.0,
+        maintenance: Callable[[], object] = lambda: None,
+        maintenance_interval_seconds: float = 900.0,
     ):
         if concurrency < 1:
             raise ValueError("worker concurrency must be positive")
@@ -49,6 +51,8 @@ class OperationWorker:
         self.concurrency = concurrency
         self.poll_interval_seconds = poll_interval_seconds
         self.slot_check_interval_seconds = slot_check_interval_seconds
+        self.maintenance = maintenance
+        self.maintenance_interval_seconds = maintenance_interval_seconds
         self._active_ids: set[str] = set()
         self._active_lock = Lock()
 
@@ -147,6 +151,7 @@ class OperationWorker:
             self._serve(stop, slot)
 
     def _serve(self, stop: Event, slot: WorkerSlot) -> None:
+        self.maintenance()
         recovered = self.recover_startup()
         if recovered:
             logger.warning(
@@ -167,10 +172,14 @@ class OperationWorker:
         futures: set[Future[PersistedOperation | None]] = set()
         slot_lost = False
         next_slot_check = monotonic() + self.slot_check_interval_seconds
+        next_maintenance = monotonic() + self.maintenance_interval_seconds
         with ThreadPoolExecutor(
             max_workers=self.concurrency, thread_name_prefix="operation-worker"
         ) as pool:
             while not stop.is_set():
+                if monotonic() >= next_maintenance:
+                    self.maintenance()
+                    next_maintenance = monotonic() + self.maintenance_interval_seconds
                 if monotonic() >= next_slot_check:
                     if not slot.held():
                         slot_lost = True

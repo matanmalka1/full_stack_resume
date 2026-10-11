@@ -1,8 +1,8 @@
 # CV Application Product Specification
 
-Status: **Binding.** Describes the product as implemented (2026-09-29), including the
+Status: **Binding.** Describes the product as implemented (2026-10-11), including the
 single-document model ([`../decisions/single-document-model.md`](../decisions/single-document-model.md)).
-Anything designed but not built — today, accounts and isolation (§22) — is marked
+Anything designed but not built — including hosted transport and editable facts — is marked
 *designed, not built* where it appears, and listed in §20.
 
 Section numbers are cited from code, tests, and other documents; keep them stable.
@@ -10,8 +10,7 @@ Section numbers are cited from code, tests, and other documents; keep them stabl
 ## תקציר מנהלים
 
 כלי שמתאים קורות חיים למשרה, קושר כל טענה לעובדות הקנוניות של המועמד, ומפיק PDF קריא
-לאדם ול־ATS. כל משתמש הוא מועמד אחד ורואה רק את המידע שלו (§22 — מאופיין, טרם מומש;
-היום הכלי מקומי למועמד יחיד וללא הזדהות).
+לאדם ול־ATS. כל משתמש הוא מועמד אחד ורואה רק את המידע שלו (§22).
 
 הזרימה המרכזית:
 
@@ -169,8 +168,8 @@ The product includes:
 - Recruiter-facing PDF download and a human-readable provenance Markdown export of the
   current document.
 - Persisted, cancellable, retryable Operations for AI work and rendering.
-- Safe Settings (§15), a health endpoint, and read-only maintenance: reconciliation and
-  orphan inspection (§16).
+- Safe Settings (§15), a health endpoint, and operator-only read-only maintenance:
+  reconciliation and orphan inspection (§16).
 
 ## 5. Explicit non-goals
 
@@ -215,8 +214,7 @@ decision.
 2. Each user is exactly one candidate. Every record belongs to exactly one user,
    directly (a root) or through its Application; no command or query reaches a record
    of another user, and such a record is indistinguishable from one that does not exist
-   (§22). *Designed, not built:* today the system represents one candidate and
-   Application rows carry no owner.
+   (§22).
 3. `CVDocument` is the only mutable resume document. Exactly one exists per Application
    once its first analysis activates.
 4. JobAnalysis, provider-response Artifact, Submission, recruitment/audit/
@@ -645,10 +643,9 @@ sign-out are not Application events and are not audited here (§22).
 ## 15. Runtime and security
 
 The product serves UI and API from one origin. Every route except sign-in and health
-requires a session (§22). It validates `Origin` on every
-mutation, accepts only its configured hosts, and uses an explicit CORS list with no
-wildcard (architecture.md §14). *Designed, not built:* the host allowlist; today it binds
-to loopback.
+requires a session (§22). It validates `Origin` on every mutation and uses an explicit
+CORS list with no wildcard (architecture.md §14). *Designed, not built:* the hosted
+deployment's Host allowlist; today it binds to loopback.
 
 Safe settings are per-user, server-owned, and optimistic (a stale write is a conflict the user
 resolves; nothing is overwritten automatically):
@@ -808,14 +805,9 @@ State as of this revision (details: `tailoring-decisions.md` §2–§3):
   inactive, with correction through the editor or fact lifecycle.
 - Live acceptance and experience measurements are recorded separately in
   `../acceptance/2026-09-29.md`; an unsuccessful run does not constitute acceptance.
-- **Approved, not built:** user accounts, per-user isolation, and per-user Knowledge
-  (§22). Until they ship, the implementation is the single-candidate, loopback-only,
-  unauthenticated tool, and every section marked *designed, not built* describes the
-  target. Delivery order: `../decisions/multi-user-accounts.md` §5 — sign-in first,
-  with the database admitting one user until isolation is complete. Built so far:
-  sign-in for that one user — the Web sign-in screen, a session required on every
-  route but sign-in and health, and the operator commands that create the user and set
-  its password.
+- **Implemented:** user accounts, per-user Knowledge, ownership and cross-user
+  isolation (§22), including shared sign-in throttling and renderer isolation. Hosted
+  transport (public origin, Host allowlist, and HSTS) remains delivery step 7.
 
 Executable evidence and the release matrix are defined only in
 `test-and-acceptance-plan.md`.
@@ -829,7 +821,7 @@ approval, a deployment-model change, or any dual-write behavior.
 
 ## 22. Accounts and isolation
 
-*Designed, not built.* Why and how an existing installation maps onto it:
+Implemented through delivery step 6. Why and how an existing installation maps onto it:
 [`../decisions/multi-user-accounts.md`](../decisions/multi-user-accounts.md). Commands,
 error codes, and routes: state-and-use-cases.md §23. Mechanisms and defaults:
 architecture.md §18. Evidence: test-and-acceptance-plan.md §3.11.
@@ -855,8 +847,8 @@ stored normalized and is unique. Passwords are stored only as a memory-hard hash
 password or session secret is stored or logged in raw form. A user can sign in, sign
 out, sign out of every device, and change the password (with the current one).
 Changing the password ends every other session. A forgotten password is reset by the
-operator, which also ends every session. Until isolation is complete the database
-admits exactly one user.
+operator, which also ends every session. The database admits multiple users only after
+the isolation migration has installed every guard in this section.
 
 **Sessions** expire and can be revoked, and are carried only in an `HttpOnly`,
 `Secure`, `SameSite=Lax` cookie; the Web client never holds a token in script-readable

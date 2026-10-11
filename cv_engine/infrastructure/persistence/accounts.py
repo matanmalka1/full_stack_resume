@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
 from ...application.accounts import ActiveSession, StoredUser
 from ...application.errors import StateConflict
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from .connection import SqlAlchemyTransactionManager
-from .tables import user_sessions, users
-
-_SINGLE_USER = "users_single_user"
+from .tables import rate_limit_buckets, user_sessions, users
 
 
 def _user(row) -> StoredUser:
@@ -48,12 +47,7 @@ class SqlAlchemyAccountRepository:
                         created_at=created_at,
                     )
                 )
-        except IntegrityError as error:
-            constraint = getattr(getattr(error.orig, "diag", None), "constraint_name", None)
-            if constraint == _SINGLE_USER:
-                raise StateConflict(
-                    "A user already exists; a second one is refused until isolation is complete."
-                ) from None
+        except IntegrityError:
             raise StateConflict("A user with this email already exists.") from None
         return StoredUser(
             id=user_id, email=email, password_hash=password_hash, created_at=created_at
@@ -130,3 +124,69 @@ class SqlAlchemyAccountRepository:
         self._transactions.connection_for(tx, access="write").execute(
             statement.values(revoked_at=now)
         )
+
+    def release_rate_limit(
+        self,
+        tx: WriteTransaction,
+        *,
+        bucket_type: str,
+        key_hash: str,
+        window_started_at: str,
+    ) -> None:
+        connection = self._transactions.connection_for(tx, access="write")
+        bucket = (
+            rate_limit_buckets.c.bucket_type == bucket_type,
+            rate_limit_buckets.c.key_hash == key_hash,
+            rate_limit_buckets.c.window_started_at == window_started_at,
+        )
+        # `count > 0` is a constraint, so a last count is a deleted row, not a zero.
+        released = connection.execute(
+            update(rate_limit_buckets)
+            .where(*bucket, rate_limit_buckets.c.count > 1)
+            .values(count=rate_limit_buckets.c.count - 1)
+        )
+        if released.rowcount == 0:
+            connection.execute(
+                delete(rate_limit_buckets).where(*bucket, rate_limit_buckets.c.count == 1)
+            )
+
+    def increment_rate_limit(
+        self,
+        tx: WriteTransaction,
+        *,
+        bucket_type: str,
+        key_hash: str,
+        window_started_at: str,
+        updated_at: str,
+    ) -> int:
+        statement = (
+            pg_insert(rate_limit_buckets)
+            .values(
+                bucket_type=bucket_type,
+                key_hash=key_hash,
+                window_started_at=window_started_at,
+                count=1,
+                updated_at=updated_at,
+            )
+            .on_conflict_do_update(
+                index_elements=[
+                    rate_limit_buckets.c.bucket_type,
+                    rate_limit_buckets.c.key_hash,
+                    rate_limit_buckets.c.window_started_at,
+                ],
+                set_={
+                    "count": rate_limit_buckets.c.count + 1,
+                    "updated_at": updated_at,
+                },
+            )
+            .returning(rate_limit_buckets.c.count)
+        )
+        return int(
+            self._transactions.connection_for(tx, access="write").execute(statement).scalar_one()
+        )
+
+    def delete_rate_limit_windows_before(self, tx: WriteTransaction, before: str) -> int:
+        result = self._transactions.connection_for(tx, access="write").execute(
+            delete(rate_limit_buckets).where(rate_limit_buckets.c.window_started_at < before)
+        )
+        return int(result.rowcount or 0)

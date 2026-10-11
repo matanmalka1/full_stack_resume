@@ -95,9 +95,7 @@ def test_pipeline_reaches_ready_and_reconciles(
     (sent,) = stored_submissions(services, app_id)
     assert sent.content == stored_document(services, app_id).content
     assert sent.job_text_hash == ingested.job_text_hash
-    report = services.maintenance.reconcile(
-        actor_of(services),
-    )
+    report = services.maintenance.reconcile()
     assert report.passed, report.problems
     counts = persisted_counts(database_engine)
     submission_files = sum(path is not None for path in (sent.html_path, sent.pdf_path))
@@ -124,9 +122,7 @@ def test_pipeline_reaches_ready_and_reconciles(
             )
         ).scalar_one()
         connection.execute(text("ALTER TABLE ai_calls ENABLE TRIGGER no_update_ai_calls"))
-    tampered_report = services.maintenance.reconcile(
-        actor_of(services),
-    )
+    tampered_report = services.maintenance.reconcile()
     assert not tampered_report.passed
     assert f"AI call response hash mismatch: {tampered}" in tampered_report.problems
 
@@ -139,9 +135,7 @@ def test_reconcile_reports_tampered_submission_without_repair(submitted_applicat
     path = services.paths.root / sent.pdf_path
     tampered = b"%PDF-1.4\n% not the submitted bytes\n"
     path.write_bytes(tampered)
-    report = services.maintenance.reconcile(
-        actor_of(services),
-    )
+    report = services.maintenance.reconcile()
     assert not report.passed
     assert any("hash mismatch" in problem for problem in report.problems)
     assert path.read_bytes() == tampered

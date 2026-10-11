@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from helpers import actor_of
-
 from contextlib import nullcontext
+
+from helpers import actor_of
 
 from cv_engine.application.commands import (
     IngestCommand,

@@ -14,15 +14,17 @@ import re
 import sys
 from dataclasses import replace
 from datetime import UTC, datetime
+from io import StringIO
 from pathlib import Path
 
 import pytest
 from api_harness import sign_in
-from helpers import actor_of
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
+from helpers import actor_of
 
+from cv_engine.admin.cli import main as admin
 from cv_engine.api import FrontendBuildError
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
 from cv_engine.api.middleware.security import BodySizeLimitMiddleware
@@ -34,6 +36,7 @@ from cv_engine.application.errors import (
     KnowledgeRejected,
     LineageBroken,
     PreconditionFailed,
+    RateLimited,
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
@@ -146,7 +149,7 @@ def test_logs_summarise_requests_keep_tracebacks_in_file_and_redact_secrets(
     assert record.exc_info is None
 
 
-def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api, services) -> None:
+def test_orphan_inventory_is_operator_only_and_never_deletes(api, services) -> None:
     """Inventory excludes fresh writes; the removed reclaim route cannot delete evidence.
 
     Ingest stores the job text in the database and writes no payload, and a
@@ -164,8 +167,17 @@ def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api
         "unregistered", "submission", suffix=".pdf", payload=b"pending payload"
     )
     response = api.get(f"{API_PREFIX}/maintenance/orphans")
-    assert response.status_code == 200, response.text
-    assert response.json() == {"candidates": []}
+    assert response.status_code == 404, response.text
+    response = api.post(
+        f"{API_PREFIX}/maintenance/reconciliations", headers={"Origin": ALLOWED_ORIGIN}
+    )
+    assert response.status_code == 404, response.text
+    reconciliation = StringIO()
+    assert admin(["reconcile"], services=services, out=reconciliation) == 0
+    assert json.loads(reconciliation.getvalue())["passed"] is True
+    output = StringIO()
+    assert admin(["inspect-orphans"], services=services, out=output) == 0
+    assert json.loads(output.getvalue()) == {"candidates": []}
 
     services.paths.artifacts_root.joinpath("working", "projection").mkdir(parents=True)
     projection = services.paths.artifacts_root / "working" / "projection" / "resume.md"
@@ -178,9 +190,9 @@ def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api
         "fresh", "submission", suffix=".pdf", payload=b"in-flight payload"
     )
     before = services.payloads.payload_inventory()
-    response = api.get(f"{API_PREFIX}/maintenance/orphans")
-    assert response.status_code == 200, response.text
-    assert response.json() == {"candidates": [orphan.reference]}
+    output = StringIO()
+    assert admin(["inspect-orphans"], services=services, out=output) == 0
+    assert json.loads(output.getvalue()) == {"candidates": [orphan.reference]}
     assert services.payloads.payload_inventory() == before
     assert services.payloads.verify_payload(orphan.reference, orphan.sha256) == "ok"
     assert ingested.job_text_hash
@@ -209,6 +221,7 @@ def test_every_refusal_maps_to_one_status_and_one_code() -> None:
         (ValidationBlocked("blocked"), 412, "VALIDATION_BLOCKED"),
         (LineageBroken("wrong owner"), 412, "LINEAGE_BROKEN"),
         (KnowledgeRejected("refused"), 412, "KNOWLEDGE_REJECTED"),
+        (RateLimited(30), 429, "RATE_LIMITED"),
         (DependencyUnavailable("no provider"), 503, "DEPENDENCY_UNAVAILABLE"),
         (InfrastructureFailure("disk"), 500, "INFRASTRUCTURE_FAILURE"),
     ]

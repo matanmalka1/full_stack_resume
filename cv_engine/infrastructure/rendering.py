@@ -263,6 +263,21 @@ def _chrome_path() -> str | None:
     return str(next((path for path in candidates if path.is_file()), "")) or None
 
 
+def _isolated_route_handler(allowed_url: str):
+    """Allow the one initial document request and abort every request after it."""
+    initial_loaded = False
+
+    def handle(route, request) -> None:
+        nonlocal initial_loaded
+        if not initial_loaded and request.url == allowed_url and request.is_navigation_request():
+            initial_loaded = True
+            route.continue_()
+            return
+        route.abort("blockedbyclient")
+
+    return handle
+
+
 def render_pdf(html_path: Path, pdf_path: Path) -> dict[str, Any]:
     try:
         from playwright.sync_api import sync_playwright
@@ -280,21 +295,36 @@ def render_pdf(html_path: Path, pdf_path: Path) -> dict[str, Any]:
             browser = playwright.chromium.launch(**launch_options)
         except Exception as exc:
             raise BrowserUnavailableError(_launch_failure_message(str(exc))) from exc
-        page = browser.new_page(viewport={"width": 1123, "height": 1588}, device_scale_factor=1)
-        page.goto(html_path.resolve().as_uri(), wait_until="networkidle")
-        geometry = page.evaluate("""() => {
-          const page = document.querySelector('[data-cv-page]');
-          const rect = page.getBoundingClientRect();
-          const offenders = [...document.querySelectorAll('.claim, h1, h2, .contacts')]
-            .filter(el => { const r = el.getBoundingClientRect(); return r.left < rect.left - 1 || r.right > rect.right + 1 || r.bottom > rect.bottom + 1; })
-            .map(el => el.textContent.trim().slice(0, 100));
-          return {scrollWidth: page.scrollWidth, clientWidth: page.clientWidth,
-                  scrollHeight: page.scrollHeight, clientHeight: page.clientHeight,
-                  offenders, dir: document.documentElement.dir,
-                  links: [...document.querySelectorAll('a')].map(a => a.href)};
-        }""")
-        page.pdf(path=str(pdf_path), format="A4", print_background=True, prefer_css_page_size=True)
-        browser.close()
+        try:
+            context = browser.new_context(
+                viewport={"width": 1123, "height": 1588}, device_scale_factor=1
+            )
+            allowed_url = html_path.resolve().as_uri()
+            context.route("**/*", _isolated_route_handler(allowed_url))
+            try:
+                page = context.new_page()
+                page.goto(allowed_url, wait_until="networkidle")
+                geometry = page.evaluate("""() => {
+                  const page = document.querySelector('[data-cv-page]');
+                  const rect = page.getBoundingClientRect();
+                  const offenders = [...document.querySelectorAll('.claim, h1, h2, .contacts')]
+                    .filter(el => { const r = el.getBoundingClientRect(); return r.left < rect.left - 1 || r.right > rect.right + 1 || r.bottom > rect.bottom + 1; })
+                    .map(el => el.textContent.trim().slice(0, 100));
+                  return {scrollWidth: page.scrollWidth, clientWidth: page.clientWidth,
+                          scrollHeight: page.scrollHeight, clientHeight: page.clientHeight,
+                          offenders, dir: document.documentElement.dir,
+                          links: [...document.querySelectorAll('a')].map(a => a.href)};
+                }""")
+                page.pdf(
+                    path=str(pdf_path),
+                    format="A4",
+                    print_background=True,
+                    prefer_css_page_size=True,
+                )
+            finally:
+                context.close()
+        finally:
+            browser.close()
     return geometry
 
 
