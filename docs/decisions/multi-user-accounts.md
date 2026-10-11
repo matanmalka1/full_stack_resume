@@ -1,8 +1,8 @@
 # Decision: user accounts and per-user isolation
 
-Status: **approved, not implemented** (2026-09-30; delivery order and scope revised
-2026-10-11: login first, held to one user by the database, and what a single user does
-not need deferred to §6). The specifications carry the binding
+Status: **approved; steps 1 to 4 of §5 implemented** (2026-09-30; delivery order and
+scope revised 2026-10-11: login first, held to one user by the database, and what a
+single user does not need deferred to §6). The specifications carry the binding
 rules, each marked *designed, not built* until it ships:
 [`product-spec.md`](../spec/product-spec.md) §22,
 [`state-and-use-cases.md`](../spec/state-and-use-cases.md) §23,

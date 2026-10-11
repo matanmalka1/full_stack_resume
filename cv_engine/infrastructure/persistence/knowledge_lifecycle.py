@@ -184,8 +184,9 @@ class SqlAlchemyKnowledgeLifecycleRepository:
             "lifecycle_version": event["lifecycle_version"],
             "created_at": event.get("created_at") or utc_now(),
         }
-        # An event's owner is assigned after it is written (migration 0005), so it is
-        # not part of the content a replay of the same event must match.
+        owner = event.get("user_id")
+        # An event written before Knowledge had an owner gets one later (migration 0005),
+        # so the owner is not part of the content a replay of the same event must match.
         visible = [column for column in fact_events.c if column.name not in {"seq", "user_id"}]
         existing = (
             connection.execute(select(*visible).where(fact_events.c.id == event_id))
@@ -196,7 +197,7 @@ class SqlAlchemyKnowledgeLifecycleRepository:
             if dict(existing) != values:
                 raise StateConflict("fact event identity already has different content")
             return event_id
-        connection.execute(insert(fact_events).values(**values))
+        connection.execute(insert(fact_events).values(**values, user_id=owner))
         return event_id
 
     @staticmethod

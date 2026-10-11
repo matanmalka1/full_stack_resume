@@ -26,4 +26,5 @@ class HealthResponse(HttpSchema):
     product_version: str
     api_version: str
     schema_version: str
-    knowledge: KnowledgeVersions
+    #: Null until there is Knowledge to version: before `create-user` and the import.
+    knowledge: KnowledgeVersions | None

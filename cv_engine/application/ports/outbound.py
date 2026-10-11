@@ -28,11 +28,6 @@ from ...domain.contracts.providers import (
 )
 from ...domain.contracts.validation import ValidationReport
 from ...domain.knowledge import Knowledge
-from ..knowledge_mutations import (
-    KnowledgeFileState,
-    KnowledgeMutation,
-    StagedKnowledgeFile,
-)
 from .values import TaskContracts
 
 
@@ -59,10 +54,10 @@ class PayloadInventory(PayloadVerifier, Protocol):
 
 
 class KnowledgeStore(Protocol):
-    """Where canonical knowledge comes from, without saying it is files.
+    """Knowledge in the installation's file layout: what `import-knowledge` reads.
 
-    Writes are prepared here but become visible only through the durable
-    Knowledge mutation journal.
+    The application reads Knowledge from the user's rows (`UserKnowledgeSource`); files
+    are import input, and the source of the AI task contracts.
     """
 
     def load(self) -> Knowledge: ...
@@ -70,57 +65,6 @@ class KnowledgeStore(Protocol):
     def facts(self) -> Any: ...
 
     def task_contracts(self) -> TaskContracts: ...
-
-    def stage_create_fact(
-        self,
-        mutation_id: str,
-        source_name: str,
-        payload: dict[str, Any],
-        *,
-        canonical: bool = False,
-    ) -> tuple[StagedKnowledgeFile, Any]: ...
-
-    def stage_confirm_fact(
-        self,
-        mutation_id: str,
-        fact_id: str,
-        *,
-        explicitly_confirmed: bool,
-    ) -> tuple[StagedKnowledgeFile, Any, Any]: ...
-
-    def stage_delete_fact(
-        self,
-        mutation_id: str,
-        fact_id: str,
-    ) -> tuple[StagedKnowledgeFile, Any, Any]: ...
-
-    def stage_attach_fact(
-        self,
-        mutation_id: str,
-        profile: str,
-        fact_id: str,
-        section: str,
-        *,
-        pin: bool = False,
-    ) -> tuple[StagedKnowledgeFile, Profile, str]: ...
-
-    def stage_confirm_and_use_fact(
-        self,
-        mutation_id: str,
-        fact_id: str,
-        profile: str,
-        section: str,
-    ) -> tuple[list[StagedKnowledgeFile], Any, Any, Profile, str, Knowledge]: ...
-
-    def activate_staged(self, staged: StagedKnowledgeFile) -> None: ...
-
-    def restore_staged(self, staged: StagedKnowledgeFile) -> None: ...
-
-    def discard_staged(self, staged: StagedKnowledgeFile) -> None: ...
-
-    def staged_from_mutation(self, mutation: KnowledgeMutation) -> StagedKnowledgeFile: ...
-
-    def staged_file_state(self, staged: StagedKnowledgeFile) -> KnowledgeFileState: ...
 
 
 class Renderer(Protocol):

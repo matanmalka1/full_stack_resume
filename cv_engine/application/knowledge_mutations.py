@@ -1,3 +1,9 @@
+"""The retired Knowledge mutation journal's records (architecture §7.2), kept as history.
+
+Knowledge mutations are single database transactions now; these types describe the
+rows the journal holds, which `import-knowledge` checks before it runs.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,25 +15,6 @@ class KnowledgeMutationState(StrEnum):
     PREPARED = "PREPARED"
     COMMITTED = "COMMITTED"
     QUARANTINED = "QUARANTINED"
-
-
-@dataclass(frozen=True)
-class StagedKnowledgeFile:
-    """Opaque project references and hashes for one validated file replacement."""
-
-    mutation_id: str
-    source_reference: str
-    staged_reference: str
-    old_sha256: str
-    new_sha256: str
-    proposed_versions: dict[str, str]
-
-
-@dataclass(frozen=True)
-class KnowledgeFileState:
-    current_sha256: str | None
-    staged_sha256: str | None
-    backup_sha256: str | None
 
 
 @dataclass(frozen=True)

@@ -63,6 +63,12 @@ def _me(client, token: str):
     return client.get(f"{API_PREFIX}/auth/me", headers=_session(token))
 
 
+@pytest.fixture
+def services(bare_services):
+    """These tests make the user themselves: services with no user and no Knowledge."""
+    return bare_services
+
+
 @pytest.mark.parametrize(
     ("raw", "stored"),
     [

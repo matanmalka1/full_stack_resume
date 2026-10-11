@@ -840,7 +840,8 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "SubmissionService",
         "MaintenanceService",
         "ApplicationQueryService",
-        "KnowledgeMutationEngine",
+        # Each fact mutation is one write scope: read, validate, write, record.
+        "FactLifecycleService",
         "KnowledgeQueryService",
         "SettingsService",
         # Hashes a password outside any scope, then writes in its own.
@@ -849,8 +850,6 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "KnowledgeImportService",
         # Appends each provider attempt in its own short scope before deciding a retry.
         "AICallRunner",
-        # Reads the Knowledge journal in its own read scope before a file read.
-        "CommittedKnowledge",
     }
     owners = set()
     paths = (ENGINE / "application").rglob("*.py")

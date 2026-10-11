@@ -22,14 +22,8 @@ from foreground import foreground_executor
 
 from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.api.session_cookie import SESSION_COOKIE
-from cv_engine.application.services.accounts import AccountService
-from cv_engine.infrastructure.passwords import Argon2PasswordHasher
-from cv_engine.infrastructure.persistence import (
-    SqlAlchemyTransactionManager,
-    create_database_engine,
-)
-from cv_engine.infrastructure.persistence.accounts import SqlAlchemyAccountRepository
-from cv_engine.runtime.composition import Services, build_api_services
+from cv_engine.runtime.composition import Services, build_api_services, build_services
+from cv_engine.runtime.paths import AppPaths
 
 TESTS_DIR = Path(__file__).resolve().parent.parent
 
@@ -51,13 +45,8 @@ class LiveApiServer:
         self.base_url = base_url
         self.session_cookie: str | None = None
 
-    def sign_in(self, database_url: str) -> None:
-        """Create the test user in the server's database and carry its session."""
-        engine = create_database_engine(database_url)
-        transactions = SqlAlchemyTransactionManager(engine)
-        AccountService(
-            transactions, SqlAlchemyAccountRepository(transactions), Argon2PasswordHasher()
-        ).create_user(TEST_EMAIL, TEST_PASSWORD)
+    def sign_in(self) -> None:
+        """Sign the provisioned test user in and carry its session."""
         reply = self._call("POST", "/auth/login", {"email": TEST_EMAIL, "password": TEST_PASSWORD})
         assert reply.status == 200, reply.body
 
@@ -126,7 +115,9 @@ def live_api_server(
             **os.environ,
             "CV_TEST_ASGI_ROOT": str(project_root),
             "CV_DATABASE_URL": database_url,
-            "PYTHONPATH": str(TESTS_DIR),
+            # The tests' own checkout first, so the server runs the code under test and
+            # not whatever an editable install elsewhere resolves `cv_engine` to.
+            "PYTHONPATH": os.pathsep.join((str(TESTS_DIR), str(TESTS_DIR.parent))),
             "CV_API_PORT": str(port),
             "CV_TEST_FRONTEND_DIST": str(frontend_dist) if frontend_dist else "",
         },
@@ -146,7 +137,12 @@ def live_api_server(
             sleep(0.1)
         else:
             pytest.fail("API process did not become ready")
-        server.sign_in(database_url)
+        # Imported here, not at module top: pytest registers `fixtures.knowledge` as a
+        # plugin after this module, and an earlier import would skip its assert rewrite.
+        from fixtures.knowledge import provision
+
+        provision(build_services(AppPaths.from_root(project_root), database_url=database_url))
+        server.sign_in()
         yield server
     finally:
         process.terminate()

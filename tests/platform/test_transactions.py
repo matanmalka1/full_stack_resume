@@ -8,7 +8,6 @@ from cv_engine.application.transactions import (
     assert_external_io_allowed,
     transaction_is_active,
 )
-from cv_engine.infrastructure.knowledge import FileKnowledge
 from cv_engine.infrastructure.payloads import PayloadStore
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.tables import applications
@@ -99,17 +98,6 @@ def test_scopes_cannot_nest_across_managers_or_be_reused(database_engine) -> Non
             pass
 
 
-def _knowledge_payload() -> dict:
-    return {
-        "fact_id": "transaction.guard",
-        "meaning": "Knowledge writes are kept outside database transactions.",
-        "renderings": {"en": "Knowledge writes are kept outside database transactions."},
-        "tags": ["architecture"],
-        "provenance": "transaction boundary regression test",
-        "resume_style": "bullet",
-    }
-
-
 def _payloads_refuse(transactions, scope, app_paths, **_fixtures) -> None:
     payloads = PayloadStore(app_paths)
     with getattr(transactions, scope)():
@@ -123,31 +111,6 @@ def _payloads_refuse(transactions, scope, app_paths, **_fixtures) -> None:
             assert_external_io_allowed("object-store write")
     assert not payloads.submission_path("application", "submission", suffix=".pdf").exists()
     assert_external_io_allowed("object-store write")
-
-
-def _knowledge_refuses(transactions, scope, app_paths, **_fixtures) -> None:
-    knowledge = FileKnowledge(
-        app_paths.knowledge_root,
-        project_root=app_paths.root,
-        temp_root=app_paths.temp_root,
-    )
-    staged, _fact = knowledge.stage_create_fact(
-        "guarded-mutation", "situational_skills.json", _knowledge_payload()
-    )
-    before = knowledge.staged_file_state(staged)
-    with getattr(transactions, scope)():
-        with pytest.raises(RuntimeError, match="Knowledge"):
-            knowledge.stage_create_fact(
-                "refused-mutation", "situational_skills.json", _knowledge_payload()
-            )
-        with pytest.raises(RuntimeError, match="Knowledge"):
-            knowledge.activate_staged(staged)
-        with pytest.raises(RuntimeError, match="Knowledge"):
-            knowledge.restore_staged(staged)
-        with pytest.raises(RuntimeError, match="Knowledge"):
-            knowledge.discard_staged(staged)
-    assert not (app_paths.temp_root / "knowledge" / "refused-mutation").exists()
-    assert knowledge.staged_file_state(staged) == before
 
 
 def _provider_refuses(transactions, scope, task_contracts, fake_openai, **_fixtures) -> None:
@@ -165,8 +128,9 @@ def _provider_refuses(transactions, scope, task_contracts, fake_openai, **_fixtu
 @pytest.mark.parametrize("scope", ["read", "write"])
 @pytest.mark.parametrize(
     "boundary",
-    [_payloads_refuse, _knowledge_refuses, _provider_refuses],
-    ids=["payloads", "knowledge", "provider"],
+    # Knowledge is not here: it is the user's rows, written inside the scope itself.
+    [_payloads_refuse, _provider_refuses],
+    ids=["payloads", "provider"],
 )
 def test_outbound_io_is_refused_inside_either_scope(
     database_engine, app_paths, task_contracts, fake_openai, boundary, scope

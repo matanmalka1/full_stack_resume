@@ -9,9 +9,10 @@ from sqlalchemy.exc import IntegrityError
 
 from ...application.errors import StateConflict
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
+from ...application.ports.user_knowledge import StoredKnowledge
 from ...util import new_id
 from .connection import SqlAlchemyTransactionManager
-from .tables import candidate_contexts, fact_events, profile_bindings
+from .tables import candidate_contexts, fact_events, profile_bindings, users
 from .tables import facts as facts_table
 
 _FACT_COLUMNS = (
@@ -29,6 +30,9 @@ _FACT_COLUMNS = (
     "replaces",
     "confirmed_at",
 )
+#: What a mutation may write; `fact_id`, `source` and `ordinal` are a fact's identity.
+_FACT_IDENTITY = ("fact_id", "source", "ordinal")
+_FACT_CONTENT_COLUMNS = tuple(column for column in _FACT_COLUMNS if column not in _FACT_IDENTITY)
 _CANDIDATE_COLUMNS = (
     "context_version",
     "name_fact_id",
@@ -156,3 +160,101 @@ class SqlAlchemyUserKnowledgeRepository:
             ).mappings()
         }
         return fact_rows, candidate, bindings
+
+    def sole_user_id(self, tx: ReadTransaction) -> str | None:
+        # `users_single_user` admits at most one row until isolation is complete.
+        return (
+            self._transactions.connection_for(tx).execute(select(users.c.id)).scalar_one_or_none()
+        )
+
+    def knowledge_state(self, tx: ReadTransaction, user_id: str) -> StoredKnowledge | None:
+        rows, candidate, bindings = self.stored_knowledge(tx, user_id)
+        if candidate is None:
+            return None
+        connection = self._transactions.connection_for(tx)
+        fact_store_version = connection.execute(
+            select(candidate_contexts.c.fact_store_version).where(
+                candidate_contexts.c.user_id == user_id
+            )
+        ).scalar_one()
+        binding_versions = {
+            row.profile_id: row.binding_version
+            for row in connection.execute(
+                select(profile_bindings.c.profile_id, profile_bindings.c.binding_version).where(
+                    profile_bindings.c.user_id == user_id
+                )
+            )
+        }
+        return StoredKnowledge(
+            user_id=user_id,
+            facts=rows,
+            candidate=candidate,
+            bindings=bindings,
+            fact_store_version=fact_store_version,
+            binding_versions=binding_versions,
+        )
+
+    def insert_fact(
+        self, tx: WriteTransaction, user_id: str, row: dict[str, Any], *, now: str
+    ) -> None:
+        self._transactions.connection_for(tx, access="write").execute(
+            insert(facts_table).values(
+                id=new_id(),
+                user_id=user_id,
+                **{column: row.get(column) for column in _FACT_COLUMNS},
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    def update_fact(
+        self, tx: WriteTransaction, user_id: str, row: dict[str, Any], *, now: str
+    ) -> None:
+        cursor = self._transactions.connection_for(tx, access="write").execute(
+            update(facts_table)
+            .where(facts_table.c.user_id == user_id, facts_table.c.fact_id == row["fact_id"])
+            .values(
+                **{column: row.get(column) for column in _FACT_CONTENT_COLUMNS},
+                updated_at=now,
+            )
+        )
+        if cursor.rowcount != 1:
+            raise StateConflict(f"fact {row['fact_id']} is not this user's")
+
+    def set_binding(
+        self,
+        tx: WriteTransaction,
+        user_id: str,
+        profile_id: str,
+        binding: dict[str, Any],
+        *,
+        expected_version: int,
+        now: str,
+    ) -> None:
+        cursor = self._transactions.connection_for(tx, access="write").execute(
+            update(profile_bindings)
+            .where(
+                profile_bindings.c.user_id == user_id,
+                profile_bindings.c.profile_id == profile_id,
+                profile_bindings.c.binding_version == expected_version,
+            )
+            .values(binding=binding, binding_version=expected_version + 1, updated_at=now)
+        )
+        if cursor.rowcount != 1:
+            raise StateConflict(f"the {profile_id} binding changed while it was being written")
+
+    def advance_fact_store_version(
+        self, tx: WriteTransaction, user_id: str, *, expected: int, now: str
+    ) -> int:
+        cursor = self._transactions.connection_for(tx, access="write").execute(
+            update(candidate_contexts)
+            .where(
+                candidate_contexts.c.user_id == user_id,
+                candidate_contexts.c.fact_store_version == expected,
+            )
+            .values(fact_store_version=expected + 1, updated_at=now)
+        )
+        if cursor.rowcount != 1:
+            # Two mutations read the same Knowledge; the later one is refused, not merged.
+            raise StateConflict("Knowledge changed while it was being written; try again.")
+        return expected + 1

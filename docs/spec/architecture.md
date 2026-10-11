@@ -124,8 +124,9 @@ service lives under `services/`.
 ### 3.3 Infrastructure
 
 Infrastructure implements the ports: SQLAlchemy Core persistence, PostgreSQL
-transaction scopes, the object stores, file-backed Knowledge, the OpenAI provider,
-rendering, structured logging, and Alembic integration.
+transaction scopes, the object stores, Knowledge (the user's rows joined with the
+policy files), the OpenAI provider, rendering, structured logging, and Alembic
+integration.
 
 Persistence ports follow consumer, lifecycle, and trust boundaries rather than tables.
 The Operation client port (what the API may do) and the execution port (what the worker
@@ -183,12 +184,12 @@ The application root is the installed repository root, computed from the code lo
 variable. A test that needs another root injects `AppPaths.from_root(...)` into
 composition.
 
-*Designed, not built (§18):* `knowledge_root` holds policy only — Profile templates,
-`config/`, `ai/`, `rendering/`. `base/` and the candidate-specific parts of `profiles/`
-become import input for an existing installation and are not read at runtime.
+`knowledge_root` holds policy only at runtime — Profile templates (`profiles/`),
+`config/`, `ai/`, `rendering/` (§18.2). `base/` is import input for an existing
+installation and is not read at runtime; `profiles/` holds templates, with no binding.
 
 ```text
-knowledge_root   = {root}            base/, profiles/, config/, ai/, rendering/
+knowledge_root   = {root}            profiles/, config/, ai/, rendering/ (base/: import input)
 artifacts_root   = {root}/artifacts
 temp_root        = {root}/tmp
 logs_root        = {root}/logs
@@ -199,9 +200,9 @@ path resolves inside the root.
 
 ## 5. CandidateContext
 
-*Designed, not built (§18):* each user has one CandidateContext, a row in
-`candidate_contexts` referencing that user's facts (§18.2). Application rows then carry `user_id`, not
-a candidate ID: the user is the candidate.
+Each user has one CandidateContext, a row in `candidate_contexts` referencing that
+user's facts (§18.2). *Designed, not built (§18):* Application rows then carry
+`user_id`, not a candidate ID: the user is the candidate.
 
 One CandidateContext is loaded from Knowledge. It references canonical name and contact
 fact IDs and defines filename/display policy, timezone, and locale, with its own
@@ -214,9 +215,10 @@ as an explicit dependency, so no candidate literal lives in code.
 Existing semantic fact IDs are preserved. New facts use UUIDv4 technical identity; a
 human slug is optional metadata and never a foreign key.
 
-Knowledge is re-read or re-hashed before commands that depend on it. Manual edits to the
-source files are valid inputs; a changed context produces `knowledge_changed` or
-`SOURCE_CHANGED` and is never silently loaded into an open editor form.
+Knowledge is re-read before commands that depend on it, and never cached across them. A
+changed context produces `knowledge_changed` or `SOURCE_CHANGED` and is never silently
+loaded into an open editor form. A Profile template or policy file edited by hand is a
+valid input; a fact changes only through the lifecycle commands (§18.2).
 
 ## 6. Persistence boundary
 
@@ -227,9 +229,10 @@ projection and their job text (locked by the first Submission, by trigger
 `lock_submitted_job_text`), recruitment and audit history, JobAnalyses, the one
 mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
 the AI call log (`ai_calls`, §11), Submissions, Operations,
-fact events, the Knowledge mutation journal, and safe settings. *Designed, not built (§18):*
-also users, sessions, single-use tokens, account events, rate-limit buckets, and
-per-user facts, CandidateContext, Profile binding, and settings.
+fact events, users and sessions, per-user facts, CandidateContext and Profile bindings
+(§18.2), the retired Knowledge mutation journal's history (§7.2), and safe settings.
+*Designed, not built (§18):* also single-use tokens, account events, rate-limit
+buckets, and per-user settings.
 
 The database is addressed by `database_url` (`CV_DATABASE_URL`). Composition creates one
 `Engine` (`pool_pre_ping=True`) that owns pooling and connection health. Transaction
@@ -297,13 +300,10 @@ Every payload has SHA-256 metadata in PostgreSQL. Friendly names are
 
 ### 6.3 Knowledge files
 
-*Designed, not built (§18):* facts, CandidateContext, and each user's Profile binding
-move to PostgreSQL; only policy stays file-backed.
-
-Facts, CandidateContext, Profiles, emphasis policy, prompts, task contracts,
-requirement concepts, rendering rules, and templates are file-backed and
-version-controlled. Database audit is not an alternative Knowledge source of truth. The
-product never runs Git commit.
+Facts, CandidateContext, and each user's Profile binding are the user's rows in
+PostgreSQL (§18.2). Policy stays file-backed and version-controlled: Profile templates,
+emphasis policy, prompts, task contracts, requirement concepts, rendering rules, and
+templates. The product never runs Git commit.
 
 ## 7. Transaction ownership and consistency
 
@@ -368,35 +368,21 @@ Reconciliation verifies every registered payload's hash (`payloads_checked`), ev
 logged AI call's sanitized response against its hash (`ai_calls_checked`), and the fact
 lifecycle, reporting each without short-circuiting.
 
-### 7.2 Knowledge mutation journal
+### 7.2 Knowledge mutations
 
-A Knowledge change crosses a file source of truth and PostgreSQL, so it uses a durable
-journal (`knowledge_mutation_journal`: `PREPARED`, `COMMITTED`, `QUARANTINED`):
+A fact mutation is one write scope. It reads the user's rows, applies the change to them
+in memory, and builds the whole Knowledge they would make, which validates every fact,
+Profile and the candidate context exactly as loading does. Only a proposal that builds
+is written: the changed fact rows and bindings, the advance of the user's
+`fact_store_version`, and the fact events, together. The version advance comes first and
+is conditional on the version the mutation read, so of two mutations from the same read
+the later is refused (`StateConflict`) before it writes a row.
 
-1. Validate the complete command and the proposed Knowledge file.
-2. Stage the new file.
-3. Persist a `PREPARED` entry with old/new hashes and paths, the staged path, the
-   database mutation and its identity, and the recovery strategy.
-4. Atomically replace the Knowledge file.
-5. In one write scope, apply the fact events and the transition to `COMMITTED`. They commit or roll
-   back together.
-6. Clean up staged and backup files outside the scope. A cleanup failure leaves
-   temporary files but does not undo the commit.
-
-Recovery runs during composition and decides from durable hashes and identities whether
-to finish or restore each `PREPARED` entry. It never guesses; an unrecoverable entry is
-`QUARANTINED`. What quarantine blocks is state-and-use-cases.md §17.
-
-While an entry is `PREPARED` the files may already hold content the database has not
-committed, so Knowledge is not read and no further mutation starts. The application
-layer checks the journal, not the file adapter: a read outside a transaction goes through
-`CommittedKnowledge`, which checks it in its own read scope; an Operation handler reading
-inside the runner's scope checks it through that token. Reconciliation reads the files
-regardless, because reporting a `PREPARED` entry is its job.
-
-*Designed, not built (§18):* once facts live in PostgreSQL a fact mutation is one write
-scope, so this journal, its recovery at composition, and quarantine are retired. Existing
-journal rows stay as read-only history.
+The cross-store journal (`knowledge_mutation_journal`) that guarded file-backed
+Knowledge is retired with its recovery at composition. Its rows stay as read-only
+history: `import-knowledge` refuses while one is `PREPARED` or `QUARANTINED`,
+reconciliation still reports one, and approval stays blocked by a quarantined one
+(state-and-use-cases.md §17), none of which can arise any more.
 
 ## 8. Domain lineage and provenance
 
@@ -716,11 +702,12 @@ The product version does not substitute for any of them.
 
 *Partly built.* Built: `users` and `user_sessions` (§18.1), sessions and passwords
 (§18.4), `create-user`, `set-password` and `import-knowledge` (§18.7), the session
-requirement on every route but sign-in and health, and the per-user Knowledge tables of
-§18.2 with `fact_events.user_id`, which `import-knowledge` writes and a database reader
-can load, but the application does not read yet (`../decisions/multi-user-accounts.md`
-§5, steps 2 to 4). Everything else here is
-designed, not built. Product rules: product-spec.md §22. Commands and codes:
+requirement on every route but sign-in and health, and per-user Knowledge (§18.2):
+the application reads and writes Knowledge as the installation's one user's rows, and
+`fact_events` carry their owner (`../decisions/multi-user-accounts.md` §5, steps 2 to
+4). Until the ownership step (§18.3) a request does not name its user; Knowledge is
+the one user's, which `users_single_user` guarantees. Everything else here is designed,
+not built. Product rules: product-spec.md §22. Commands and codes:
 state-and-use-cases.md §23. Why, the migration of an existing installation, and the
 delivery order: `../decisions/multi-user-accounts.md`.
 

@@ -27,6 +27,7 @@ from helpers import analysis_proposal
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
 from cv_engine.api.schemas.operations import OperationResponse
 from cv_engine.api.session_cookie import SESSION_COOKIE
+from cv_engine.application.errors import StateConflict
 from cv_engine.application.operations import TERMINAL_OPERATION_STATUSES
 from cv_engine.runtime.composition import Services, build_api_services
 
@@ -40,12 +41,17 @@ TEST_PASSWORD = "test password, long enough"
 
 
 def sign_in(client: TestClient, services: Services) -> TestClient:
-    """Create the test user and carry its session on every request of `client`.
+    """Sign the test user in and carry its session on every request of `client`.
 
-    The cookie is `Secure`, so the client's jar would keep it off the plain-HTTP test
-    transport; it is set as a default header instead, as a browser on https sends it.
+    The user is the one `services` provisioned with Knowledge; it is created here only
+    for a client over services that have none yet. The cookie is `Secure`, so the
+    client's jar would keep it off the plain-HTTP test transport; it is set as a
+    default header instead, as a browser on https sends it.
     """
-    services.accounts.create_user(TEST_EMAIL, TEST_PASSWORD)
+    try:
+        services.accounts.create_user(TEST_EMAIL, TEST_PASSWORD)
+    except StateConflict:
+        pass
     response = client.post(
         f"{API_PREFIX}/auth/login",
         json={"email": TEST_EMAIL, "password": TEST_PASSWORD},

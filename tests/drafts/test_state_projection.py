@@ -19,6 +19,7 @@ from helpers import (
     stored_document,
     stored_submissions,
 )
+from sqlalchemy import select, update
 
 from cv_engine.application.commands import (
     ApproveDocumentCommand,
@@ -35,6 +36,7 @@ from cv_engine.application.errors import (
     StateConflict,
 )
 from cv_engine.domain.document import ContentCheck, PreparationState
+from cv_engine.infrastructure.persistence.tables import facts
 from cv_engine.runtime.composition import Services
 from cv_engine.util import sha256_file, utc_now
 
@@ -248,8 +250,9 @@ def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
 def test_a_fact_edit_by_hand_moves_the_basis_without_a_write(
     services: Services, project_root: Path, database_engine
 ) -> None:
-    """§3 and §6: a dependent fact changed in `base/` outdates every stamp on read.
+    """§3 and §6: a dependent fact changed outside the lifecycle outdates every stamp on read.
 
+    The fact's row is rewritten directly, as an operator's manual correction would be.
     Nothing is written to the document; restoring the fact restores the approval,
     because the approval was only ever a stamp compared with a computed basis.
     """
@@ -265,35 +268,31 @@ def test_a_fact_edit_by_hand_moves_the_basis_without_a_write(
         for claim in section.claims
         for fact_id in claim.fact_ids
     )
-    source = next(
-        path
-        for path in sorted((project_root / "base").glob("*.json"))
-        if any(
-            item.get("fact_id") == fact_id
-            for item in json.loads(path.read_text(encoding="utf-8")).get("facts", [])
-        )
-    )
-    original = source.read_text(encoding="utf-8")
-    data = json.loads(original)
-    fact = next(item for item in data["facts"] if item["fact_id"] == fact_id)
-    fact["meaning"] = f"{fact['meaning']} (edited by hand)"
+    with database_engine.connect() as connection:
+        original = connection.execute(
+            select(facts.c.meaning).where(facts.c.fact_id == fact_id)
+        ).scalar_one()
     before = persisted_counts(database_engine)
 
-    source.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    with database_engine.begin() as connection:
+        connection.execute(
+            update(facts)
+            .where(facts.c.fact_id == fact_id)
+            .values(meaning=f"{original} (edited by hand)")
+        )
     detail = _detail(services, application_id)
     assert detail.preparation_state is PreparationState.DRAFT_IN_PROGRESS
     assert detail.content_check is ContentCheck.OUTDATED
     assert detail.document_hash == document_hash
 
-    source.write_text(original, encoding="utf-8")
+    with database_engine.begin() as connection:
+        connection.execute(update(facts).where(facts.c.fact_id == fact_id).values(meaning=original))
     assert _detail(services, application_id).preparation_state is PreparationState.APPROVED
     assert persisted_counts(database_engine) == before
     assert stored_document(services, application_id) == document
 
 
-def test_a_deleted_fact_before_drafting_blocks_nothing(
-    services: Services, project_root: Path
-) -> None:
+def test_a_deleted_fact_before_drafting_blocks_nothing(services: Services) -> None:
     """§3 and §7: a document without content depends on no fact.
 
     Deleting a fact its Profile offers raises no review reason before drafting; the
@@ -305,15 +304,11 @@ def test_a_deleted_fact_before_drafting_blocks_nothing(
     assert document.content is None
     profile = services.knowledge.load().profiles.get(analysis.analysis.profile)
     pool = {fact_id for spec in profile.sections for fact_id in spec.fact_ids}
-    source, data, fact = next(
-        (path, data, item)
-        for path in sorted((project_root / "base").glob("*.json"))
-        for data in [json.loads(path.read_text(encoding="utf-8"))]
-        for item in data.get("facts", [])
-        if item.get("fact_id") in pool and item.get("resume_style") == "bullet"
+    store = services.knowledge.facts()
+    fact_id = next(
+        fact_id for fact_id in sorted(pool) if store.get(fact_id).resume_style == "bullet"
     )
-    fact["status"] = "deleted"
-    source.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=True)
 
     detail = _detail(services, application_id)
     assert detail.review_reasons == []
