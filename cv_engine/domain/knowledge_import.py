@@ -44,9 +44,17 @@ def fact_rows(facts: FactStore) -> list[dict[str, Any]]:
     for fact in facts.facts.values():
         source = source_id_of_name(source_name_of(fact))
         ordinals[source] = ordinals.get(source, 0) + 1
-        payload = fact.model_dump(mode="json", exclude={"source_file"})
-        rows.append({**payload, "source": source, "ordinal": ordinals[source]})
+        rows.append(fact_row(fact, source, ordinals[source]))
     return rows
+
+
+def fact_row(fact: Fact, source: str, ordinal: int) -> dict[str, Any]:
+    """One fact as a row: its content, and where it sits (`source`, `ordinal`)."""
+    return {
+        **fact.model_dump(mode="json", exclude={"source_file"}),
+        "source": source,
+        "ordinal": ordinal,
+    }
 
 
 def fact_from_row(row: dict[str, Any]) -> Fact:

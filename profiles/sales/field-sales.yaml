@@ -10,10 +10,6 @@
     "balanced-sales"
   ],
   "normalized_role": "Field Sales",
-  "safe_headlines": [
-    "Field Sales",
-    "B2B Sales | Account Management | Business Development"
-  ],
   "required_tags": [
     "sales"
   ],
@@ -21,44 +17,15 @@
     "field-sales": 100,
     "new-business": 80
   },
-  "omitted_roles": {
-    "development.phdigital.role": "A software engineering role is not this CV's argument; the commercial history it prints runs unbroken to its end."
-  },
   "sections": [
     {
       "name_en": "Professional Summary",
       "name_he": "תקציר מקצועי",
-      "fact_ids": [
-        "sales.summary.field",
-        "sales.summary.new_business",
-        "sales.summary.account"
-      ],
       "max_claims": 1
     },
     {
       "name_en": "Work Experience",
       "name_he": "ניסיון מקצועי",
-      "fact_ids": [
-        "sales.role.leader.title",
-        "sales.role.leader.dates",
-        "sales.metric.performance",
-        "sales.metric.team_size",
-        "sales.metric.portfolio_growth",
-        "sales.role.field.title",
-        "sales.role.field.dates",
-        "sales.cycle.prospecting",
-        "sales.cycle.discovery",
-        "sales.cycle.negotiation",
-        "sales.cycle.closing",
-        "sales.metric.new_customers",
-        "sales.activity.lead_mix",
-        "sales.cycle.account_management",
-        "sales.company.customers"
-      ],
-      "pinned_fact_ids": [
-        "sales.metric.performance",
-        "sales.cycle.prospecting"
-      ],
       "max_claims": 12,
       "min_claims_per_role": 3,
       "min_quantitative_per_role": 1
@@ -66,42 +33,21 @@
     {
       "name_en": "Core Skills",
       "name_he": "מיומנויות ליבה",
-      "fact_ids": [
-        "sales.activity.work_mode",
-        "common.logistics.nationwide_sales",
-        "sales.achievement.difficult_market",
-        "sales.achievement.complex_deals",
-        "sales.achievement.reactivation"
-      ],
       "max_claims": 3
     },
     {
       "name_en": "Tools",
       "name_he": "כלים",
-      "fact_ids": [
-        "sales.tool.priority",
-        "sales.tool.excel",
-        "sales.tool.communication"
-      ],
       "max_claims": 3
     },
     {
       "name_en": "Education",
       "name_he": "השכלה",
-      "fact_ids": [
-        "common.education.fullstack"
-      ],
       "max_claims": 1
     },
     {
       "name_en": "Languages",
       "name_he": "שפות",
-      "fact_ids": [
-        "common.language.hebrew",
-        "common.language.english",
-        "common.language.arabic",
-        "common.language.french"
-      ],
       "max_claims": 4
     }
   ]

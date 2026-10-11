@@ -119,8 +119,7 @@ database details, or architecture. Those stay available in provenance views.
   templates, emphasis policy, prompts, task contracts, requirement
   concepts, and rendering rules stay version-controlled files under the project root
   (`profiles/`, `config/`, `ai/`, `rendering/`) and are their own source of truth.
-  *Designed, not built:* today facts, CandidateContext, and whole Profiles are files
-  under `base/` and `profiles/`.
+  `base/` is import input for an existing installation only.
 - React is the product interface. FastAPI is the only user-facing adapter; React
   reaches the system through it and nowhere else. The worker is an internal execution
   host for Operations, not a second client. A second user-facing surface for a use-case
@@ -270,7 +269,7 @@ decision.
 
 ## 7. Candidate and application behavior
 
-Each user has one CandidateContext (per-user state, §22; today `base/candidate.json`).
+Each user has one CandidateContext (per-user state, §22).
 It points to the user's canonical name and contact fact IDs (with track-specific contacts, such as GitHub for development) and supplies
 filename language, locale, timezone, and link schemes. Names and contacts stay canonical
 facts, not duplicated metadata.
@@ -702,23 +701,18 @@ PostgreSQL and bucket backup are the environment's responsibility.
 
 ## 17. Knowledge lifecycle
 
-*Designed, not built (§22):* facts belong to a user and live in PostgreSQL. A fact
-mutation is then one database transaction — fact row and fact events commit
-together — and the mutation journal, its recovery, and
-quarantine are retired. Hand edits to Knowledge files are no longer an input; `base/`
-is import input for an existing installation only. The lifecycle rules below (statuses,
-create, confirm, edit, delete, attach, confirm and use, from a claim) are unchanged. Until
-then, the implemented mechanism is:
-
-Knowledge stays file-based and version-controlled. A fact mutation from the Web runs:
+Facts belong to a user and live in PostgreSQL (§22). A fact mutation from the Web is
+one database transaction:
 
 ```text
-React -> FastAPI -> FactLifecycleService -> validate/stage -> PREPARED journal entry
-      -> replace file -> fact events + COMMITTED, one transaction
+React -> FastAPI -> FactLifecycleService -> read rows -> validate the whole Knowledge
+      -> fact rows, bindings, fact-store version, fact events: one transaction
 ```
 
-File work runs outside database scopes. The journal and audit never replace the files as
-the source of truth (architecture.md §7.2). The application never runs a Git commit.
+The cross-store mutation journal, its recovery, and quarantine are retired; its rows
+stay as history (architecture.md §7.2). Hand edits to Knowledge files are no longer an
+input; `base/` is import input for an existing installation only. Profile templates and
+policy files stay version-controlled, and the application never runs a Git commit.
 
 Fact statuses are `pending`, `canonical`, and `deleted`:
 
@@ -742,7 +736,7 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
   unaffected.
 - **Attach.** Offers a canonical fact to an existing Profile section's pool, optionally
   pinned. It changes no Profile structure and grants no Profile editing.
-- **Confirm and use.** One journaled command that confirms the fact and attaches it to
+- **Confirm and use.** One command that confirms the fact and attaches it to
   the named Profile section, or fails as a whole. It writes no document; the next draft
   of that Application's document can choose the fact.
 - **From a claim.** Copies the claim's exact text as a rendering without AI rewriting.
@@ -751,13 +745,13 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
 There are no archive, withdrawal, retirement, or known-incorrect transitions, and no
 client may present them.
 
-An unrecoverable journal entry is quarantined. While any is, every fact mutation and
-every approval is refused; reads, history, export, and recruitment tracking continue.
+A quarantined entry left in the retired journal's history still refuses every
+approval; reads, history, export, and recruitment tracking continue. None can arise
+any more, and `import-knowledge` refuses while one exists.
 
-Hand edits to the Knowledge files are supported. Commands re-read or re-hash their
-dependencies rather than trusting a cache; a dependent change moves the document's
-basis, and a change under a running analysis fails it with `SOURCE_CHANGED`. A changed
-fact is never silently reloaded into an open editor form.
+Commands re-read their dependencies rather than trusting a cache; a dependent change
+moves the document's basis, and a change under a running analysis fails it with
+`SOURCE_CHANGED`. A changed fact is never silently reloaded into an open editor form.
 
 ## 18. Operations and failure behavior
 

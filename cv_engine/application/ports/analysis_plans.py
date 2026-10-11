@@ -35,14 +35,12 @@ class AnalysisContextSource:
 
 
 class AnalysisKnowledgeSource(Protocol):
-    """Read canonical files only; the caller checks recovery state through its token."""
+    """The Knowledge a command reads: in the caller's scope when given one, else its own."""
 
-    def load(self) -> Knowledge: ...
+    def load(self, tx: ReadTransaction | None = None) -> Knowledge: ...
 
 
 class AnalysisContextSourceReader(Protocol):
-    def knowledge_is_prepared(self, tx: ReadTransaction) -> bool: ...
-
     def job_text_source(
         self, tx: ReadTransaction, application_id: str
     ) -> AnalysisJobTextSource: ...

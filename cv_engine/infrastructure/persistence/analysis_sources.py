@@ -12,25 +12,12 @@ from .connection import SqlAlchemyTransactionManager
 from .tables import (
     applications,
     job_analyses,
-    knowledge_mutation_journal,
 )
 
 
 class SqlAlchemyAnalysisContextSourceReader:
     def __init__(self, transactions: SqlAlchemyTransactionManager):
         self._transactions = transactions
-
-    def knowledge_is_prepared(self, tx: ReadTransaction) -> bool:
-        return (
-            self._transactions.connection_for(tx)
-            .execute(
-                select(knowledge_mutation_journal.c.id)
-                .where(knowledge_mutation_journal.c.state == "PREPARED")
-                .limit(1)
-            )
-            .scalar_one_or_none()
-            is not None
-        )
 
     def job_text_source(self, tx: ReadTransaction, application_id: str) -> AnalysisJobTextSource:
         row = (

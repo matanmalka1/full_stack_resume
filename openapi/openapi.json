@@ -3317,7 +3317,14 @@
             "type": "string"
           },
           "knowledge": {
-            "$ref": "#/components/schemas/KnowledgeVersions"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KnowledgeVersions"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "product_version": {
             "title": "Product Version",
@@ -7707,6 +7714,7 @@
     },
     "/api/v1/health": {
       "get": {
+        "description": "The instance answers whether or not anyone has Knowledge yet.\n\nKnowledge is a user's rows, so an installation with no user, or one not yet\nimported, is healthy and reports no Knowledge versions rather than failing.",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {

@@ -30,7 +30,6 @@ from ...commands import (
 from ...errors import (
     ApplicationError,
     InfrastructureFailure,
-    KnowledgeRejected,
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
@@ -198,11 +197,9 @@ class AnalysisOperationHandler(AITaskHandler):
         if source.job_text_hash != sources.job_text_hash:
             raise SourceChanged("The job text changed before analysis activation.")
 
-        if self.sources.knowledge_is_prepared(tx):
-            raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
         if (
             operation.sources.knowledge_context_hash
-            != load_knowledge(self.knowledge).context_hash()
+            != load_knowledge(self.knowledge, tx).context_hash()
         ):
             raise SourceChanged("Knowledge changed before analysis activation.")
 
@@ -403,8 +400,6 @@ class RenderOperationHandler:
 
     def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
         verify_document_hash(tx, self.documents, operation)
-        if self.sources.knowledge_is_prepared(tx):
-            raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
 
     def _fail(
         self,
@@ -470,7 +465,7 @@ class RenderOperationHandler:
     def activate(self, tx: WriteTransaction, operation, prepared):
         if not isinstance(prepared.value, ExecutedRender):
             raise TypeError("render handler received an invalid executed value")
-        knowledge = load_knowledge(self.knowledge)
+        knowledge = load_knowledge(self.knowledge, tx)
         try:
             result, superseded = self.service.activate(tx, prepared.value, knowledge)
         except StateConflict as exc:

@@ -162,16 +162,20 @@ Evidence: `tests/platform/` (`test_api_foundation.py`, `test_settings.py`,
 
 Evidence: `tests/operations/`.
 
-### 3.6 Knowledge lifecycle and journal
+### 3.6 Knowledge lifecycle
 
 - New facts are `pending`, cannot reach a CV, and follow `pending → canonical` on one
-  explicit confirmation; illegal and repeated transitions are refused; events are immutable; a
-  pending fact does not invalidate drafts built from canonical facts.
+  explicit confirmation; illegal and repeated transitions are refused; events are immutable
+  and carry their owner; a pending fact does not invalidate drafts built from canonical facts.
 - `create_fact_from_claim` preserves the exact claim text; `confirm_and_use_fact` is one
-  journaled command.
-- Journal crash windows (before/after file activation, hash mismatch, audit failure) end in deterministic recovery or explicit quarantine.
-  Under quarantine, history stays readable and approval is blocked.
-- A hand edit to a dependent fact moves the basis without a document write.
+  command that confirms and attaches or changes nothing.
+- A mutation is one transaction: an audit failure writes no part of it, and a mutation
+  from a stale read is refused before it writes a row.
+- A quarantined entry left in the retired journal's history keeps history readable and
+  blocks approval.
+- A direct change to a dependent fact's row moves the basis without a document write.
+- Imported Knowledge read back against the installation's template-only `profiles/` is
+  the Knowledge the files held.
 - *Designed, not built:* `edit_fact` changes content in place with one event, refuses a
   canonical edit without confirmation and any edit of a deleted fact, moves a dependent
   document's basis without writing it, and leaves every Submission byte-identical.

@@ -92,8 +92,8 @@ The basis is computed on read. Three stamps of it are stored:
 - `rendered_basis`: the basis whose files `html_path`/`pdf_path` hold.
 
 A NULL stamp never equals the basis. Any change to the document, or to a dependent fact,
-changes the basis however the fact changed — through the Knowledge mutation journal or
-by hand in `base/`. No command invalidates a stamp by writing; an outdated stamp simply
+changes the basis however the fact changed — through a lifecycle command or by a
+direct change to its row. No command invalidates a stamp by writing; an outdated stamp simply
 no longer matches on the next read.
 
 Pinning:
@@ -154,8 +154,8 @@ There is no frozen context and no `stale_reasons` projection:
 
 - A content edit or re-pin changes `document_hash`, so every stamp is
   outdated at once.
-- A change to a dependent fact (edit, status transition, replacement, deletion, removal
-  from `base/`) changes `facts_hash`, so every stamp is outdated at once. A change to an
+- A change to a dependent fact (edit, status transition, replacement, deletion)
+  changes `facts_hash`, so every stamp is outdated at once. A change to an
   unrelated fact does not.
 - A newer analysis or an edited job text is the `DOCUMENT_ON_OLDER_ANALYSIS` warning; the document
   stays as it is until `build_from_analysis`.
@@ -401,7 +401,7 @@ more by the render handler.
 - `PRECONDITION_FAILED`: the workflow refused the run - the document, the Application,
   or Knowledge is not in a state the action accepts; changing that state fixes it.
   `INFRASTRUCTURE_FAILED`: storage the run needed failed - the database, the payload
-  store, or the Knowledge files; a retry may succeed once it recovers.
+  store, or the Knowledge policy files; a retry may succeed once it recovers.
   `VALIDATION_EXECUTION_FAILED`: the engine itself failed - an unexpected error, or no
   handler for the Operation type. All three activate nothing.
 - `CLAIM_REVIEW_UNCERTAIN`: the semantic reviewer could not establish support for a
@@ -727,13 +727,13 @@ dependent facts, and stored content report. Writes nothing.
 
 ## 17. Knowledge commands
 
-Every fact mutation runs through the Knowledge mutation journal
-(architecture.md §7.2). While any mutation is quarantined, every fact mutation is
-refused (`KNOWLEDGE_REJECTED`, 412) and approval is refused (§15).
-*Designed, not built (§23):* facts are the signed-in user's, in PostgreSQL; a fact
-mutation is one transaction, and the journal and quarantine are retired along with
-these two refusals. A `fact_id` is unique per user, and another user's fact is 404.
-Attachment targets are the user's Profile binding over the shared templates.
+Facts are the user's, in PostgreSQL, and every fact mutation is one transaction
+(architecture.md §7.2). The cross-store journal is retired; no entry can be prepared or
+quarantined any more. An entry left unresolved in its history still refuses every fact
+mutation (`KNOWLEDGE_REJECTED`, 412) and approval (§15); retiring those two refusals is
+a cleanup of its own. Attachment targets are the user's Profile binding over the shared
+templates. *Designed, not built (§23):* the signed-in user's facts; a `fact_id` is
+unique per user, and another user's fact is 404.
 
 Fact statuses: `pending`, `canonical`, `deleted`. The lifecycle is
 `pending -> canonical` on one explicit confirmation; any live fact may be deleted.
@@ -801,7 +801,7 @@ Non-canonical facts are refused. It changes no Profile structure and no document
 
 ### `confirm_and_use_fact(fact_id, application_id, job_analysis_id, profile, section)`
 
-One journaled command:
+One command, one transaction:
 
 ```text
 pending -> canonical

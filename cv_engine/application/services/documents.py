@@ -6,8 +6,8 @@ Composition and validation are the domain's; this module binds them to the docum
 so generation, check, approve, render and submit all make the same decision the same
 way.
 
-Nothing here opens a transaction or performs I/O except `load_knowledge`, which
-reads Knowledge files and must therefore run outside a database scope.
+Nothing here opens a transaction or performs I/O except `load_knowledge`, which reads
+the user's Knowledge: in the caller's scope when it holds one, else in its own.
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ from ..ports.transactions import ReadTransaction, WriteTransaction
 from ..state import document_review_reasons
 
 
-def load_knowledge(source: AnalysisKnowledgeSource) -> Knowledge:
+def load_knowledge(source: AnalysisKnowledgeSource, tx: ReadTransaction | None = None) -> Knowledge:
     try:
-        return source.load()
+        return source.load(tx)
     except OSError as exc:
         raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
     except ValueError as exc:

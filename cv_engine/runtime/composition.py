@@ -12,9 +12,9 @@ from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationType
 from ..application.ports import (
     AIProvider,
-    KnowledgeStore,
     Renderer,
 )
+from ..application.ports.user_knowledge import UserKnowledgeSource
 from ..application.services.accounts import AccountService
 from ..application.services.ai_calls import AICallRunner
 from ..application.services.analysis.activation import AnalysisActivation
@@ -26,10 +26,8 @@ from ..application.services.drafts.activation import DraftActivation
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.review import DraftReviewService
 from ..application.services.knowledge import (
-    CommittedKnowledge,
     FactLifecycleService,
     KnowledgeQueryService,
-    KnowledgeRecoveryService,
 )
 from ..application.services.knowledge.importing import KnowledgeImportService
 from ..application.services.maintenance import MaintenanceService
@@ -45,8 +43,9 @@ from ..application.services.recruitment.lifecycle import RecruitmentService
 from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
 from ..application.services.settings import SettingsService
+from ..infrastructure.database_knowledge import DatabaseKnowledge
 from ..infrastructure.document_files import DocumentFiles
-from ..infrastructure.knowledge import FileKnowledge
+from ..infrastructure.knowledge import load_task_contracts
 from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3ObjectStore
 from ..infrastructure.operation_logging import OperationFailureLogger
 from ..infrastructure.passwords import Argon2PasswordHasher
@@ -111,7 +110,7 @@ class Services:
     paths: AppPaths
     database_url: str
     schema_version: str
-    knowledge: KnowledgeStore
+    knowledge: UserKnowledgeSource
     payloads: PayloadStore
     applications: ApplicationService
     queries: ApplicationQueryService
@@ -170,7 +169,6 @@ def build_services(
     paths: AppPaths,
     *,
     database_url: str | None = None,
-    knowledge: KnowledgeStore | None = None,
     payloads: PayloadStore | None = None,
     renderer: Renderer | None = None,
     provider: AIProvider | None = None,
@@ -191,18 +189,9 @@ def build_services(
     intake_recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
     intake_audit = SqlAlchemyAuditLog(transactions)
     knowledge_lifecycle_store = SqlAlchemyKnowledgeLifecycleRepository(transactions)
-    resolved_knowledge = knowledge or FileKnowledge(
-        paths.knowledge_root,
-        project_root=paths.root,
-        temp_root=paths.temp_root,
-    )
-    # Services that read Knowledge outside a transaction read it as committed.
-    # The Operation handlers read inside the runner's scope and check the journal
-    # through its token, and the Knowledge services hold the journal themselves;
-    # both take the files.
-    committed_knowledge = CommittedKnowledge(
-        resolved_knowledge, transactions=transactions, journal=knowledge_lifecycle_store
-    )
+    user_knowledge = SqlAlchemyUserKnowledgeRepository(transactions)
+    # Knowledge is the user's rows; templates and policy are the installation's files.
+    resolved_knowledge = DatabaseKnowledge(transactions, user_knowledge, paths.knowledge_root)
     resolved_payloads = payloads or PayloadStore(paths, build_object_store(paths, resolved_config))
     resolved_renderer = renderer or PlaywrightRenderer(paths.knowledge_root)
     # Built only when a key is configured. Constructing an adapter that refuses
@@ -213,7 +202,7 @@ def build_services(
     api_key = resolved_config.get("openai_api_key")
     if resolved_provider is None and api_key:
         resolved_provider = OpenAIProvider(
-            resolved_knowledge.task_contracts(),
+            load_task_contracts(paths.knowledge_root),
             default_model=str(resolved_config.get("model")),
             api_key=str(api_key),
         )
@@ -245,7 +234,7 @@ def build_services(
         sources=analysis_sources,
         documents=documents,
         ai_calls=ai_calls,
-        knowledge=committed_knowledge,
+        knowledge=resolved_knowledge,
         provider=resolved_provider,
     )
     draft_history = DraftHistoryService(
@@ -253,7 +242,7 @@ def build_services(
         documents=documents,
         sources=analysis_sources,
         applications=SqlAlchemyDraftHistoryApplicationReader(transactions),
-        knowledge=committed_knowledge,
+        knowledge=resolved_knowledge,
     )
     operation_submissions = OperationSubmissionService(
         transactions=transactions,
@@ -269,13 +258,13 @@ def build_services(
         documents=documents,
         sources=analysis_sources,
         files=document_files,
-        knowledge=committed_knowledge,
+        knowledge=resolved_knowledge,
     )
     draft_service = DraftAuthoringService(
         transactions=transactions,
         documents=documents,
         sources=analysis_sources,
-        knowledge=committed_knowledge,
+        knowledge=resolved_knowledge,
         provider=resolved_provider,
         ai_calls=ai_calls,
     )
@@ -283,7 +272,7 @@ def build_services(
         transactions=transactions,
         documents=documents,
         sources=analysis_sources,
-        knowledge=committed_knowledge,
+        knowledge=resolved_knowledge,
         journal=knowledge_lifecycle_store,
         audit=intake_audit,
     )
@@ -292,7 +281,7 @@ def build_services(
         documents=documents,
         sources=analysis_sources,
         files=document_files,
-        knowledge=committed_knowledge,
+        knowledge=resolved_knowledge,
         renderer=resolved_renderer,
         payloads=resolved_payloads,
     )
@@ -306,7 +295,7 @@ def build_services(
         files=document_files,
         recruitment=recruitment_store,
         audit=intake_audit,
-        knowledge=committed_knowledge,
+        knowledge=resolved_knowledge,
     )
     failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
     runner = OperationRunner(
@@ -354,14 +343,9 @@ def build_services(
         transactions=transactions,
         store=knowledge_lifecycle_store,
         knowledge=resolved_knowledge,
+        repository=user_knowledge,
         documents=documents,
     )
-    KnowledgeRecoveryService(
-        transactions=transactions,
-        store=knowledge_lifecycle_store,
-        knowledge=resolved_knowledge,
-        documents=documents,
-    ).recover_knowledge_mutations()
     settings_service = SettingsService(
         transactions,
         SqlAlchemySettingsStore(transactions),
@@ -385,7 +369,7 @@ def build_services(
             projections=application_projections,
             documents=documents,
             submissions=document_submissions,
-            knowledge=committed_knowledge,
+            knowledge=resolved_knowledge,
         ),
         analysis=analysis_service,
         drafts=draft_service,
@@ -413,7 +397,7 @@ def build_services(
             transactions,
             SqlAlchemyAccountRepository(transactions),
             knowledge_lifecycle_store,
-            SqlAlchemyUserKnowledgeRepository(transactions),
+            user_knowledge,
         ),
     )
 

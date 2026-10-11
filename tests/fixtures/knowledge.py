@@ -4,10 +4,12 @@ import shutil
 from pathlib import Path
 
 import pytest
+from api_harness import TEST_EMAIL, TEST_PASSWORD
 from fake_provider import FakeOpenAI
 from helpers import store_draft
-from knowledge_seed import V2_IDENTITY_FACT, seed_fact, write_canonical_sources
+from knowledge_seed import SEED_DIR, V2_IDENTITY_FACT, seed_fact, write_canonical_sources
 
+from cv_engine.application.errors import StateConflict
 from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
 from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
@@ -31,13 +33,19 @@ SOURCE_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def project_root(tmp_path: Path) -> Path:
-    """An isolated application root holding a full knowledge copy."""
+    """An isolated application root holding a full knowledge copy, in the file layout.
+
+    The installation's `profiles/` are templates only since Knowledge moved to the
+    database, so the Profiles here are the seed's full copies, bindings included: this
+    root is what `import-knowledge` reads, and what the file loaders below parse.
+    """
     root = tmp_path / "repo"
     root.mkdir()
     write_canonical_sources(root / "base")
     seed_fact(root / "base", "common.json", dict(V2_IDENTITY_FACT), canonical=True)
     shutil.copy2(SOURCE_ROOT / "base/candidate.json", root / "base/candidate.json")
-    for name in ("profiles", "rendering", "ai", "config"):
+    shutil.copytree(SEED_DIR / "profiles", root / "profiles")
+    for name in ("rendering", "ai", "config"):
         shutil.copytree(SOURCE_ROOT / name, root / name)
     return root
 
@@ -95,9 +103,34 @@ def candidate_context(project_root: Path, fact_store: FactStore):
     return load_candidate_context(project_root, fact_store)
 
 
+def provision(services: Services) -> Services:
+    """The test user, with the project root's Knowledge imported for it.
+
+    Idempotent, because one test may hold `services` and `ai_services` over the same
+    database: the second finds the user and its Knowledge already there.
+    """
+    try:
+        services.accounts.create_user(TEST_EMAIL, TEST_PASSWORD)
+    except StateConflict:
+        pass
+    try:
+        services.knowledge_import.import_knowledge(
+            TEST_EMAIL, FileKnowledge(services.paths.knowledge_root)
+        )
+    except StateConflict:
+        pass
+    return services
+
+
+@pytest.fixture
+def bare_services(app_paths: AppPaths) -> Services:
+    """No user and no Knowledge: for what happens before `create-user` and the import."""
+    return build_services(app_paths)
+
+
 @pytest.fixture
 def services(app_paths: AppPaths) -> Services:
-    return build_services(app_paths)
+    return provision(build_services(app_paths))
 
 
 @pytest.fixture
@@ -112,7 +145,7 @@ def fake_openai(monkeypatch) -> FakeOpenAI:
 
 @pytest.fixture
 def ai_services(app_paths: AppPaths, fake_openai: FakeOpenAI, task_contracts) -> Services:
-    return build_services(app_paths, provider=fake_openai.provider(task_contracts))
+    return provision(build_services(app_paths, provider=fake_openai.provider(task_contracts)))
 
 
 @pytest.fixture

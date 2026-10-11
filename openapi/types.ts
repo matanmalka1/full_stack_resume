@@ -867,7 +867,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Instance identity and versions */
+        /**
+         * Instance identity and versions
+         * @description The instance answers whether or not anyone has Knowledge yet.
+         *
+         *     Knowledge is a user's rows, so an installation with no user, or one not yet
+         *     imported, is healthy and reports no Knowledge versions rather than failing.
+         */
         get: operations["health_api_v1_health_get"];
         put?: never;
         post?: never;
@@ -2199,7 +2205,7 @@ export interface components {
         HealthResponse: {
             /** Api Version */
             api_version: string;
-            knowledge: components["schemas"]["KnowledgeVersions"];
+            knowledge: components["schemas"]["KnowledgeVersions"] | null;
             /** Product Version */
             product_version: string;
             /** Schema Version */
