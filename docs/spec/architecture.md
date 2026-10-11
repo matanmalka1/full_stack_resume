@@ -717,8 +717,9 @@ The product version does not substitute for any of them.
 *Partly built.* Built: `users` and `user_sessions` (§18.1), sessions and passwords
 (§18.4), `create-user`, `set-password` and `import-knowledge` (§18.7), the session
 requirement on every route but sign-in and health, and the per-user Knowledge tables of
-§18.2, which `import-knowledge` writes but the application does not read yet
-(`../decisions/multi-user-accounts.md` §5, steps 2 to 4). Everything else here is
+§18.2 with `fact_events.user_id`, which `import-knowledge` writes and a database reader
+can load, but the application does not read yet (`../decisions/multi-user-accounts.md`
+§5, steps 2 to 4). Everything else here is
 designed, not built. Product rules: product-spec.md §22. Commands and codes:
 state-and-use-cases.md §23. Why, the migration of an existing installation, and the
 delivery order: `../decisions/multi-user-accounts.md`.
@@ -898,5 +899,6 @@ Passwords are read from a prompt that does not echo, entered twice, or with
   Before committing it reads the rows back and rebuilds every fact, Profile, and the
   candidate context; anything that differs from what it read refuses the import, and
   nothing is written. Per-file `source_version`s are not imported: `fact_store_version`
-  starts at 0 and replaces them.
+  starts at 0 and replaces them. In the same transaction every existing `fact_events`
+  row gets that user as its owner, the one change its guard permits.
 - `reconcile` and `inspect-orphans` (state-and-use-cases.md §19b).
