@@ -17,7 +17,7 @@ from sqlalchemy import (
 
 from ...application.ports.transactions import ReadTransaction
 from .connection import SqlAlchemyTransactionManager
-from .tables import ai_calls, submissions
+from .tables import ai_calls, submissions, users
 
 
 def _integrity_problems(connection) -> list[str]:
@@ -54,6 +54,13 @@ def _integrity_problems(connection) -> list[str]:
 class SqlAlchemyMaintenanceInspection:
     def __init__(self, transactions: SqlAlchemyTransactionManager):
         self._transactions = transactions
+
+    def user_ids(self, tx: ReadTransaction) -> list[str]:
+        return list(
+            self._transactions.connection_for(tx)
+            .execute(select(users.c.id).order_by(users.c.id))
+            .scalars()
+        )
 
     def integrity_problems(self, tx: ReadTransaction) -> list[str]:
         return _integrity_problems(self._transactions.connection_for(tx))

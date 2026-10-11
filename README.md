@@ -145,15 +145,15 @@ append-only, and a correction appends an event rather than editing the one it co
 Reconciliation checks database references, artifact hashes, and the fact lifecycle:
 
 ```bash
-curl -X POST -H "Origin: http://127.0.0.1:8765" \
-  http://127.0.0.1:8765/api/v1/maintenance/reconciliations
+python -m cv_engine.admin reconcile
 ```
 
 It reports and never repairs: a mismatch against an immutable record is something to be
-told about, not something a route may quietly fix. `200` carries the report whether or
-not it passed, and `passed` is the field to read. Verification goes through the
-configured payload store, so it reports the truth under local storage and under an S3
-bucket alike.
+told about, not something maintenance may quietly fix. The command exits `0` when the
+report's `passed` field is true and `2` when reconciliation finds a problem.
+Verification goes through the configured payload store, so it reports the truth under
+local storage and under an S3 bucket alike. Maintenance is an operator CLI, not a
+user-facing HTTP surface.
 
 ## AI provider
 
@@ -267,12 +267,13 @@ diff in the commit message:
 cd openapi && npm ci && npm run generate
 ```
 
-Read-only storage inspection is available at `GET /api/v1/maintenance/orphans`.
-Its `candidates` are managed immutable payload references that no record references and
-that were stored more than an hour ago, so a write still on its way to registration is
-never listed. It excludes mutable working outputs and performs no deletion. Nothing in
-the system deletes an immutable payload, so orphans are reported, never removed
-(`docs/spec/architecture.md` section 7.1). Local and S3 stores share this contract.
+Read-only storage inspection is available to the operator with
+`python -m cv_engine.admin inspect-orphans`. Its `candidates` are managed immutable
+payload references that no record references and that were stored more than an hour
+ago, so a write still on its way to registration is never listed. It excludes mutable
+working outputs and performs no deletion. Nothing in the system deletes an immutable
+payload, so orphans are reported, never removed (`docs/spec/architecture.md` section
+7.1). Local and S3 stores share this contract.
 
 ## Tests
 

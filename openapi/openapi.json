@@ -3014,62 +3014,6 @@
         "title": "FactHistoryResponse",
         "type": "object"
       },
-      "FactLifecycleReportResponse": {
-        "additionalProperties": false,
-        "description": "The fact lifecycle checked against its audit trail.",
-        "properties": {
-          "fact_counts": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "title": "Fact Counts",
-            "type": "object"
-          },
-          "facts_version": {
-            "title": "Facts Version",
-            "type": "string"
-          },
-          "journal_prepared": {
-            "title": "Journal Prepared",
-            "type": "integer"
-          },
-          "journal_quarantined": {
-            "title": "Journal Quarantined",
-            "type": "integer"
-          },
-          "lifecycle_version": {
-            "title": "Lifecycle Version",
-            "type": "string"
-          },
-          "passed": {
-            "title": "Passed",
-            "type": "boolean"
-          },
-          "problems": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Problems",
-            "type": "array"
-          },
-          "tracked_facts": {
-            "title": "Tracked Facts",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "passed",
-          "fact_counts",
-          "tracked_facts",
-          "facts_version",
-          "lifecycle_version",
-          "problems",
-          "journal_prepared",
-          "journal_quarantined"
-        ],
-        "title": "FactLifecycleReportResponse",
-        "type": "object"
-      },
       "FactListItemResponse": {
         "additionalProperties": false,
         "description": "One fact, beside the status its audit trail last recorded.\n\n`recorded_status` is `null` for a fact the trail never saw, which is what\nreconciliation exists to notice; it is not the same as the fact's status.",
@@ -3934,24 +3878,6 @@
         "title": "OperationType",
         "type": "string"
       },
-      "OrphanInventoryResponse": {
-        "additionalProperties": false,
-        "description": "Observed candidates have no database reference and were stored over an hour ago.",
-        "properties": {
-          "candidates": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Candidates",
-            "type": "array"
-          }
-        },
-        "required": [
-          "candidates"
-        ],
-        "title": "OrphanInventoryResponse",
-        "type": "object"
-      },
       "PdfPageLimitReason": {
         "additionalProperties": false,
         "description": "The rendered PDF ran past the profile's page limit.",
@@ -4074,43 +4000,6 @@
           "allowed_resolution_actions"
         ],
         "title": "ReasonResponse",
-        "type": "object"
-      },
-      "ReconciliationResponse": {
-        "additionalProperties": false,
-        "description": "Whether stored evidence and the fact lifecycle agree.\n\n`problems` describes stored payloads and logged AI calls; the lifecycle keeps its\nown list, so\na reader can tell which half is broken instead of seeing one merged list.",
-        "properties": {
-          "ai_calls_checked": {
-            "title": "Ai Calls Checked",
-            "type": "integer"
-          },
-          "fact_lifecycle": {
-            "$ref": "#/components/schemas/FactLifecycleReportResponse"
-          },
-          "passed": {
-            "title": "Passed",
-            "type": "boolean"
-          },
-          "payloads_checked": {
-            "title": "Payloads Checked",
-            "type": "integer"
-          },
-          "problems": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Problems",
-            "type": "array"
-          }
-        },
-        "required": [
-          "passed",
-          "payloads_checked",
-          "ai_calls_checked",
-          "problems",
-          "fact_lifecycle"
-        ],
-        "title": "ReconciliationResponse",
         "type": "object"
       },
       "RecruitmentTimelineItemResponse": {
@@ -6951,6 +6840,25 @@
               }
             },
             "description": "The request did not match the API contract."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The shared sign-in limit was reached (`RATE_LIMITED`).",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the current fixed window ends.",
+                "schema": {
+                  "minimum": 1.0,
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "summary": "Sign in and start a session",
@@ -7686,90 +7594,6 @@
         "summary": "Instance identity and versions",
         "tags": [
           "health"
-        ]
-      }
-    },
-    "/api/v1/maintenance/orphans": {
-      "get": {
-        "description": "Read-only; a candidate has no database reference and was stored over an hour ago.\n\nThis endpoint neither repairs nor deletes payloads.",
-        "operationId": "inspect_orphans_api_v1_maintenance_orphans_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrphanInventoryResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Inspect unreferenced immutable payload candidates",
-        "tags": [
-          "maintenance"
-        ]
-      }
-    },
-    "/api/v1/maintenance/reconciliations": {
-      "post": {
-        "description": "Check database references, artifact hashes, and the fact lifecycle.",
-        "operationId": "reconcile_api_v1_maintenance_reconciliations_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReconciliationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Reconcile stored evidence and the fact lifecycle",
-        "tags": [
-          "maintenance"
         ]
       }
     },

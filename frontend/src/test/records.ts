@@ -1,11 +1,4 @@
-import type {
-  ApplicationDetail,
-  CVDocument,
-  DocumentCheck,
-  Operation,
-  ReconciliationReport,
-  Settings,
-} from "../api/contracts";
+import type { ApplicationDetail, CVDocument, DocumentCheck, Operation, Settings } from "../api/contracts";
 
 /* Record builders for the §9 projection shapes.
 
@@ -58,7 +51,6 @@ export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationD
   },
   ...overrides,
 });
-
 export const cvDocument = (overrides: Partial<CVDocument> = {}): CVDocument => ({
   id: "doc-1",
   application_id: "app-1",
@@ -149,23 +141,5 @@ export const settings = (overrides: Partial<Settings> = {}): Settings => ({
   ui_text_size: "normal",
   ui_theme: "system",
   updated_at: null,
-  ...overrides,
-});
-
-export const reconciliationReport = (overrides: Partial<ReconciliationReport> = {}): ReconciliationReport => ({
-  passed: true,
-  payloads_checked: 4,
-  ai_calls_checked: 2,
-  problems: [],
-  fact_lifecycle: {
-    passed: true,
-    fact_counts: { canonical: 3, pending: 1 },
-    tracked_facts: 4,
-    facts_version: "facts-version-1",
-    lifecycle_version: "lifecycle-version-1",
-    problems: [],
-    journal_prepared: 0,
-    journal_quarantined: 0,
-  },
   ...overrides,
 });

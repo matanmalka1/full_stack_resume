@@ -10,18 +10,19 @@ Orphan inspection (architecture.md §7.1) is the third. It lists stored payloads
 that nothing references, and deletes nothing: no path in the system deletes an
 immutable payload, so no race can remove one a registration is about to reference.
 
-The service holds the payload store and a token-explicit inspection port. That is why
-this is a service and not a router helper: `ApiServices` deliberately carries
-no repositories or stores, and reconciliation needs both.
+The service holds the payload store and a token-explicit inspection port. The operator
+CLI invokes it through full runtime composition; `ApiServices` deliberately does not
+carry maintenance access, repositories, or stores.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from ...domain.contracts.knowledge import FactStatus
 from ...util import canonical_json, sha256_text
 from ..actor import Actor
-from ..commands import ReconciliationResult
+from ..commands import FactReconciliationResult, ReconciliationResult
 from ..maintenance import ORPHAN_MIN_AGE, OrphanInventory
 from ..ports import PayloadInventory
 from ..ports.maintenance import MaintenanceInspection
@@ -47,12 +48,11 @@ class MaintenanceService:
         self.inspection = inspection
         self.knowledge = knowledge
 
-    def reconcile(self, actor: Actor) -> ReconciliationResult:
-        """Report whether stored evidence and the actor's fact lifecycle both agree.
+    def reconcile(self) -> ReconciliationResult:
+        """Report whether stored evidence and every user's fact lifecycle agree.
 
-        The payload and AI-call checks span the installation; the fact lifecycle is the
-        actor's. Maintenance becomes an operator command spanning every user when a
-        second user is admitted (product-spec §16).
+        This is an operator-only whole-instance command. It is deliberately not exposed
+        through the user API once multiple users can exist.
 
         Neither half is short-circuited: a failing artifact check must not
         hide a broken lifecycle, because the report exists to say what is
@@ -62,6 +62,7 @@ class MaintenanceService:
             problems = self.inspection.integrity_problems(tx)
             inventory = self.inspection.registered_payloads(tx)
             calls = self.inspection.ai_call_evidence(tx)
+            user_ids = self.inspection.user_ids(tx)
         checked = 0
         for row in inventory:
             checked += 1
@@ -80,7 +81,48 @@ class MaintenanceService:
                 != call["sanitized_response_hash"]
             ):
                 problems.append(f"AI call response hash mismatch: {call['id']}")
-        fact_lifecycle = self.knowledge.reconcile_facts(actor)
+        fact_reports = [
+            (user_id, self.knowledge.reconcile_facts(Actor(user_id=user_id)))
+            for user_id in user_ids
+        ]
+        fact_problems = [
+            f"user {user_id}: {problem}"
+            for user_id, report in fact_reports
+            for problem in report.problems
+            if not problem.startswith("Knowledge mutation ")
+        ]
+        journal_problems = sorted(
+            {
+                problem
+                for _, report in fact_reports
+                for problem in report.problems
+                if problem.startswith("Knowledge mutation ")
+            }
+        )
+        lifecycle_problems = [*fact_problems, *journal_problems]
+        fact_lifecycle = FactReconciliationResult(
+            passed=not lifecycle_problems,
+            fact_counts={
+                status.value: sum(report.fact_counts[status.value] for _, report in fact_reports)
+                for status in FactStatus
+            },
+            tracked_facts=sum(report.tracked_facts for _, report in fact_reports),
+            facts_version=sha256_text(
+                canonical_json({user_id: report.facts_version for user_id, report in fact_reports})
+            ),
+            lifecycle_version=sha256_text(
+                canonical_json(
+                    {user_id: report.lifecycle_version for user_id, report in fact_reports}
+                )
+            ),
+            problems=lifecycle_problems,
+            journal_prepared=max(
+                (report.journal_prepared for _, report in fact_reports), default=0
+            ),
+            journal_quarantined=max(
+                (report.journal_quarantined for _, report in fact_reports), default=0
+            ),
+        )
         return ReconciliationResult(
             passed=not problems and fact_lifecycle.passed,
             payloads_checked=checked,

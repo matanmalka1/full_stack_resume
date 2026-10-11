@@ -45,7 +45,6 @@ from .routers import (
     documents,
     facts,
     health,
-    maintenance,
     operations,
     settings,
     tracking,
@@ -116,7 +115,7 @@ def create_app(
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "If-Match", "Idempotency-Key"],
-        expose_headers=["Content-Disposition", "ETag", "Location"],
+        expose_headers=["Content-Disposition", "ETag", "Location", "Retry-After"],
     )
     app.add_middleware(OriginPolicyMiddleware, allowed=origins)
     app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=services.limits.max_body_bytes)
@@ -143,7 +142,6 @@ def create_app(
         facts.router,
         settings.router,
         tracking.router,
-        maintenance.router,
     ):
         app.include_router(
             router,

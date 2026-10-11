@@ -1,4 +1,4 @@
-"""Operator commands: `create-user`, `set-password`, and `import-knowledge`.
+"""Operator account, Knowledge, and whole-instance maintenance commands.
 
 A password is read from a prompt that does not echo, entered twice, or with
 `--password-stdin` from standard input. It is never an argument, so it never lands in
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import json
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -28,7 +29,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m cv_engine.admin")
     commands = parser.add_subparsers(dest="command", required=True)
     for name, help_text in (
-        ("create-user", "create the one user"),
+        ("create-user", "create a user"),
         ("set-password", "set a user's password and end every session"),
     ):
         command = commands.add_parser(name, help=help_text)
@@ -47,6 +48,12 @@ def _parser() -> argparse.ArgumentParser:
         dest="source",
         type=Path,
         help="the directory holding base/ and profiles/ (default: this installation)",
+    )
+    commands.add_parser(
+        "reconcile", help="verify immutable evidence and every user's fact lifecycle"
+    )
+    commands.add_parser(
+        "inspect-orphans", help="list old immutable payloads with no database reference"
     )
     return parser
 
@@ -85,7 +92,7 @@ def main(
     out = out or sys.stdout
     err = err or sys.stderr
     password = ""
-    if arguments.command != "import-knowledge":
+    if arguments.command in {"create-user", "set-password"}:
         try:
             password = _read_password(arguments.password_stdin, stdin or sys.stdin, prompt)
         except _PasswordMismatch:
@@ -99,7 +106,7 @@ def main(
         elif arguments.command == "set-password":
             user = services.accounts.set_password(arguments.email, password)
             print(f"set the password of {user.email}; every session ended", file=out)
-        else:
+        elif arguments.command == "import-knowledge":
             from ..infrastructure.knowledge import FileKnowledge
 
             root = arguments.source or services.paths.knowledge_root
@@ -109,6 +116,16 @@ def main(
             print(
                 f"imported {result.facts} facts and {result.profiles} profile bindings "
                 f"for {result.email}; {result.fact_events} fact events now belong to them",
+                file=out,
+            )
+        elif arguments.command == "reconcile":
+            report = services.maintenance.reconcile()
+            print(json.dumps(report.model_dump(mode="json"), indent=2, sort_keys=True), file=out)
+            return 0 if report.passed else 2
+        else:
+            inventory = services.maintenance.inspect_orphans()
+            print(
+                json.dumps({"candidates": inventory.candidates}, indent=2, sort_keys=True),
                 file=out,
             )
     except ApplicationError as error:

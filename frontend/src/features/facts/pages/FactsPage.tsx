@@ -13,7 +13,6 @@ import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
 import { useFactDetail, useFactPool } from "../api/queries";
 import { FactCreationDialog } from "../components/FactCreationDialog";
-import { FactsIntegrityCheck } from "../components/FactsIntegrityCheck";
 import { FactManagementDetail } from "../components/FactManagementDetail";
 import { FactPoolFilters } from "../components/FactPoolFilters";
 import { FactPoolList } from "../components/FactPoolList";
@@ -92,11 +91,9 @@ export const FactsPage = () => {
     >
       {poolQuery.data?.outOfSyncCount ? (
         <Callout role="alert" title="נמצאה אי־התאמה ביומן העובדות" tone="blocker">
-          יש להפעיל את בדיקת התקינות שבמסך זה ולברר את הפער לפני קידום עובדות או שימוש בהן.
+          יש לפנות למפעיל המערכת לבדיקת התקינות לפני קידום עובדות או שימוש בהן.
         </Callout>
       ) : null}
-
-      <FactsIntegrityCheck />
 
       {mutationsBlocked ? null : (
         <FactCreationDialog
