@@ -115,7 +115,7 @@ Services return Pydantic boundary DTOs, never database rows or filesystem paths.
 
 Services live under `services/` and the ports they depend on under `ports/`. Modules
 directly under `application/` hold what several of those share: contracts that a port
-and its service both name (`operations.py`, `settings.py`, `knowledge_mutations.py`),
+and its service both name (`operations.py`, `settings.py`),
 pure policy (`state.py`, `transactions.py`), the error taxonomy, and the Operation
 runner, which is the worker's entry point rather than a service. Where a top-level module
 shares its name with a service, the module holds that service's contracts and the
@@ -230,7 +230,7 @@ projection and their job text (locked by the first Submission, by trigger
 mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
 the AI call log (`ai_calls`, §11), Submissions, Operations,
 fact events, users and sessions, per-user facts, CandidateContext and Profile bindings
-(§18.2), the retired Knowledge mutation journal's history (§7.2), and safe settings.
+(§18.2), and safe settings.
 This also includes rate-limit buckets and per-user settings. Single-use tokens and
 account events remain deferred.
 
@@ -379,9 +379,8 @@ is conditional on the version the mutation read, so of two mutations from the sa
 the later is refused (`StateConflict`) before it writes a row.
 
 The cross-store journal (`knowledge_mutation_journal`) that guarded file-backed
-Knowledge is retired with its recovery at composition. Its rows stay as read-only
-history: `import-knowledge` refuses while one is `PREPARED` or `QUARANTINED`, and
-reconciliation still reports one. Neither a fact mutation nor an approval consults it.
+Knowledge is retired. Migration `0008` drops its table, and refuses while the table
+holds a row, so no history is discarded.
 
 ## 8. Domain lineage and provenance
 
@@ -620,14 +619,15 @@ never merges silently.
 
 ## 14. Local security
 
-*Designed, not built (§18):* the security model below is replaced by §18.5. Origin
-validation on every mutation and the explicit CORS list stay; loopback-only binding and
-"no authentication and no CSRF token" do not.
+*Designed, not built (step 7):* hosted deployment (§18.5) replaces loopback-only
+binding with one public origin. Origin validation on every mutation and the explicit
+CORS list stay.
 
 The service binds to `127.0.0.1`, serves UI and API same-origin, and validates `Origin`
 on mutation. CORS uses an explicit origin list with no wildcard and no credentials;
-development adds only the one Vite origin (`CV_API_DEV_ORIGIN`). There is no
-authentication and no CSRF token.
+development adds only the one Vite origin (`CV_API_DEV_ORIGIN`). Every route but
+sign-in and health needs a session (§18). There is no CSRF token: an allowed `Origin`
+with `SameSite=Lax` cookies is the defence (§18.5).
 
 The OpenAI key is environment-only backend configuration. React sees only whether it is
 configured. Logs and Operation payloads are redacted and never contain keys,
@@ -675,8 +675,8 @@ Masking happens only at display boundaries: a configured secret shows as `***` w
 source label, and an unset secret shows as unset. Connectors always receive the real
 value. `.env` and `.env.*` are Git-ignored.
 
-*Designed, not built (§18):* accounts add no secret setting. Session tokens are random
-and stored only as hashes, so there is no signing key to configure.
+Accounts add no secret setting. Session tokens are random and stored only as hashes,
+so there is no signing key to configure.
 
 ## 16. Database lifecycle and upgrade
 

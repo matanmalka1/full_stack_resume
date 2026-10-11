@@ -13,7 +13,6 @@ from .knowledge import (
     candidate_contexts,
     fact_events,
     facts,
-    knowledge_mutation_journal,
     profile_bindings,
 )
 from .prep import cv_documents, job_analyses
@@ -44,7 +43,6 @@ __all__ = [
     "operations",
     "operation_outputs",
     "fact_events",
-    "knowledge_mutation_journal",
     "users",
     "user_sessions",
     "rate_limit_buckets",

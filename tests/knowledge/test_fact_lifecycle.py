@@ -27,7 +27,6 @@ from cv_engine.application.errors import (
     StateConflict,
     UnknownRecord,
 )
-from cv_engine.application.knowledge_mutations import PrepareKnowledgeMutation
 from cv_engine.domain.contracts.knowledge import FactStatus
 from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.knowledge import FactStoreError
@@ -171,47 +170,7 @@ def test_audit_failure_writes_no_part_of_the_mutation(
     assert "situational.postgres" not in _reload(services).facts
 
 
-def test_a_quarantined_journal_entry_is_history_and_blocks_nothing(drafted_application) -> None:
-    """The retired journal's rows are history (architecture §7.2): one left quarantined
-    is reported by reconciliation, and blocks neither approval nor a fact mutation."""
-    setup = drafted_application("Quarantine Co")
-    services, application_id = setup
-    request = PrepareKnowledgeMutation(
-        mutation_id=str(uuid.uuid4()),
-        mutation_type="fact_confirmed",
-        source_reference="base/sales.json",
-        staged_reference="tmp/knowledge/quarantined-mutation/new",
-        old_sha256="a" * 64,
-        new_sha256="b" * 64,
-        db_mutation_type="fact_event",
-        db_mutation_id="quarantined-event",
-        db_mutation={"actions": []},
-        recovery_strategy="finish_or_restore",
-    )
-    transactions, store = _knowledge_persistence(services)
-    with transactions.write() as tx:
-        store.prepare_mutation(tx, request)
-    with transactions.write() as tx:
-        store.quarantine_mutation(tx, request.mutation_id, "unrecoverable")
-
-    assert (
-        services.knowledge_queries.fact_history(
-            actor_of(services),
-        ).events
-        == []
-    )
-    assert approve_active_draft(services, application_id).passed
-    services.knowledge_lifecycle.add_fact(
-        actor_of(services), "situational_skills.json", dict(NEW_FACT)
-    )
-    reconciliation = services.knowledge_queries.reconcile_facts(
-        actor_of(services),
-    )
-    assert reconciliation.journal_quarantined == 1
-    assert not reconciliation.passed
-
-
-def test_confirm_and_use_is_one_journaled_fact_and_profile_command(
+def test_confirm_and_use_is_one_fact_and_profile_command(
     drafted_application,
 ) -> None:
     """§17: confirm and attach in one mutation; the document is not written."""
@@ -254,10 +213,6 @@ def test_confirm_and_use_is_one_journaled_fact_and_profile_command(
         ("canonical", "canonical"),
     ]
     assert len(result.event_ids) == 2
-    transactions, store = _knowledge_persistence(services)
-    with transactions.read() as tx:
-        assert store.prepared_mutations(tx) == []
-        assert store.quarantined_mutations(tx) == []
 
 
 def test_a_mutation_from_a_stale_read_is_refused_not_merged(

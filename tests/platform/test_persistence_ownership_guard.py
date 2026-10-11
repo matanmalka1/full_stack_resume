@@ -12,9 +12,8 @@ CHILD_IDS = frozenset(
 )
 
 # Each entry is deliberately internal: the service already resolved the Application,
-# it is worker-only and derives the owner from the Operation, or it is the retired
-# single-user mutation journal. A stale exception fails because the discovered set
-# must equal this set exactly.
+# or it is worker-only and derives the owner from the Operation. A stale exception
+# fails because the discovered set must equal this set exactly.
 SCOPED_BY_CALLER = frozenset(
     {
         ("ai_calls", "AICallLog", "append"),

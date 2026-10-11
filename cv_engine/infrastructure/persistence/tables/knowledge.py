@@ -1,4 +1,4 @@
-"""Knowledge/facts tables: fact lifecycle audit, the mutation journal, and per-user Knowledge.
+"""Knowledge/facts tables: fact lifecycle audit and per-user Knowledge.
 
 `facts`, `candidate_contexts` and `profile_bindings` are the per-user Knowledge of
 architecture §18.2. They are seeded by `import-knowledge` and are the live Knowledge
@@ -51,55 +51,6 @@ Index(
     fact_events.c.created_at,
     fact_events.c.seq,
 )
-
-knowledge_mutation_journal = Table(
-    "knowledge_mutation_journal",
-    metadata,
-    Column("id", UUID(as_uuid=False), primary_key=True),
-    Column("mutation_type", Text, nullable=False),
-    Column("state", Text, nullable=False),
-    Column("source_reference", Text, nullable=False),
-    Column("staged_reference", Text, nullable=False, unique=True),
-    Column("old_sha256", Text, nullable=False),
-    Column("new_sha256", Text, nullable=False),
-    Column("db_mutation_type", Text, nullable=False),
-    Column("db_mutation_id", String, nullable=False),
-    Column("db_mutation_json", JSONB, nullable=False),
-    Column("recovery_strategy", Text, nullable=False),
-    Column("prepared_at", IsoTimestamp(), nullable=False),
-    Column("committed_at", IsoTimestamp()),
-    Column("quarantined_at", IsoTimestamp()),
-    Column("quarantine_reason", Text),
-    CheckConstraint("length(trim(mutation_type)) > 0", name="mutation_type_nonempty"),
-    CheckConstraint(
-        "state IN ('PREPARED', 'COMMITTED', 'QUARANTINED')",
-        name="state",
-    ),
-    CheckConstraint("length(trim(source_reference)) > 0", name="source_reference_nonempty"),
-    CheckConstraint("length(trim(staged_reference)) > 0", name="staged_reference_nonempty"),
-    CheckConstraint("length(old_sha256) = 64", name="old_sha256_length"),
-    CheckConstraint("length(new_sha256) = 64", name="new_sha256_length"),
-    CheckConstraint("length(trim(db_mutation_type)) > 0", name="db_mutation_type_nonempty"),
-    CheckConstraint("length(trim(db_mutation_id)) > 0", name="db_mutation_id_nonempty"),
-    CheckConstraint("length(trim(recovery_strategy)) > 0", name="recovery_strategy_nonempty"),
-    CheckConstraint(
-        "(state = 'PREPARED' AND committed_at IS NULL AND quarantined_at IS NULL "
-        "AND quarantine_reason IS NULL) OR "
-        "(state = 'COMMITTED' AND committed_at IS NOT NULL AND quarantined_at IS NULL "
-        "AND quarantine_reason IS NULL) OR "
-        "(state = 'QUARANTINED' AND committed_at IS NULL AND quarantined_at IS NOT NULL "
-        "AND length(trim(quarantine_reason)) > 0)",
-        name="state_fields",
-    ),
-    UniqueConstraint("db_mutation_type", "db_mutation_id"),
-)
-Index(
-    "idx_knowledge_mutation_journal_state",
-    knowledge_mutation_journal.c.state,
-    knowledge_mutation_journal.c.prepared_at,
-    knowledge_mutation_journal.c.id,
-)
-
 
 FACT_STATUSES = ("pending", "canonical", "deleted")
 RESUME_STYLES = ("paragraph", "heading", "date", "bullet", "item", "contact")

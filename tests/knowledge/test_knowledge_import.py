@@ -19,18 +19,13 @@ from sqlalchemy.exc import DBAPIError
 
 from cv_engine.admin.cli import main as admin
 from cv_engine.application.errors import KnowledgeRejected, StateConflict, UnknownRecord
-from cv_engine.application.knowledge_mutations import PrepareKnowledgeMutation
 from cv_engine.application.services.knowledge.importing import KnowledgeImportService
 from cv_engine.domain.knowledge_import import join_profile, split_profile
 from cv_engine.infrastructure.database_knowledge import DatabaseKnowledge
 from cv_engine.infrastructure.knowledge import FileKnowledge
 from cv_engine.infrastructure.persistence.accounts import SqlAlchemyAccountRepository
-from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
-    SqlAlchemyKnowledgeLifecycleRepository,
-)
 from cv_engine.infrastructure.persistence.tables import (
     candidate_contexts,
-    fact_events,
     facts,
     profile_bindings,
 )
@@ -105,19 +100,6 @@ def test_imported_knowledge_reads_back_through_the_installations_templates(
     }
 
 
-def test_import_leaves_no_ownerless_fact_events(
-    services, user, project_root, database_engine
-) -> None:
-    result = services.knowledge_import.import_knowledge(EMAIL, FileKnowledge(project_root))
-
-    with database_engine.connect() as connection:
-        ownerless = connection.execute(
-            select(func.count()).select_from(fact_events).where(fact_events.c.user_id.is_(None))
-        ).scalar_one()
-    assert result.fact_events == 0
-    assert ownerless == 0
-
-
 def test_rows_carry_each_fact_its_source_order_and_the_split_profiles(
     services, user, project_root, database_engine
 ) -> None:
@@ -188,7 +170,6 @@ def test_a_concurrent_second_import_is_refused_by_the_unique_keys(
     importer = KnowledgeImportService(
         transaction_manager,
         SqlAlchemyAccountRepository(transaction_manager),
-        SqlAlchemyKnowledgeLifecycleRepository(transaction_manager),
         _BlindRepository(transaction_manager),
     )
     importer.import_knowledge(EMAIL, FileKnowledge(project_root))
@@ -229,32 +210,6 @@ def test_files_that_change_during_the_import_commit_nothing(
     assert _counts(database_engine) == (0, 0, 0)
 
 
-def test_import_refuses_while_a_knowledge_mutation_is_unresolved(
-    services, user, project_root, transaction_manager, database_engine
-) -> None:
-    mutation_id = new_id()
-    with transaction_manager.write() as tx:
-        SqlAlchemyKnowledgeLifecycleRepository(transaction_manager).prepare_mutation(
-            tx,
-            PrepareKnowledgeMutation(
-                mutation_id=mutation_id,
-                mutation_type="fact_confirmed",
-                source_reference="base/sales.json",
-                staged_reference=f"temp/knowledge/{mutation_id}.json",
-                old_sha256="a" * 64,
-                new_sha256="b" * 64,
-                db_mutation_type="fact_event",
-                db_mutation_id="event-1",
-                db_mutation={"fact_id": "fact-1", "to_status": "canonical"},
-                recovery_strategy="finish_or_restore",
-            ),
-        )
-
-    with pytest.raises(KnowledgeRejected, match="unresolved mutation"):
-        services.knowledge_import.import_knowledge(EMAIL, FileKnowledge(project_root))
-    assert _counts(database_engine) == (0, 0, 0)
-
-
 class _LossyRepository(SqlAlchemyUserKnowledgeRepository):
     """Writes one fact's meaning wrongly, as a broken adapter would."""
 
@@ -270,7 +225,6 @@ def test_an_import_that_does_not_rebuild_the_files_commits_nothing(
     importer = KnowledgeImportService(
         transaction_manager,
         SqlAlchemyAccountRepository(transaction_manager),
-        SqlAlchemyKnowledgeLifecycleRepository(transaction_manager),
         _LossyRepository(transaction_manager),
     )
 

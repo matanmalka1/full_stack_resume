@@ -85,21 +85,11 @@ class MaintenanceService:
             (user_id, self.knowledge.reconcile_facts(Actor(user_id=user_id)))
             for user_id in user_ids
         ]
-        fact_problems = [
+        lifecycle_problems = [
             f"user {user_id}: {problem}"
             for user_id, report in fact_reports
             for problem in report.problems
-            if not problem.startswith("Knowledge mutation ")
         ]
-        journal_problems = sorted(
-            {
-                problem
-                for _, report in fact_reports
-                for problem in report.problems
-                if problem.startswith("Knowledge mutation ")
-            }
-        )
-        lifecycle_problems = [*fact_problems, *journal_problems]
         fact_lifecycle = FactReconciliationResult(
             passed=not lifecycle_problems,
             fact_counts={
@@ -116,12 +106,6 @@ class MaintenanceService:
                 )
             ),
             problems=lifecycle_problems,
-            journal_prepared=max(
-                (report.journal_prepared for _, report in fact_reports), default=0
-            ),
-            journal_quarantined=max(
-                (report.journal_quarantined for _, report in fact_reports), default=0
-            ),
         )
         return ReconciliationResult(
             passed=not problems and fact_lifecycle.passed,

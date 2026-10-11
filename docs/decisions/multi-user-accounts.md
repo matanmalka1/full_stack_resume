@@ -1,9 +1,10 @@
 # Decision: user accounts and per-user isolation
 
-Status: **approved; steps 1 to 4 of §5 implemented** (2026-09-30; delivery order and
-scope revised 2026-10-11: login first, held to one user by the database, and what a
-single user does not need deferred to §6). The specifications carry the binding
-rules, each marked *designed, not built* until it ships:
+Status: **approved; steps 1 to 6 of §5 implemented; step 7 (hosted deployment) open**
+(2026-09-30; delivery order and scope revised 2026-10-11: login first, held to one
+user by the database, and what a single user does not need deferred to §6). The
+specifications carry the binding rules, what is still open marked *designed, not
+built*:
 [`product-spec.md`](../spec/product-spec.md) §22,
 [`state-and-use-cases.md`](../spec/state-and-use-cases.md) §23,
 [`architecture.md`](../spec/architecture.md) §18, and
@@ -142,9 +143,8 @@ one user. For an existing installation, in delivery order (§5):
    `fact_events` rows get their owner through a *permitted transition*: the guard allows
    exactly `user_id: NULL → value`, once, with no other column changing — the pattern
    that already guards terminal Operation rows (architecture §6.1), not a trigger
-   bypass. Existing `knowledge_mutation_journal` rows stay read-only history; a
-   `PREPARED` or `QUARANTINED` entry refuses the upgrade until an operator resolves it on
-   the old version.
+   bypass. The `knowledge_mutation_journal` is retired once Knowledge is in the
+   database; migration `0008` drops its table and refuses while it holds a row.
 3. **Ownership step:** add `applications.user_id`, assign every existing row to the one
    user, then make it `NOT NULL`. The revision refuses when rows exist and the user count
    is not exactly one. The owner is derived from the fact that the installation had one
