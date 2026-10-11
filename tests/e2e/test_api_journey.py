@@ -34,6 +34,7 @@ from fake_provider import FakeOpenAI
 from helpers import (
     ACCOUNT_MANAGER_JOB,
     REVIEW_DECISION_JOB,
+    actor_of,
     analysis_proposal,
 )
 
@@ -323,10 +324,15 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
         state["latest_analysis"]["analysis"]
     )
     with transaction_manager.read() as tx:
-        analysis = application_projection_reader.analysis(tx, original["job_analysis"])["analysis"]
+        analysis = application_projection_reader.analysis(
+            tx, original["job_analysis"], application_id
+        )["analysis"]
     assert [
         gap.severity
-        for gap in gaps(analysis.requirements, ai_api_worker.services.knowledge.facts())
+        for gap in gaps(
+            analysis.requirements,
+            ai_api_worker.services.knowledge.facts(actor_of(ai_api_worker.services).user_id),
+        )
     ] == ["hard"]
 
     token = state["document_hash"]

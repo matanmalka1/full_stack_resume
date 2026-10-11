@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import Depends, Request, Response
 
 from ..application.accounts import SessionGrant, UserView
+from ..application.actor import Actor
 from .dependencies import Services
 
 SESSION_COOKIE = "__Host-cv_session"
@@ -45,3 +46,13 @@ def clear_session_cookie(response: Response) -> None:
 def require_session(services: Services, token: SessionToken) -> UserView:
     """Every route but sign-in and health: a valid session or `401 AUTHENTICATION_REQUIRED`."""
     return services.accounts.current_user(token)
+
+
+def current_actor(user: Annotated[UserView, Depends(require_session)]) -> Actor:
+    """Who the request acts for. FastAPI resolves `require_session` once per request, so
+    the router-level check and this share one session lookup."""
+    return Actor(user_id=user.id)
+
+
+#: The signed-in user a route passes to every service call (architecture §18.3).
+CurrentActor = Annotated[Actor, Depends(current_actor)]

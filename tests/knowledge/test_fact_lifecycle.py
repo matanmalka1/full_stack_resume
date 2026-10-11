@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from helpers import (
+    actor_of,
     approve_active_draft,
     edit_document_claim,
     persisted_counts,
@@ -34,7 +35,6 @@ from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
 )
 from cv_engine.infrastructure.persistence.tables import candidate_contexts, fact_events
-from cv_engine.infrastructure.persistence.user_knowledge import SqlAlchemyUserKnowledgeRepository
 from cv_engine.runtime.composition import Services, build_services
 from cv_engine.runtime.paths import AppPaths
 
@@ -55,7 +55,7 @@ def _knowledge_persistence(services: Services):
 
 def _reload(services: Services) -> FactStore:
     """Read the fact store back from the database, as a later process would."""
-    return build_services(services.paths).knowledge.facts()
+    return build_services(services.paths).knowledge.facts(actor_of(services).user_id)
 
 
 def _fact_store_version(database_engine) -> int:
@@ -66,7 +66,9 @@ def _fact_store_version(database_engine) -> int:
 def test_new_fact_is_pending_cannot_reach_a_cv_and_contextual_identity_is_generated(
     services: Services,
 ) -> None:
-    result = services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+    result = services.knowledge_lifecycle.add_fact(
+        actor_of(services), "situational_skills.json", dict(NEW_FACT)
+    )
 
     assert result.fact.status is FactStatus.PENDING
     stored = _reload(services).get("situational.postgres")
@@ -77,28 +79,34 @@ def test_new_fact_is_pending_cannot_reach_a_cv_and_contextual_identity_is_genera
 
     payload = {key: value for key, value in NEW_FACT.items() if key != "fact_id"}
     contextual = services.knowledge_lifecycle.create_pending_fact(
-        "situational_skills.json", payload
+        actor_of(services), "situational_skills.json", payload
     )
     assert uuid.UUID(contextual.fact.fact_id).version == 4
     assert contextual.fact.status is FactStatus.PENDING
     with pytest.raises(KnowledgeRejected, match="not user-editable"):
-        services.knowledge_lifecycle.create_pending_fact("situational_skills.json", dict(NEW_FACT))
+        services.knowledge_lifecycle.create_pending_fact(
+            actor_of(services), "situational_skills.json", dict(NEW_FACT)
+        )
 
 
 def test_attachment_target_projection_exposes_sections_without_profile_documents(
     services: Services,
 ) -> None:
-    targets = services.knowledge_queries.fact_attachment_targets()
+    targets = services.knowledge_queries.fact_attachment_targets(
+        actor_of(services),
+    )
     development = next(item for item in targets.profiles if item.profile == "development")
     assert development.label
     assert development.sections
     assert all(not section.attached and not section.pinned for section in development.sections)
 
-    knowledge = services.knowledge_lifecycle.load_knowledge()
+    knowledge = services.knowledge_lifecycle.load_knowledge(
+        actor_of(services),
+    )
     source_profile = knowledge.profiles.get("development")
     source_section = next(section for section in source_profile.sections if section.fact_ids)
     existing_id = source_section.fact_ids[0]
-    existing = services.knowledge_queries.fact_attachment_targets(existing_id)
+    existing = services.knowledge_queries.fact_attachment_targets(actor_of(services), existing_id)
     projected_profile = next(item for item in existing.profiles if item.profile == "development")
     projected_section = next(
         item for item in projected_profile.sections if item.section == source_section.name_en
@@ -107,7 +115,7 @@ def test_attachment_target_projection_exposes_sections_without_profile_documents
     assert projected_section.pinned is (existing_id in source_section.pinned_fact_ids)
 
     with pytest.raises(UnknownRecord, match="unknown fact_id"):
-        services.knowledge_queries.fact_attachment_targets("does-not-exist")
+        services.knowledge_queries.fact_attachment_targets(actor_of(services), "does-not-exist")
 
 
 def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) -> None:
@@ -124,6 +132,7 @@ def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) 
     )
 
     created = services.knowledge_lifecycle.create_fact_from_claim(
+        actor_of(services),
         application_id,
         claim.claim_id,
         source="sales.json",
@@ -153,7 +162,9 @@ def test_audit_failure_writes_no_part_of_the_mutation(
     _refuse_events(services, monkeypatch)
 
     with pytest.raises(ValueError, match="audit insertion failure"):
-        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+        services.knowledge_lifecycle.add_fact(
+            actor_of(services), "situational_skills.json", dict(NEW_FACT)
+        )
 
     assert persisted_counts(database_engine) == before
     assert _fact_store_version(database_engine) == version
@@ -183,10 +194,19 @@ def test_a_quarantined_journal_entry_is_history_and_blocks_nothing(drafted_appli
     with transactions.write() as tx:
         store.quarantine_mutation(tx, request.mutation_id, "unrecoverable")
 
-    assert services.knowledge_queries.fact_history().events == []
+    assert (
+        services.knowledge_queries.fact_history(
+            actor_of(services),
+        ).events
+        == []
+    )
     assert approve_active_draft(services, application_id).passed
-    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
-    reconciliation = services.knowledge_queries.reconcile_facts()
+    services.knowledge_lifecycle.add_fact(
+        actor_of(services), "situational_skills.json", dict(NEW_FACT)
+    )
+    reconciliation = services.knowledge_queries.reconcile_facts(
+        actor_of(services),
+    )
     assert reconciliation.journal_quarantined == 1
     assert not reconciliation.passed
 
@@ -198,6 +218,7 @@ def test_confirm_and_use_is_one_journaled_fact_and_profile_command(
     setup = drafted_application("Contextual Knowledge Co")
     services, application_id = setup
     created = services.knowledge_lifecycle.add_fact(
+        actor_of(services),
         "sales.json",
         {
             **NEW_FACT,
@@ -209,6 +230,7 @@ def test_confirm_and_use_is_one_journaled_fact_and_profile_command(
 
     before = stored_document(services, application_id)
     result = services.knowledge_lifecycle.confirm_and_use_fact(
+        actor_of(services),
         created.fact.fact_id,
         application_id=application_id,
         job_analysis_id=setup.analysis_id,
@@ -220,10 +242,12 @@ def test_confirm_and_use_is_one_journaled_fact_and_profile_command(
     assert stored_document(services, application_id) == before
     assert before.id == result.document_id
     assert before.document_hash == result.document_hash == setup.document_hash
-    profile = services.knowledge.load().profiles.get("account-manager")
+    profile = services.knowledge.load(actor_of(services).user_id).profiles.get("account-manager")
     work = next(spec for spec in profile.sections if spec.name_en == "Work Experience")
     assert created.fact.fact_id in work.fact_ids
-    events = services.knowledge_queries.fact_history(created.fact.fact_id).events
+    events = services.knowledge_queries.fact_history(
+        actor_of(services), created.fact.fact_id
+    ).events
     assert [(event.from_status, event.to_status) for event in events] == [
         (None, "pending"),
         ("pending", "canonical"),
@@ -246,14 +270,18 @@ def test_a_mutation_from_a_stale_read_is_refused_not_merged(
     """
     transactions = services_transactions(services)
     with transactions.read() as tx:
-        stale = services.knowledge.state(tx)
-    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+        stale = services.knowledge.state(tx, actor_of(services).user_id)
+    services.knowledge_lifecycle.add_fact(
+        actor_of(services), "situational_skills.json", dict(NEW_FACT)
+    )
     before = persisted_counts(database_engine)
-    monkeypatch.setattr(services.knowledge, "state", lambda _tx: stale)
+    monkeypatch.setattr(services.knowledge, "state", lambda _tx, _user_id: stale)
 
     with pytest.raises(StateConflict, match="changed while it was being written"):
         services.knowledge_lifecycle.add_fact(
-            "situational_skills.json", {**NEW_FACT, "fact_id": "situational.concurrent"}
+            actor_of(services),
+            "situational_skills.json",
+            {**NEW_FACT, "fact_id": "situational.concurrent"},
         )
 
     assert persisted_counts(database_engine) == before
@@ -265,6 +293,7 @@ def test_confirm_and_use_audit_failure_leaves_the_fact_and_the_binding_as_they_w
     setup = drafted_application("Contextual Rollback Co")
     services, application_id = setup
     created = services.knowledge_lifecycle.add_fact(
+        actor_of(services),
         "sales.json",
         {
             **NEW_FACT,
@@ -273,11 +302,14 @@ def test_confirm_and_use_audit_failure_leaves_the_fact_and_the_binding_as_they_w
         },
         application_id=application_id,
     )
-    profile_before = services.knowledge.load().profiles.get("account-manager")
+    profile_before = services.knowledge.load(actor_of(services).user_id).profiles.get(
+        "account-manager"
+    )
     _refuse_events(services, monkeypatch)
 
     with pytest.raises(ValueError, match="audit insertion failure"):
         services.knowledge_lifecycle.confirm_and_use_fact(
+            actor_of(services),
             created.fact.fact_id,
             application_id=application_id,
             job_analysis_id=setup.analysis_id,
@@ -286,7 +318,10 @@ def test_confirm_and_use_audit_failure_leaves_the_fact_and_the_binding_as_they_w
         )
 
     assert _reload(services).get(created.fact.fact_id).status is FactStatus.PENDING
-    assert services.knowledge.load().profiles.get("account-manager") == profile_before
+    assert (
+        services.knowledge.load(actor_of(services).user_id).profiles.get("account-manager")
+        == profile_before
+    )
 
 
 def test_an_unrelated_fact_change_leaves_a_document_approvable(drafted_application) -> None:
@@ -299,12 +334,16 @@ def test_an_unrelated_fact_change_leaves_a_document_approvable(drafted_applicati
     setup = drafted_application("Unrelated Fact Co")
     services, application_id = setup
     before = _reload(services)
-    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+    services.knowledge_lifecycle.add_fact(
+        actor_of(services), "situational_skills.json", dict(NEW_FACT)
+    )
     after = _reload(services)
     assert after.version == before.version
     assert after.lifecycle_version != before.lifecycle_version
 
-    services.knowledge_lifecycle.confirm_fact("situational.postgres", explicitly_confirmed=True)
+    services.knowledge_lifecycle.confirm_fact(
+        actor_of(services), "situational.postgres", explicitly_confirmed=True
+    )
     assert _reload(services).version != before.version
 
     approved = approve_active_draft(services, application_id)
@@ -317,52 +356,71 @@ def test_lifecycle_refuses_unconfirmed_illegal_duplicate_and_repeated_deletion(
     """Confirmation needs explicit attestation and a pending fact; a fact ID is
     unique across every source; and deletion is confirmed, one-way, excluded from
     the default listing and targets, and keeps the lifecycle trail."""
-    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+    services.knowledge_lifecycle.add_fact(
+        actor_of(services), "situational_skills.json", dict(NEW_FACT)
+    )
 
     with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
         services.knowledge_lifecycle.confirm_fact(
-            "situational.postgres", explicitly_confirmed=False
+            actor_of(services), "situational.postgres", explicitly_confirmed=False
         )
     assert _reload(services).get("situational.postgres").status is FactStatus.PENDING
 
     with pytest.raises(KnowledgeRejected, match="fact already exists"):
-        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+        services.knowledge_lifecycle.add_fact(
+            actor_of(services), "situational_skills.json", dict(NEW_FACT)
+        )
     with pytest.raises(KnowledgeRejected, match="fact already exists"):
         services.knowledge_lifecycle.add_fact(
-            "common.json", {**NEW_FACT, "meaning": "different meaning"}
+            actor_of(services), "common.json", {**NEW_FACT, "meaning": "different meaning"}
         )
 
     fact_id = "situational.postgres"
 
     with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
-        services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=False)
+        services.knowledge_lifecycle.delete_fact(
+            actor_of(services), fact_id, explicitly_confirmed=False
+        )
 
-    deleted = services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=True)
+    deleted = services.knowledge_lifecycle.delete_fact(
+        actor_of(services), fact_id, explicitly_confirmed=True
+    )
     assert deleted.fact.status is FactStatus.DELETED
     stored = _reload(services).get(fact_id)
     assert stored.status is FactStatus.DELETED
 
     # One-way: deleting an already-deleted fact is refused.
     with pytest.raises(KnowledgeRejected, match="already deleted"):
-        services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=True)
+        services.knowledge_lifecycle.delete_fact(
+            actor_of(services), fact_id, explicitly_confirmed=True
+        )
 
     # Excluded from the default listing; still reachable by explicit filter and by ID.
-    default_listing = services.knowledge_queries.list_facts()
+    default_listing = services.knowledge_queries.list_facts(
+        actor_of(services),
+    )
     assert fact_id not in {item.fact.fact_id for item in default_listing.items}
-    deleted_listing = services.knowledge_queries.list_facts("deleted")
+    deleted_listing = services.knowledge_queries.list_facts(actor_of(services), "deleted")
     assert fact_id in {item.fact.fact_id for item in deleted_listing.items}
-    assert services.knowledge_queries.show_fact(fact_id).fact.status is FactStatus.DELETED
+    assert (
+        services.knowledge_queries.show_fact(actor_of(services), fact_id).fact.status
+        is FactStatus.DELETED
+    )
 
     # Excluded from attachment targets, and refused by confirm/attach.
     with pytest.raises(UnknownRecord, match="deleted"):
-        services.knowledge_queries.fact_attachment_targets(fact_id)
+        services.knowledge_queries.fact_attachment_targets(actor_of(services), fact_id)
     with pytest.raises(KnowledgeRejected, match="only a pending fact can be confirmed"):
-        services.knowledge_lifecycle.confirm_fact(fact_id, explicitly_confirmed=True)
+        services.knowledge_lifecycle.confirm_fact(
+            actor_of(services), fact_id, explicitly_confirmed=True
+        )
     with pytest.raises(KnowledgeRejected, match="only canonical facts"):
-        services.knowledge_lifecycle.attach_fact(fact_id, "account-manager", "Work Experience")
+        services.knowledge_lifecycle.attach_fact(
+            actor_of(services), fact_id, "account-manager", "Work Experience"
+        )
 
     # The lifecycle trail is preserved, not erased.
-    history = services.knowledge_queries.fact_history(fact_id)
+    history = services.knowledge_queries.fact_history(actor_of(services), fact_id)
     assert [event.to_status for event in history.events] == ["pending", "deleted"]
 
 
@@ -426,21 +484,23 @@ def test_lifecycle_survives_process_boundaries_over_http(
 
     # The database is the record, not the server's memory.
     reader = build_services(AppPaths.from_root(project_root), database_url=database_url)
-    stored = reader.knowledge.facts().get(fact_id)
+    stored = reader.knowledge.facts(actor_of(reader).user_id).get(fact_id)
     assert stored.status is FactStatus.CANONICAL
 
 
 def test_lifecycle_events_are_immutable_and_carry_their_owner(services: Services) -> None:
-    result = services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+    result = services.knowledge_lifecycle.add_fact(
+        actor_of(services), "situational_skills.json", dict(NEW_FACT)
+    )
     transactions, store = _knowledge_persistence(services)
+    owner = actor_of(services).user_id
     with transactions.read() as tx:
-        owner = SqlAlchemyUserKnowledgeRepository(transactions).sole_user_id(tx)
         recorded = (
             transactions.connection_for(tx)
             .execute(select(fact_events.c.user_id).where(fact_events.c.id == result.event_id))
             .scalar_one()
         )
-    assert recorded == owner is not None
+    assert recorded == owner
 
     with pytest.raises(ProgrammingError, match="immutable record"):
         with transactions.write() as tx:
@@ -513,6 +573,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     assert not validate_active_draft(services, app_id).passed
 
     captured = services.knowledge_lifecycle.capture_claim_fact(
+        actor_of(services),
         app_id,
         claim.claim_id,
         source="sales.json",
@@ -525,7 +586,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     assert captured.fact.resume_style == claim.style
 
     services.knowledge_lifecycle.confirm_fact(
-        "sales.leadership.pipeline_review", explicitly_confirmed=True
+        actor_of(services), "sales.leadership.pipeline_review", explicitly_confirmed=True
     )
 
     edit_document_claim(
@@ -536,7 +597,11 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     assert any(issue.code == "fact-outside-profile-section" for issue in checked.report.issues)
 
     services.knowledge_lifecycle.attach_fact(
-        "sales.leadership.pipeline_review", "account-manager", "Work Experience", pin=True
+        actor_of(services),
+        "sales.leadership.pipeline_review",
+        "account-manager",
+        "Work Experience",
+        pin=True,
     )
     refreshed = seed_analysis_for_command(
         services,
@@ -546,18 +611,21 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
         ),
     )
     services.draft_editing.build_from_analysis(
+        actor_of(services),
         BuildFromAnalysisCommand(
             application_id=app_id,
             analysis_id=refreshed.analysis_id,
             expected_document_hash=stored_document(services, app_id).document_hash,
-        )
+        ),
     )
     seed_draft(services, app_id)
     assert validate_active_draft(services, app_id).passed
     selected = _working_claim(services, app_id, "sales.leadership.pipeline_review")
     assert selected.claim_type == "canonical"
     assert selected.text == text
-    events = services.knowledge_queries.fact_history("sales.leadership.pipeline_review").events
+    events = services.knowledge_queries.fact_history(
+        actor_of(services), "sales.leadership.pipeline_review"
+    ).events
     assert [event.event_type for event in events] == [
         "fact_created",
         "fact_confirmed",

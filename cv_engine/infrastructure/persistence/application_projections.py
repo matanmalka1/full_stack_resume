@@ -15,6 +15,7 @@ from .analysis_sql import _analysis_record
 from .base import json_text_record
 from .connection import SqlAlchemyTransactionManager
 from .operation_sql import _operation_record
+from .ownership import owned
 from .tables import (
     applications,
     audit_records,
@@ -37,10 +38,10 @@ class SqlAlchemyApplicationProjectionReader:
         """Every Application column but the job text itself, which only detail reads."""
         return select(*(column for column in applications.c if column.name != "job_text"))
 
-    def application(self, tx: ReadTransaction, application_id: str) -> dict[str, Any]:
+    def application(self, tx: ReadTransaction, application_id: str, user_id: str) -> dict[str, Any]:
         row = (
             self._connection(tx)
-            .execute(select(applications).where(applications.c.id == application_id))
+            .execute(select(applications).where(owned(application_id, user_id)))
             .mappings()
             .one_or_none()
         )
@@ -48,12 +49,12 @@ class SqlAlchemyApplicationProjectionReader:
             raise UnknownRecord(application_id)
         return dict(row)
 
-    def applications(self, tx: ReadTransaction) -> list[dict[str, Any]]:
+    def applications(self, tx: ReadTransaction, user_id: str) -> list[dict[str, Any]]:
         rows = (
             self._connection(tx)
             .execute(
                 self._application_projection()
-                .where(applications.c.deleted_at.is_(None))
+                .where(applications.c.user_id == user_id, applications.c.deleted_at.is_(None))
                 .order_by(applications.c.created_at, applications.c.id)
             )
             .mappings()
@@ -81,10 +82,17 @@ class SqlAlchemyApplicationProjectionReader:
         )
         return [_analysis_record(row) for row in rows]
 
-    def analysis(self, tx: ReadTransaction, analysis_id: str) -> dict[str, Any]:
+    def analysis(
+        self, tx: ReadTransaction, analysis_id: str, application_id: str
+    ) -> dict[str, Any]:
         row = (
             self._connection(tx)
-            .execute(select(job_analyses).where(job_analyses.c.id == analysis_id))
+            .execute(
+                select(job_analyses).where(
+                    job_analyses.c.id == analysis_id,
+                    job_analyses.c.application_id == application_id,
+                )
+            )
             .mappings()
             .one_or_none()
         )

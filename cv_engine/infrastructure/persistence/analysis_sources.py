@@ -9,6 +9,7 @@ from ...application.ports.analysis_plans import AnalysisContextSource, AnalysisJ
 from ...application.ports.transactions import ReadTransaction
 from .analysis_sql import _analysis_record
 from .connection import SqlAlchemyTransactionManager
+from .ownership import owned
 from .tables import (
     applications,
     job_analyses,
@@ -19,7 +20,18 @@ class SqlAlchemyAnalysisContextSourceReader:
     def __init__(self, transactions: SqlAlchemyTransactionManager):
         self._transactions = transactions
 
-    def job_text_source(self, tx: ReadTransaction, application_id: str) -> AnalysisJobTextSource:
+    def require_owned(self, tx: ReadTransaction, application_id: str, user_id: str) -> None:
+        found = (
+            self._transactions.connection_for(tx)
+            .execute(select(applications.c.id).where(owned(application_id, user_id)))
+            .scalar_one_or_none()
+        )
+        if found is None:
+            raise UnknownRecord(f"unknown application: {application_id}")
+
+    def job_text_source(
+        self, tx: ReadTransaction, application_id: str, user_id: str
+    ) -> AnalysisJobTextSource:
         row = (
             self._transactions.connection_for(tx)
             .execute(
@@ -29,7 +41,7 @@ class SqlAlchemyAnalysisContextSourceReader:
                     applications.c.job_text_hash,
                     applications.c.job_normalized_hash,
                     applications.c.deleted_at,
-                ).where(applications.c.id == application_id)
+                ).where(owned(application_id, user_id))
             )
             .mappings()
             .one_or_none()
@@ -45,7 +57,7 @@ class SqlAlchemyAnalysisContextSourceReader:
         )
 
     def analysis_context_source(
-        self, tx: ReadTransaction, job_analysis_id: str
+        self, tx: ReadTransaction, job_analysis_id: str, user_id: str
     ) -> AnalysisContextSource:
         connection = self._transactions.connection_for(tx)
         row = (
@@ -59,7 +71,7 @@ class SqlAlchemyAnalysisContextSourceReader:
                     applications.c.deleted_at,
                 )
                 .join(applications)
-                .where(job_analyses.c.id == job_analysis_id)
+                .where(job_analyses.c.id == job_analysis_id, applications.c.user_id == user_id)
             )
             .mappings()
             .one_or_none()

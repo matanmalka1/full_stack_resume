@@ -8,6 +8,7 @@ from time import monotonic
 import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
 from helpers import (
+    actor_of,
     edit_document_claim,
     seed_document,
     seed_draft,
@@ -87,9 +88,10 @@ def test_racing_claimants_produce_one_claim_and_one_execution(
     through the same durable claim contract and execute once.
     """
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company="Claim Race Co", target_role="Developer", job_text="Python role", client="web"
-        )
+        ),
     )
     created = _enqueue_operation(
         services,
@@ -147,7 +149,9 @@ def test_racing_claimants_produce_one_claim_and_one_execution(
             {OperationType.ANALYZE_JOB: handler},
             runner_id="worker-racer",
         ),
-        request_cancellation=services.operation_lifecycle.cancel,
+        request_cancellation=lambda operation_id: services.operation_lifecycle.cancel(
+            actor_of(services), operation_id
+        ),
         exclusive=_held_slot,
         concurrency=1,
         poll_interval_seconds=0,
@@ -188,7 +192,9 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
             operation_failure_logger=event_logger.record_operation_failure,
             operation_event_logger=event_logger.record_event,
         ),
-        request_cancellation=services.operation_lifecycle.cancel,
+        request_cancellation=lambda operation_id: services.operation_lifecycle.cancel(
+            actor_of(services), operation_id
+        ),
         exclusive=_held_slot,
         concurrency=1,
     )
@@ -220,13 +226,14 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
 
 def _application(services, company: str) -> str:
     return services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company=company,
             target_role="Developer",
             job_text="Python role",
             acknowledged_duplicates=True,
             client="web",
-        )
+        ),
     ).application_id
 
 
@@ -359,7 +366,7 @@ def _finish_running(services, database_engine) -> None:
         if status == "running":
             _execution_write(services, "complete_operation", operation_id, runner_id=owner)
         else:
-            services.operation_lifecycle.cancel(operation_id)
+            services.operation_lifecycle.cancel(actor_of(services), operation_id)
 
 
 def test_a_claim_refused_by_a_guard_moves_on_to_the_next_candidate(
@@ -428,7 +435,7 @@ def _wait_for_a_lock_wait(database_engine, timeout: float = 5.0) -> None:
         ("40001", None, True),
         ("23505", "uq_operations_running_application", True),
         ("23505", "uq_operations_running_render", True),
-        ("23505", "uq_operations_operation_type_idempotency_key", False),
+        ("23505", "uq_operations_application_id_operation_type_idempotency_key", False),
         ("23503", None, False),
     ],
 )
@@ -498,7 +505,9 @@ def test_worker_stops_when_its_lock_session_ends(services, database_engine) -> N
     """
     worker = OperationWorker(
         _runner(services, {}, runner_id="lock-loser"),
-        request_cancellation=services.operation_lifecycle.cancel,
+        request_cancellation=lambda operation_id: services.operation_lifecycle.cancel(
+            actor_of(services), operation_id
+        ),
         exclusive=lambda: worker_exclusivity(database_engine),
         concurrency=1,
         poll_interval_seconds=0.01,
@@ -595,22 +604,24 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     services, monkeypatch
 ) -> None:
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company="Missing Rendering Co",
             target_role="Developer",
             job_text="Python developer role",
             client="web",
-        )
+        ),
     )
     attempts = 0
 
-    def prepare_that_fails(_command, *, operation_id=None, still_owned=None):
+    def prepare_that_fails(_actor, _command, *, operation_id=None, still_owned=None):
         nonlocal attempts
         attempts += 1
         raise MissingFactRendering("situational.agentic_multi_agent", "he")
 
     monkeypatch.setattr(services.analysis, "prepare", prepare_that_fails)
     operation = services.operation_submissions.submit_analysis(
+        actor_of(services),
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_text_hash=ingested.job_text_hash,
@@ -633,7 +644,9 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     )
     assert completed.outputs == []
     with pytest.raises(StateConflict, match="cannot be retried"):
-        services.operation_lifecycle.retry(completed.id, idempotency_key="meaningless-retry")
+        services.operation_lifecycle.retry(
+            actor_of(services), completed.id, idempotency_key="meaningless-retry"
+        )
     assert attempts == 1
 
 
@@ -654,7 +667,7 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     original_cancel = services.operation_lifecycle.operations.request_cancellation
     cancellation_attempts = []
 
-    def cancel_after_runner_write(tx, operation_id):
+    def cancel_after_runner_write(tx, operation_id, user_id):
         cancellation_attempts.append(operation_id)
         if len(cancellation_attempts) == 1:
             # Establish the cancellation snapshot, then commit a runner write to the
@@ -662,7 +675,7 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
             services.operation_runner.execution_store.operation(tx, operation_id)
             with ThreadPoolExecutor(max_workers=1) as pool:
                 pool.submit(_runner_touches_row, database_engine, operation_id).result(timeout=2)
-        return original_cancel(tx, operation_id)
+        return original_cancel(tx, operation_id, user_id)
 
     monkeypatch.setattr(
         services.operation_lifecycle.operations, "request_cancellation", cancel_after_runner_write
@@ -681,7 +694,9 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     )
     worker = OperationWorker(
         runner,
-        request_cancellation=services.operation_lifecycle.cancel,
+        request_cancellation=lambda operation_id: services.operation_lifecycle.cancel(
+            actor_of(services), operation_id
+        ),
         exclusive=_held_slot,
         concurrency=1,
         poll_interval_seconds=0.01,
@@ -705,6 +720,7 @@ def _run(services: Services, operation_id: str):
 
 def _submit_draft(services: Services, application_id: str, document_hash: str):
     return services.operation_submissions.submit_draft(
+        actor_of(services),
         DraftCommand(application_id=application_id, expected_document_hash=document_hash),
         idempotency_key=new_id(),
         draft_service=services.drafts,
@@ -730,11 +746,12 @@ def test_create_draft_activates_only_against_the_hash_it_froze(
     def move_document():
         newer = seed_existing_analysis(services, ingested)
         services.draft_editing.build_from_analysis(
+            actor_of(services),
             BuildFromAnalysisCommand(
                 application_id=application_id,
                 analysis_id=newer.analysis_id,
                 expected_document_hash=document.document_hash,
-            )
+            ),
         )
 
     prepare = services.drafts.prepare
@@ -756,7 +773,7 @@ def test_create_draft_activates_only_against_the_hash_it_froze(
     assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
     assert stored_document(services, application_id).content is None
     with pytest.raises(StateConflict):
-        services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
+        services.operation_lifecycle.retry(actor_of(services), queued.id, idempotency_key=new_id())
 
     succeeded = _run(services, _submit_draft(services, application_id, moved.document_hash).id)
     assert succeeded.status is OperationStatus.SUCCEEDED, succeeded.safe_failure_detail
@@ -785,9 +802,10 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
     application_id = ingested.application_id
     document_hash = seed_draft(services, application_id).document_hash
     assert services.draft_review.approve_document(
+        actor_of(services),
         ApproveDocumentCommand(
             application_id=application_id, expected_document_hash=document_hash, client="web"
-        )
+        ),
     ).passed
 
     working = rendering_adapter.render_pdf
@@ -797,6 +815,7 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
 
     monkeypatch.setattr(rendering_adapter, "render_pdf", crash)
     queued = services.operation_submissions.submit_render(
+        actor_of(services),
         RenderCommand(application_id=application_id, expected_document_hash=document_hash),
         idempotency_key=new_id(),
         rendering_service=services.rendering,
@@ -804,7 +823,7 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
     failed = _run(services, queued.id)
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.RENDER_FAILED
-    detail = services.queries.application_detail(application_id)
+    detail = services.queries.application_detail(actor_of(services), application_id)
     assert detail.preparation_state is PreparationState.APPROVED
     assert detail.last_render_error is not None
     assert detail.last_render_error["failure_code"] == "RENDER_FAILED"
@@ -821,27 +840,31 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
         if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
     )
     changed = services.draft_editing.update_document(
+        actor_of(services),
         UpdateDocumentCommand(
             application_id=application_id,
             expected_document_hash=current.document_hash,
             claim_orders={section.name: [c.claim_id for c in reversed(section.claims)]},
-        )
+        ),
     )
     assert services.draft_review.approve_document(
+        actor_of(services),
         ApproveDocumentCommand(
             application_id=application_id,
             expected_document_hash=changed.document_hash,
             client="web",
-        )
+        ),
     ).passed
-    retried = services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
+    retried = services.operation_lifecycle.retry(
+        actor_of(services), queued.id, idempotency_key=new_id()
+    )
     retry_record = services.operation_runner.operation(retried.id)
     assert retry_record.sources.expected_document_hash == changed.document_hash
     assert retry_record.payload["expected_document_hash"] == changed.document_hash
     assert retried.retry_of_operation_id == queued.id
     completed = _run(services, retried.id)
     assert completed.status is OperationStatus.SUCCEEDED, completed.safe_failure_detail
-    detail = services.queries.application_detail(application_id)
+    detail = services.queries.application_detail(actor_of(services), application_id)
     assert detail.preparation_state is PreparationState.READY
     assert detail.last_render_error is None
     assert len([path for path in attempts.rglob("*.pdf")]) == 1
@@ -858,6 +881,7 @@ def test_render_discards_unactivated_files(
     assert document.content is not None
     claim = document.content.sections[0].claims[0]
     queued = services.operation_submissions.submit_render(
+        actor_of(services),
         RenderCommand(application_id=app_id, expected_document_hash=document.document_hash),
         idempotency_key=new_id(),
         rendering_service=services.rendering,
@@ -869,7 +893,7 @@ def test_render_discards_unactivated_files(
         result = execute(prepared)
         attempts.append(result.files)
         if outcome == "cancel":
-            services.operation_lifecycle.cancel(queued.id)
+            services.operation_lifecycle.cancel(actor_of(services), queued.id)
         else:
             edit_document_claim(
                 services,
@@ -907,19 +931,22 @@ def test_successful_rerender_discards_superseded_files(ready_application):
         if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
     )
     edited = services.draft_editing.update_document(
+        actor_of(services),
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=before.document_hash,
             claim_orders={section.name: [c.claim_id for c in reversed(section.claims)]},
-        )
+        ),
     )
     assert services.draft_review.approve_document(
+        actor_of(services),
         ApproveDocumentCommand(
             application_id=app_id, expected_document_hash=edited.document_hash, client="web"
-        )
+        ),
     ).passed
     services.rendering.render(
-        RenderCommand(application_id=app_id, expected_document_hash=edited.document_hash)
+        actor_of(services),
+        RenderCommand(application_id=app_id, expected_document_hash=edited.document_hash),
     )
     after = stored_document(services, app_id)
     assert after.pdf_path != before.pdf_path and after.html_path != before.html_path

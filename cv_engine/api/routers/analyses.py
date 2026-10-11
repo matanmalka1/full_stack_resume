@@ -6,6 +6,7 @@ from ...application.commands import ApplyAnalysisDecisionsCommand
 from ..dependencies import Services
 from ..schemas.analyses import AnalysisDecisionsResponse, ApplyAnalysisDecisionsRequest
 from ..schemas.applications import ApplicationStateResponse
+from ..session_cookie import CurrentActor
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
@@ -20,6 +21,7 @@ def apply_analysis_decisions(
     analysis_id: str,
     request: ApplyAnalysisDecisionsRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> AnalysisDecisionsResponse:
     """`201`: every changed classification value creates an immutable JobAnalysis (§13).
 
@@ -34,12 +36,13 @@ def apply_analysis_decisions(
     stored value's exact type depend on how Pydantic coerces a `str` subclass.
     """
     result = services.analysis.apply_analysis_decisions(
+        actor,
         ApplyAnalysisDecisionsCommand(
             job_analysis_id=analysis_id,
             **request.model_dump(mode="json"),
-        )
+        ),
     )
-    state = services.queries.application_detail(request.application_id)
+    state = services.queries.application_detail(actor, request.application_id)
     state_document = state.model_dump(mode="json")
     projected = ApplicationStateResponse.model_validate(
         {name: state_document[name] for name in ApplicationStateResponse.model_fields}

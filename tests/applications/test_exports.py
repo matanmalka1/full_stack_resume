@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from helpers import actor_of
 
 from cv_engine.application.commands import (
     IngestCommand,
@@ -13,13 +14,15 @@ def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> Non
     from cv_engine.application.maintenance import EXPORT_SCHEMA_VERSION
     from cv_engine.infrastructure.exports import export_csv
 
+    actor = actor_of(services)
     ingested = services.applications.ingest(
+        actor,
         IngestCommand(
             company="Acme", target_role="Developer", job_text="Python developer role", client="web"
-        )
+        ),
     )
     app_id = ingested.application_id
-    output = export_csv(services.queries.list_applications(), tmp_path / "applications.csv")
+    output = export_csv(services.queries.list_applications(actor), tmp_path / "applications.csv")
     text = output.read_text(encoding="utf-8")
     assert "current_status" in text
     assert app_id in text

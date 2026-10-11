@@ -10,6 +10,7 @@ from ....domain.recruitment import (
     user_transition_allowed,
 )
 from ....util import new_id, utc_now
+from ...actor import Actor
 from ...commands import (
     ApplicationMutationResult,
     CloseApplicationCommand,
@@ -33,17 +34,17 @@ class RecruitmentService:
         self._recruitment = recruitment
         self._audit_log = audit
 
-    def _application(self, application_id: str, *, active: bool = True) -> dict:
+    def _application(self, actor: Actor, application_id: str, *, active: bool = True) -> dict:
         with self._transactions.read() as tx:
-            application = self._recruitment.application(tx, application_id)
+            application = self._recruitment.application(tx, application_id, actor.user_id)
         if active and application.get("deleted_at") is not None:
             raise StateConflict(f"application is deleted: {application_id}")
         return application
 
     def _result(
-        self, application_id: str, event_id: str | None = None
+        self, actor: Actor, application_id: str, event_id: str | None = None
     ) -> ApplicationMutationResult:
-        application = self._application(application_id, active=False)
+        application = self._application(actor, application_id, active=False)
         return ApplicationMutationResult(
             application_id=application_id,
             current_status=application["current_status"],
@@ -81,8 +82,10 @@ class RecruitmentService:
             ),
         )
 
-    def transition_status(self, command: RecruitmentStatusCommand) -> ApplicationMutationResult:
-        application = self._application(command.application_id)
+    def transition_status(
+        self, actor: Actor, command: RecruitmentStatusCommand
+    ) -> ApplicationMutationResult:
+        application = self._application(actor, command.application_id)
         try:
             current, target = (
                 ApplicationStatus(application["current_status"]),
@@ -93,7 +96,7 @@ class RecruitmentService:
         if submission_owns_transition(target):
             raise StateConflict("applied is submission-owned and cannot be set directly")
         if target is current:
-            return self._result(command.application_id)
+            return self._result(actor, command.application_id)
         if not user_transition_allowed(current, target):
             raise StateConflict(f"invalid status transition: {current.value} -> {target.value}")
         now, event_id = command.occurred_at or utc_now(), new_id()
@@ -124,24 +127,29 @@ class RecruitmentService:
                 occurred_at=now,
                 details={"from_status": current.value, "to_status": target.value},
             )
-        return self._result(command.application_id, event_id)
+        return self._result(actor, command.application_id, event_id)
 
-    def close_application(self, command: CloseApplicationCommand) -> ApplicationMutationResult:
+    def close_application(
+        self, actor: Actor, command: CloseApplicationCommand
+    ) -> ApplicationMutationResult:
         return self.transition_status(
+            actor,
             RecruitmentStatusCommand(
                 application_id=command.application_id,
                 target_status="closed",
                 reason="application closed",
                 actor_type=command.actor_type,
                 client=command.client,
-            )
+            ),
         )
 
-    def delete_application(self, command: DeleteApplicationCommand) -> ApplicationMutationResult:
-        self._application(command.application_id)
+    def delete_application(
+        self, actor: Actor, command: DeleteApplicationCommand
+    ) -> ApplicationMutationResult:
+        self._application(actor, command.application_id)
         now = utc_now()
         with self._transactions.write() as tx:
-            self._recruitment.set_deleted(tx, command.application_id, now)
+            self._recruitment.set_deleted(tx, command.application_id, actor.user_id, now)
             self._audit(
                 tx,
                 application_id=command.application_id,
@@ -152,21 +160,23 @@ class RecruitmentService:
                 client=command.client,
                 occurred_at=now,
             )
-        return self._result(command.application_id)
+        return self._result(actor, command.application_id)
 
     def correct_recruitment_status(
-        self, command: RecruitmentCorrectionCommand
+        self, actor: Actor, command: RecruitmentCorrectionCommand
     ) -> ApplicationMutationResult:
         if not command.reason.strip():
             raise StateConflict("recruitment correction reason is required")
-        application = self._application(command.application_id)
+        application = self._application(actor, command.application_id)
         try:
             current, target = (
                 ApplicationStatus(application["current_status"]),
                 ApplicationStatus(command.target_status),
             )
             with self._transactions.read() as tx:
-                corrected = self._recruitment.event(tx, command.corrects_event_id)
+                corrected = self._recruitment.event(
+                    tx, command.corrects_event_id, command.application_id
+                )
         except ValueError as exc:
             raise StateConflict(str(exc)) from exc
         except UnknownRecord as exc:
@@ -212,10 +222,12 @@ class RecruitmentService:
                     "reason": command.reason.strip(),
                 },
             )
-        return self._result(command.application_id, event_id)
+        return self._result(actor, command.application_id, event_id)
 
-    def set_next_action(self, command: NextActionCommand) -> ApplicationMutationResult:
-        self._application(command.application_id)
+    def set_next_action(
+        self, actor: Actor, command: NextActionCommand
+    ) -> ApplicationMutationResult:
+        self._application(actor, command.application_id)
         now = command.occurred_at or utc_now()
         with self._transactions.write() as tx:
             event_id = self._recruitment.insert_next_action(
@@ -241,4 +253,4 @@ class RecruitmentService:
                     "next_action_date": command.next_action_date,
                 },
             )
-        return self._result(command.application_id, event_id)
+        return self._result(actor, command.application_id, event_id)

@@ -9,6 +9,7 @@ from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import new_id
 from .base import json_text_record
 from .connection import SqlAlchemyTransactionManager
+from .ownership import owned
 from .tables import applications, recruitment_events
 
 
@@ -16,10 +17,10 @@ class SqlAlchemyRecruitmentRepository:
     def __init__(self, transactions: SqlAlchemyTransactionManager):
         self._transactions = transactions
 
-    def application(self, tx: ReadTransaction, application_id: str) -> dict[str, Any]:
+    def application(self, tx: ReadTransaction, application_id: str, user_id: str) -> dict[str, Any]:
         row = (
             self._transactions.connection_for(tx)
-            .execute(select(applications).where(applications.c.id == application_id))
+            .execute(select(applications).where(owned(application_id, user_id)))
             .mappings()
             .one_or_none()
         )
@@ -27,12 +28,12 @@ class SqlAlchemyRecruitmentRepository:
             raise UnknownRecord(application_id)
         return dict(row)
 
-    def lock_application(self, tx: WriteTransaction, application_id: str) -> dict[str, Any]:
+    def lock_application(
+        self, tx: WriteTransaction, application_id: str, user_id: str
+    ) -> dict[str, Any]:
         row = (
             self._transactions.connection_for(tx, access="write")
-            .execute(
-                select(applications).where(applications.c.id == application_id).with_for_update()
-            )
+            .execute(select(applications).where(owned(application_id, user_id)).with_for_update())
             .mappings()
             .one_or_none()
         )
@@ -40,22 +41,26 @@ class SqlAlchemyRecruitmentRepository:
             raise UnknownRecord(application_id)
         return dict(row)
 
-    def set_deleted(self, tx: WriteTransaction, application_id: str, deleted_at: str) -> None:
+    def set_deleted(
+        self, tx: WriteTransaction, application_id: str, user_id: str, deleted_at: str
+    ) -> None:
         result = self._transactions.connection_for(tx, access="write").execute(
             update(applications)
-            .where(
-                applications.c.id == application_id,
-                applications.c.deleted_at.is_(None),
-            )
+            .where(owned(application_id, user_id), applications.c.deleted_at.is_(None))
             .values(deleted_at=deleted_at, updated_at=deleted_at)
         )
         if result.rowcount != 1:
             raise StateConflict(f"application is deleted: {application_id}")
 
-    def event(self, tx: ReadTransaction, event_id: str) -> dict[str, Any]:
+    def event(self, tx: ReadTransaction, event_id: str, application_id: str) -> dict[str, Any]:
         row = (
             self._transactions.connection_for(tx)
-            .execute(select(recruitment_events).where(recruitment_events.c.id == event_id))
+            .execute(
+                select(recruitment_events).where(
+                    recruitment_events.c.id == event_id,
+                    recruitment_events.c.application_id == application_id,
+                )
+            )
             .mappings()
             .one_or_none()
         )

@@ -26,6 +26,7 @@ from ....domain.drafts import (
 )
 from ....domain.frame import dangling_heading
 from ....domain.knowledge import Knowledge
+from ...actor import Actor
 from ...commands import (
     DraftCommand,
     RegenerateClaimCommand,
@@ -146,24 +147,26 @@ class DraftAuthoringService:
             raise ProviderNotConfigured("AI mode was requested but no provider is configured")
         return self._provider
 
-    def load_knowledge(self) -> Knowledge:
-        return load_knowledge(self._knowledge)
+    def load_knowledge(self, actor: Actor) -> Knowledge:
+        return load_knowledge(self._knowledge, actor)
 
     @staticmethod
     def assert_provider_io_allowed() -> None:
         assert_external_io_allowed("draft provider execution")
 
-    def document_source(self, application_id: str) -> DocumentSource:
+    def document_source(self, actor: Actor, application_id: str) -> DocumentSource:
         with self.transactions.read() as tx:
-            return read_document_source(tx, self.documents, self.sources, application_id)
+            return read_document_source(tx, self.documents, self.sources, application_id, actor)
 
-    def _target(self, application_id: str, expected_document_hash: str) -> DocumentSource:
-        source = self.document_source(application_id)
+    def _target(
+        self, actor: Actor, application_id: str, expected_document_hash: str
+    ) -> DocumentSource:
+        source = self.document_source(actor, application_id)
         refuse_deleted(application_id, source.deleted_at)
         require_hash(source.document, expected_document_hash)
         return source
 
-    def job_text(self, application_id: str, job_text_hash: str) -> str:
+    def job_text(self, actor: Actor, application_id: str, job_text_hash: str) -> str:
         """The job text the document's analysis read, while it is still the current one.
 
         An edited job text replaces the earlier one in place, so a document whose
@@ -171,7 +174,7 @@ class DraftAuthoringService:
         text and build from that analysis first.
         """
         with self.transactions.read() as tx:
-            source = self.sources.job_text_source(tx, application_id)
+            source = self.sources.job_text_source(tx, application_id, actor.user_id)
         if source.job_text_hash != job_text_hash:
             raise StateConflict(
                 "the job text changed after the document's analysis; analyze the "
@@ -196,6 +199,7 @@ class DraftAuthoringService:
 
     def prepare(
         self,
+        actor: Actor,
         command: DraftCommand,
         *,
         operation_id: str,
@@ -208,14 +212,14 @@ class DraftAuthoringService:
         (docs/decisions/ai-owned-selection.md). Every provider attempt is logged against
         `operation_id`; `still_owned` must hold before any retry.
         """
-        source = self._target(command.application_id, command.expected_document_hash)
+        source = self._target(actor, command.application_id, command.expected_document_hash)
         document = source.document
         if document.content is not None:
             raise PreconditionFailed(
                 "the document already has content; edit or regenerate it, or build it "
                 "again from its analysis"
             )
-        knowledge = self.load_knowledge()
+        knowledge = self.load_knowledge(actor)
         frame = compose_content(
             command.application_id,
             document.analysis_id,
@@ -224,6 +228,7 @@ class DraftAuthoringService:
             knowledge,
         )
         content, withheld = self._propose_draft(
+            actor,
             operation_id,
             frame,
             source,
@@ -241,6 +246,7 @@ class DraftAuthoringService:
 
     def _propose_draft(
         self,
+        actor: Actor,
         operation_id: str,
         frame: DraftDocument,
         source: DocumentSource,
@@ -275,7 +281,7 @@ class DraftAuthoringService:
                 for fact_id in claim.fact_ids
             }
         )
-        job_text = self.job_text(frame.application_id, frame.job_text_hash)
+        job_text = self.job_text(actor, frame.application_id, frame.job_text_hash)
         context = DraftResumeContext(
             job_analysis={
                 "track": analysis.track.value,
@@ -345,13 +351,13 @@ class DraftAuthoringService:
         return updated, reason
 
     def _regeneration_target(
-        self, application_id: str, expected_document_hash: str
+        self, actor: Actor, application_id: str, expected_document_hash: str
     ) -> tuple[DocumentSource, DraftDocument, Knowledge]:
         """The exact document a regeneration named, or the refusal that says why."""
-        source = self._target(application_id, expected_document_hash)
+        source = self._target(actor, application_id, expected_document_hash)
         if source.document.content is None:
             raise PreconditionFailed("the document has no content to regenerate yet")
-        return source, source.document.content, self.load_knowledge()
+        return source, source.document.content, self.load_knowledge(actor)
 
     def _review_pending_claims(
         self,
@@ -457,6 +463,7 @@ class DraftAuthoringService:
 
     def prepare_section_regeneration(
         self,
+        actor: Actor,
         command: RegenerateSectionCommand,
         *,
         operation_id: str,
@@ -464,7 +471,7 @@ class DraftAuthoringService:
     ) -> PreparedRegeneration:
         """§14 `regenerate_section`: propose replacement wording for one section."""
         source, draft, knowledge = self._regeneration_target(
-            command.application_id, command.expected_document_hash
+            actor, command.application_id, command.expected_document_hash
         )
         analysis = source.analysis
         section = next((item for item in draft.sections if item.name == command.section), None)
@@ -531,6 +538,7 @@ class DraftAuthoringService:
 
     def prepare_claim_regeneration(
         self,
+        actor: Actor,
         command: RegenerateClaimCommand,
         *,
         operation_id: str,
@@ -538,7 +546,7 @@ class DraftAuthoringService:
     ) -> PreparedRegeneration:
         """§14 `regenerate_claim`: propose replacement wording for one claim."""
         source, draft, knowledge = self._regeneration_target(
-            command.application_id, command.expected_document_hash
+            actor, command.application_id, command.expected_document_hash
         )
         analysis = source.analysis
         located = next(

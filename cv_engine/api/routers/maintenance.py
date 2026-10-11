@@ -17,6 +17,7 @@ from ..schemas.maintenance import (
     OrphanInventoryResponse,
     ReconciliationResponse,
 )
+from ..session_cookie import CurrentActor
 
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 
@@ -26,9 +27,13 @@ router = APIRouter(prefix="/maintenance", tags=["maintenance"])
     response_model=ReconciliationResponse,
     summary="Reconcile stored evidence and the fact lifecycle",
 )
-def reconcile(services: Services) -> ReconciliationResponse:
+def reconcile(services: Services, actor: CurrentActor) -> ReconciliationResponse:
     """Check database references, artifact hashes, and the fact lifecycle."""
-    return ReconciliationResponse.of(services.maintenance.reconcile())
+    return ReconciliationResponse.of(
+        services.maintenance.reconcile(
+            actor,
+        )
+    )
 
 
 @router.get(

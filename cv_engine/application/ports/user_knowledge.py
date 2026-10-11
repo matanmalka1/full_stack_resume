@@ -54,10 +54,6 @@ class UserKnowledgeRepository(Protocol):
         """Facts in (source, ordinal) order, the candidate payload, and bindings by profile."""
         ...
 
-    def sole_user_id(self, tx: ReadTransaction) -> str | None:
-        """The installation's one user, until isolation gives every request its own."""
-        ...
-
     def knowledge_state(self, tx: ReadTransaction, user_id: str) -> StoredKnowledge | None:
         """Everything a mutation needs, with the versions it must advance; None if unimported."""
         ...
@@ -93,18 +89,18 @@ class UserKnowledgeRepository(Protocol):
 
 
 class UserKnowledgeSource(Protocol):
-    """The Knowledge every command reads, from the one user's rows and the policy files.
+    """The Knowledge every command reads: one user's rows joined with the policy files.
 
     `tx` is the caller's scope when it already holds one, as the Operation handlers do;
     without it the source opens its own read scope.
     """
 
-    def load(self, tx: ReadTransaction | None = None) -> Knowledge: ...
+    def load(self, user_id: str, tx: ReadTransaction | None = None) -> Knowledge: ...
 
-    def facts(self, tx: ReadTransaction | None = None) -> FactStore: ...
+    def facts(self, user_id: str, tx: ReadTransaction | None = None) -> FactStore: ...
 
-    def state(self, tx: ReadTransaction) -> StoredKnowledge:
-        """The one user's rows; refused when there is no user or nothing was imported."""
+    def state(self, tx: ReadTransaction, user_id: str) -> StoredKnowledge:
+        """The user's rows; refused when nothing was imported for them."""
         ...
 
     def build(self, state: StoredKnowledge) -> Knowledge:

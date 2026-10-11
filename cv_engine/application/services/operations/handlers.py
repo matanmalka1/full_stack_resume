@@ -19,6 +19,7 @@ from typing import Any
 
 from ....domain.contracts.validation import ValidationReport
 from ....util import new_id
+from ...actor import Actor
 from ...commands import (
     AnalysisResult,
     AnalyzeCommand,
@@ -127,6 +128,12 @@ def _render_failure_reason(report: ValidationReport) -> FailureReason:
     return RenderCheckReason(code=_RENDER_REASON_CODES.get(issue.code, "render_validation"))
 
 
+def owner(operation: PersistedOperation) -> Actor:
+    """Who a queued Operation acts for: its Application's owner, read from the database
+    with the record and never from the payload (architecture §18.3)."""
+    return Actor(user_id=operation.owner_user_id)
+
+
 class AITaskHandler:
     """What the three AI-only handlers share: classification.
 
@@ -189,7 +196,9 @@ class AnalysisOperationHandler(AITaskHandler):
         if sources.job_text_hash is None:
             raise SourceChanged("Analysis Operation has no frozen job text identity.")
         try:
-            source = self.sources.job_text_source(tx, operation.application_id)
+            source = self.sources.job_text_source(
+                tx, operation.application_id, operation.owner_user_id
+            )
         except UnknownRecord as exc:
             raise SourceChanged("The Application no longer exists.") from exc
         if source.deleted_at is not None:
@@ -199,7 +208,7 @@ class AnalysisOperationHandler(AITaskHandler):
 
         if (
             operation.sources.knowledge_context_hash
-            != load_knowledge(self.knowledge, tx).context_hash()
+            != load_knowledge(self.knowledge, owner(operation), tx).context_hash()
         ):
             raise SourceChanged("Knowledge changed before analysis activation.")
 
@@ -209,7 +218,10 @@ class AnalysisOperationHandler(AITaskHandler):
         try:
             return self.prepared(
                 self.service.prepare(
-                    self._command(operation), operation_id=operation.id, still_owned=still_owned
+                    owner(operation),
+                    self._command(operation),
+                    operation_id=operation.id,
+                    still_owned=still_owned,
                 )
             )
         except ApplicationError as exc:
@@ -219,7 +231,9 @@ class AnalysisOperationHandler(AITaskHandler):
         if not isinstance(prepared.value, PreparedAnalysis):
             raise TypeError("analysis handler received an invalid prepared value")
         try:
-            result = self.activation.activate(tx, self._command(operation), prepared.value)
+            result = self.activation.activate(
+                tx, owner(operation), self._command(operation), prepared.value
+            )
         except StateConflict as exc:
             raise SourceChanged("The analysis context changed before activation.") from exc
         outputs = [
@@ -261,6 +275,7 @@ class AnalysisOperationHandler(AITaskHandler):
         self.continuations.enqueue(
             tx,
             draft_operation_request(command, sources, f"draft-continuation:{operation.id}"),
+            operation.owner_user_id,
             operation_id=new_id(),
         )
 
@@ -296,7 +311,10 @@ class DraftOperationHandler(DraftTaskHandler):
         try:
             return self.prepared(
                 self.service.prepare(
-                    self._command(operation), operation_id=operation.id, still_owned=still_owned
+                    owner(operation),
+                    self._command(operation),
+                    operation_id=operation.id,
+                    still_owned=still_owned,
                 )
             )
         except ApplicationError as exc:
@@ -343,11 +361,11 @@ class RegenerationOperationHandler(DraftTaskHandler):
             command = self._command(operation)
             if isinstance(command, RegenerateSectionCommand):
                 result = self.service.prepare_section_regeneration(
-                    command, operation_id=operation.id, still_owned=still_owned
+                    owner(operation), command, operation_id=operation.id, still_owned=still_owned
                 )
             elif isinstance(command, RegenerateClaimCommand):
                 result = self.service.prepare_claim_regeneration(
-                    command, operation_id=operation.id, still_owned=still_owned
+                    owner(operation), command, operation_id=operation.id, still_owned=still_owned
                 )
             else:
                 raise TypeError("regeneration handler parsed an invalid command")
@@ -413,7 +431,7 @@ class RenderOperationHandler:
         # Recorded only while the hash still matches; otherwise only the Operation
         # keeps the failure (§16).
         self.service.record_failure(
-            command.application_id, command.expected_document_hash, recorded
+            owner(operation), command.application_id, command.expected_document_hash, recorded
         )
         return error
 
@@ -421,7 +439,7 @@ class RenderOperationHandler:
         if not still_owned():
             return PreparedOperation()
         try:
-            prepared = self.service.prepare(self._command(operation))
+            prepared = self.service.prepare(owner(operation), self._command(operation))
         except ValidationBlocked as exc:
             raise self._fail(
                 operation,
@@ -465,7 +483,7 @@ class RenderOperationHandler:
     def activate(self, tx: WriteTransaction, operation, prepared):
         if not isinstance(prepared.value, ExecutedRender):
             raise TypeError("render handler received an invalid executed value")
-        knowledge = load_knowledge(self.knowledge, tx)
+        knowledge = load_knowledge(self.knowledge, owner(operation), tx)
         try:
             result, superseded = self.service.activate(tx, prepared.value, knowledge)
         except StateConflict as exc:

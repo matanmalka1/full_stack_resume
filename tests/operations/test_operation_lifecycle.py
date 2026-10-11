@@ -4,6 +4,7 @@ import pytest
 from foreground import foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
+    actor_of,
     analysis_proposal,
 )
 from operations_support import (
@@ -144,6 +145,10 @@ def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> 
 
     with pytest.raises(ValidationError, match=r"payload\.provider\.api-key"):
         CreateOperation(payload={"provider": {"api-key": "must-not-persist"}}, **common)
+    with pytest.raises(ValidationError, match=r"payload\.user_id"):
+        CreateOperation(payload={"user_id": "must-come-from-the-application"}, **common)
+    with pytest.raises(ValidationError, match=r"payload\.options\.actor"):
+        CreateOperation(payload={"options": {"actor": "must-not-persist"}}, **common)
 
 
 def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
@@ -182,7 +187,7 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
 
     def execute_until_cancelled(operation, still_owned):
         assert still_owned()
-        services.operation_lifecycle.cancel(operation.id)
+        services.operation_lifecycle.cancel(actor_of(services), operation.id)
         assert not still_owned()
         raise OperationExecutionError(
             OperationFailureCode.CANCELLED_BEFORE_ACTIVATION, "The Operation was cancelled."
@@ -213,22 +218,24 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     assert failed.technical_log_reference == "logs/operation-failure.jsonl"
 
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company="Unclassified Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             client="web",
-        )
+        ),
     )
     attempts = 0
 
-    def prepare_that_fails(_command, *, operation_id=None, still_owned=None):
+    def prepare_that_fails(_actor, _command, *, operation_id=None, still_owned=None):
         nonlocal attempts
         attempts += 1
         raise InfrastructureFailure("provider request timed out")
 
     monkeypatch.setattr(services.analysis, "prepare", prepare_that_fails)
     operation = services.operation_submissions.submit_analysis(
+        actor_of(services),
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_text_hash=ingested.job_text_hash,
@@ -245,11 +252,12 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     assert completed.failure_code is OperationFailureCode.INFRASTRUCTURE_FAILED
     assert attempts == 1
 
-    def prepare_that_is_refused(_command, *, operation_id=None, still_owned=None):
+    def prepare_that_is_refused(_actor, _command, *, operation_id=None, still_owned=None):
         raise PreconditionFailed("the document has no content yet")
 
     monkeypatch.setattr(services.analysis, "prepare", prepare_that_is_refused)
     refused = services.operation_submissions.submit_analysis(
+        actor_of(services),
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_text_hash=ingested.job_text_hash,
@@ -277,9 +285,10 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
     code rather than prose; and a foreground run reuses an explicit key end to end.
     """
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company="Operation Co", target_role="Developer", job_text="Python role", client="web"
-        )
+        ),
     )
     request = _stored_request(ingested.application_id)
 
@@ -298,11 +307,13 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
 
     assert repeated == created
     assert created.payload_hash == request.payload_hash
+    assert created.owner_user_id == actor_of(services).user_id
+    assert "user_id" not in created.payload
     assert created.status is OperationStatus.QUEUED
     assert _operation(services, created.id) == created
     active = _active_operation(services, ingested.application_id)
     assert active is not None and active.id == created.id
-    detail = services.queries.application_detail(ingested.application_id)
+    detail = services.queries.application_detail(actor_of(services), ingested.application_id)
     assert detail.active_operation == as_operation_view(created)
     assert detail.latest_operation == as_operation_view(created)
     assert detail.active_operation.status is OperationStatus.QUEUED
@@ -322,21 +333,22 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
         runner_id="runner",
         now="2026-08-19T08:02:00+00:00",
     )
-    after_failure = services.queries.application_detail(ingested.application_id)
+    after_failure = services.queries.application_detail(actor_of(services), ingested.application_id)
     assert after_failure.active_operation is None
     assert after_failure.latest_operation == as_operation_view(failed)
 
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company="Conflict Co",
             target_role="Developer",
             job_text="Python role",
             acknowledged_duplicates=True,
             client="web",
-        )
+        ),
     )
     request = _stored_request(ingested.application_id, key="conflict-request")
-    _enqueue_operation(
+    conflict_created = _enqueue_operation(
         services,
         request,
     )
@@ -351,13 +363,31 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
         )
     assert raised.value.code == IDEMPOTENCY_KEY_REUSED
 
+    another = services.applications.ingest(
+        actor_of(services),
+        IngestCommand(
+            company="Independent Key Co",
+            target_role="Developer",
+            job_text="A different Python role",
+            acknowledged_duplicates=True,
+            client="web",
+        ),
+    )
+    same_key_elsewhere = _enqueue_operation(
+        services,
+        _stored_request(another.application_id, key=request.idempotency_key),
+    )
+    assert same_key_elsewhere.application_id == another.application_id
+    assert same_key_elsewhere.id != conflict_created.id
+
     ingested = ai_services.applications.ingest(
+        actor_of(ai_services),
         IngestCommand(
             company="Foreground Operation Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             client="web",
-        )
+        ),
     )
     command = AnalyzeCommand(
         application_id=ingested.application_id,
@@ -367,6 +397,7 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
     def submit_and_run() -> str:
         fake_openai.script("propose_analysis", analysis_proposal())
         operation = ai_services.operation_submissions.submit_analysis(
+            actor_of(ai_services),
             command,
             idempotency_key="analysis-idempotency-key",
             analysis_service=ai_services.analysis,
@@ -500,9 +531,10 @@ def test_operation_usage_and_cost_sum_every_logged_call_once(services, database_
 
 def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services, database_engine) -> None:
     ingested = services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company="Immutable Op Co", target_role="Developer", job_text="Python role", client="web"
-        )
+        ),
     )
     created = _enqueue_operation(
         services,
@@ -540,7 +572,7 @@ def test_an_output_is_recorded_only_by_a_running_uncancelled_operation(services)
     operation = _operation_for_runner(services, "Cancel Output Co")
 
     def execute(_operation, _still_owned):
-        services.operation_lifecycle.cancel(operation.id)
+        services.operation_lifecycle.cancel(actor_of(services), operation.id)
         return PreparedOperation()
 
     activated = []
@@ -571,7 +603,7 @@ def test_an_output_is_recorded_only_by_a_running_uncancelled_operation(services)
     with pytest.raises(UnknownRecord):
         _execution_write(services, "record_operation_output", new_id(), "job_analysis", new_id())
 
-    services.operation_lifecycle.cancel(operation.id)
+    services.operation_lifecycle.cancel(actor_of(services), operation.id)
     with pytest.raises(StateConflict, match="cannot be recorded"):
         _execution_write(
             services, "record_operation_output", operation.id, "job_analysis", new_id()
@@ -666,7 +698,7 @@ def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(servi
         store = services.operation_runner.execution_store
         assert store.execution_still_owned(tx, operation.id, runner_id="owner")
         assert not store.execution_still_owned(tx, operation.id, runner_id="impostor")
-    services.operation_lifecycle.cancel(operation.id)
+    services.operation_lifecycle.cancel(actor_of(services), operation.id)
     with services.operation_runner.transactions.read() as tx:
         assert not services.operation_runner.execution_store.execution_still_owned(
             tx, operation.id, runner_id="owner"

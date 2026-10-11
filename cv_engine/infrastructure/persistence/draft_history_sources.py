@@ -6,6 +6,7 @@ from ...application.errors import UnknownRecord
 from ...application.ports.drafts import DraftHistoryApplication
 from ...application.ports.transactions import ReadTransaction
 from .connection import SqlAlchemyTransactionManager
+from .ownership import owned
 from .tables import applications
 
 
@@ -14,14 +15,14 @@ class SqlAlchemyDraftHistoryApplicationReader:
         self._transactions = transactions
 
     def history_application(
-        self, tx: ReadTransaction, application_id: str
+        self, tx: ReadTransaction, application_id: str, user_id: str
     ) -> DraftHistoryApplication:
         row = (
             self._transactions.connection_for(tx)
             .execute(
                 select(
                     applications.c.company, applications.c.target_role, applications.c.deleted_at
-                ).where(applications.c.id == application_id)
+                ).where(owned(application_id, user_id))
             )
             .mappings()
             .one_or_none()

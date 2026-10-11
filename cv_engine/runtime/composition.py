@@ -7,6 +7,7 @@ from pathlib import Path
 from .. import __version__
 from ..api import ApiLimits, ApiServices, InstanceIdentity
 from ..api.app import API_VERSION
+from ..application.actor import Actor
 from ..application.commands import RegenerateClaimCommand, RegenerateSectionCommand
 from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationType
@@ -333,9 +334,18 @@ def build_services(
         operation_failure_logger=failure_logger.record_operation_failure,
         operation_event_logger=failure_logger.record_event,
     )
+
+    def cancel_for_its_owner(operation_id: str) -> object:
+        """The worker cancels its own running Operations when it loses its lock. It holds
+        only their IDs, so it reads each one's owner the way it reads it on a claim: from
+        the database, through the Operation's Application (architecture §18.3)."""
+        with transactions.read() as tx:
+            owner = operation_execution.operation(tx, operation_id).owner_user_id
+        return operation_lifecycle.cancel(Actor(user_id=owner), operation_id)
+
     worker = OperationWorker(
         runner,
-        request_cancellation=operation_lifecycle.cancel,
+        request_cancellation=cancel_for_its_owner,
         exclusive=lambda: worker_exclusivity(engine),
     )
     knowledge_service = FactLifecycleService(
@@ -344,6 +354,7 @@ def build_services(
         knowledge=resolved_knowledge,
         repository=user_knowledge,
         documents=documents,
+        sources=analysis_sources,
     )
     settings_service = SettingsService(
         transactions,

@@ -20,11 +20,11 @@ from .prep import cv_documents, job_analyses
 from .shared import (
     OPERATION_FAILURE_CODES,
     ai_calls,
-    app_settings,
     applications,
     audit_records,
     operation_outputs,
     operations,
+    user_settings,
 )
 from .tracking import recruitment_events, submissions
 
@@ -43,7 +43,6 @@ __all__ = [
     "audit_records",
     "operations",
     "operation_outputs",
-    "app_settings",
     "fact_events",
     "knowledge_mutation_journal",
     "users",
@@ -51,4 +50,5 @@ __all__ = [
     "facts",
     "candidate_contexts",
     "profile_bindings",
+    "user_settings",
 ]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ....domain.contracts.analysis import JobAnalysis, OverrideKey
 from ....domain.profiles import classification_mismatch
+from ...actor import Actor
 from ...commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
@@ -46,7 +47,7 @@ def revise_classification(
 class AnalysisCorrection:
     @staticmethod
     def apply_analysis_decisions(
-        service, command: ApplyAnalysisDecisionsCommand
+        service, actor: Actor, command: ApplyAnalysisDecisionsCommand
     ) -> AnalysisDecisionsResult:
         """§13: apply one explicit matching-configuration decision.
 
@@ -64,10 +65,12 @@ class AnalysisCorrection:
                 "the analysis addressed by the request does not match the analysis "
                 "observed by the form"
             )
-        record = service.analysis_context_source(command.application_id, command.job_analysis_id)
+        record = service.analysis_context_source(
+            actor, command.application_id, command.job_analysis_id
+        )
         service.refuse_deleted(record.application_id, record.deleted_at)
         analysis: JobAnalysis = record.analysis
-        document = service.current_document(command.application_id)
+        document = service.current_document(actor, command.application_id)
         if document is not None:
             if command.expected_document_hash is None:
                 raise PreconditionFailed(
@@ -91,9 +94,9 @@ class AnalysisCorrection:
             raise PreconditionFailed("the submitted decisions change nothing")
 
         result = AnalysisCorrection.revise_classification(
-            service, command, analysis, record, merged
+            service, actor, command, analysis, record, merged
         )
-        current = service.current_document(command.application_id)
+        current = service.current_document(actor, command.application_id)
         return AnalysisDecisionsResult(
             application_id=command.application_id,
             job_analysis_id=result.analysis_id,
@@ -105,16 +108,18 @@ class AnalysisCorrection:
     @staticmethod
     def revise_classification(
         service,
+        actor: Actor,
         command: ApplyAnalysisDecisionsCommand,
         analysis: JobAnalysis,
         record,
         merged_overrides: dict[str, str],
     ) -> AnalysisResult:
         """Create a user-revised analysis without invoking an extractor or provider."""
-        knowledge = service.load_knowledge()
+        knowledge = service.load_knowledge(actor)
         revised = revise_classification(analysis, merged_overrides, knowledge.profiles)
         selected = analysis_profile(revised, knowledge.profiles)
         return service.activate(
+            actor,
             AnalyzeCommand(
                 application_id=command.application_id,
                 job_text_hash=record.job_text_hash,

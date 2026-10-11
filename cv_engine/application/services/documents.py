@@ -25,6 +25,7 @@ from ...domain.drafts import build_draft
 from ...domain.frame import MissingFactRendering as DomainMissingFactRendering
 from ...domain.knowledge import Knowledge
 from ...domain.validation import validate_draft
+from ..actor import Actor
 from ..errors import (
     DOCUMENT_CHANGED,
     InfrastructureFailure,
@@ -41,9 +42,11 @@ from ..ports.transactions import ReadTransaction, WriteTransaction
 from ..state import document_review_reasons
 
 
-def load_knowledge(source: AnalysisKnowledgeSource, tx: ReadTransaction | None = None) -> Knowledge:
+def load_knowledge(
+    source: AnalysisKnowledgeSource, actor: Actor, tx: ReadTransaction | None = None
+) -> Knowledge:
     try:
-        return source.load(tx)
+        return source.load(actor.user_id, tx)
     except OSError as exc:
         raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
     except ValueError as exc:
@@ -79,10 +82,11 @@ def _source(
     document: CVDocument | None,
     sources: AnalysisContextSourceReader,
     application_id: str,
+    actor: Actor,
 ) -> DocumentSource:
     if document is None:
         raise UnknownRecord(f"application {application_id} has no CV document yet; analyze first")
-    context = sources.analysis_context_source(tx, document.analysis_id)
+    context = sources.analysis_context_source(tx, document.analysis_id, actor.user_id)
     return DocumentSource(
         document=document,
         analysis=context.analysis,
@@ -98,8 +102,12 @@ def read_document_source(
     documents: DocumentStore,
     sources: AnalysisContextSourceReader,
     application_id: str,
+    actor: Actor,
 ) -> DocumentSource:
-    return _source(tx, documents.document(tx, application_id), sources, application_id)
+    """The Application resolved for `actor` first, then its document: another user's
+    Application is the same `UnknownRecord` whether or not it has a document."""
+    sources.require_owned(tx, application_id, actor.user_id)
+    return _source(tx, documents.document(tx, application_id), sources, application_id, actor)
 
 
 def lock_document_source(
@@ -107,9 +115,11 @@ def lock_document_source(
     documents: DocumentStore,
     sources: AnalysisContextSourceReader,
     application_id: str,
+    actor: Actor,
 ) -> DocumentSource:
     """The same read, with the document row locked until the transaction ends."""
-    return _source(tx, documents.lock_document(tx, application_id), sources, application_id)
+    sources.require_owned(tx, application_id, actor.user_id)
+    return _source(tx, documents.lock_document(tx, application_id), sources, application_id, actor)
 
 
 def refuse_deleted(application_id: str, deleted_at: str | None) -> None:

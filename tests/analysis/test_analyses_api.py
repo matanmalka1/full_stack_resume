@@ -14,6 +14,7 @@ from api_harness import MUTATION_HEADERS
 from helpers import (
     ACCOUNT_MANAGER_JOB,
     REVIEW_DECISION_JOB,
+    actor_of,
     analysis_proposal,
     persisted_counts,
     seed_existing_analysis,
@@ -27,13 +28,14 @@ from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentSto
 
 def _application(services, company: str, *, job_text: str = ACCOUNT_MANAGER_JOB) -> str:
     return services.applications.ingest(
+        actor_of(services),
         IngestCommand(
             company=company,
             target_role="Account Manager",
             job_text=job_text,
             acknowledged_duplicates=True,
             client="web",
-        )
+        ),
     ).application_id
 
 
@@ -46,9 +48,9 @@ def _existing_analysis(
 ) -> str:
     """Seed an analysis record explicitly; these tests exercise later API decisions."""
     with transaction_manager.read() as tx:
-        job_text_hash = application_projection_reader.application(tx, application_id)[
-            "job_text_hash"
-        ]
+        job_text_hash = application_projection_reader.application(
+            tx, application_id, actor_of(harness.services).user_id
+        )["job_text_hash"]
     return seed_existing_analysis(
         harness.services,
         AnalyzeCommand(application_id=application_id, job_text_hash=job_text_hash),
@@ -190,7 +192,7 @@ def test_a_decision_creates_an_analysis_and_leaves_the_document(
         )
         submitted = {"emphasis_override": "new-business"}
     with transaction_manager.read() as tx:
-        original_analysis = application_projection_reader.analysis(tx, analysis_id)
+        original_analysis = application_projection_reader.analysis(tx, analysis_id, application_id)
     original_document = _document(api_worker, application_id)
 
     response = _post(
@@ -209,7 +211,10 @@ def test_a_decision_creates_an_analysis_and_leaves_the_document(
     assert body["job_analysis_id"] != analysis_id
     assert body["document_id"] == original_document["id"]
     with transaction_manager.read() as tx:
-        assert application_projection_reader.analysis(tx, analysis_id) == original_analysis
+        assert (
+            application_projection_reader.analysis(tx, analysis_id, application_id)
+            == original_analysis
+        )
 
     state = _state(api_worker, application_id)
     document = _document(api_worker, application_id)

@@ -3316,16 +3316,6 @@
             "title": "Api Version",
             "type": "string"
           },
-          "knowledge": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/KnowledgeVersions"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "product_version": {
             "title": "Product Version",
             "type": "string"
@@ -3343,8 +3333,7 @@
           "status",
           "product_version",
           "api_version",
-          "schema_version",
-          "knowledge"
+          "schema_version"
         ],
         "title": "HealthResponse",
         "type": "object"
@@ -3463,50 +3452,6 @@
           "locked"
         ],
         "title": "JobPostingResponse",
-        "type": "object"
-      },
-      "KnowledgeVersions": {
-        "additionalProperties": false,
-        "properties": {
-          "candidate_context": {
-            "title": "Candidate Context",
-            "type": "string"
-          },
-          "emphasis_policies": {
-            "title": "Emphasis Policies",
-            "type": "string"
-          },
-          "facts": {
-            "title": "Facts",
-            "type": "string"
-          },
-          "facts_lifecycle": {
-            "title": "Facts Lifecycle",
-            "type": "string"
-          },
-          "presentations": {
-            "title": "Presentations",
-            "type": "string"
-          },
-          "profiles": {
-            "title": "Profiles",
-            "type": "string"
-          },
-          "requirement_concepts": {
-            "title": "Requirement Concepts",
-            "type": "string"
-          }
-        },
-        "required": [
-          "facts",
-          "facts_lifecycle",
-          "profiles",
-          "emphasis_policies",
-          "presentations",
-          "candidate_context",
-          "requirement_concepts"
-        ],
-        "title": "KnowledgeVersions",
         "type": "object"
       },
       "LoginRequest": {
@@ -7714,7 +7659,7 @@
     },
     "/api/v1/health": {
       "get": {
-        "description": "The instance answers whether or not anyone has Knowledge yet.\n\nKnowledge is a user's rows, so an installation with no user, or one not yet\nimported, is healthy and reports no Knowledge versions rather than failing.",
+        "description": "Instance identity and versions. Anonymous, so it names no user's Knowledge.",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {
@@ -8047,7 +7992,7 @@
             "description": "The request did not match the API contract."
           }
         },
-        "summary": "Read safe application settings",
+        "summary": "Read the signed-in user's safe settings",
         "tags": [
           "settings"
         ]
@@ -8117,7 +8062,7 @@
             "description": "The request did not match the API contract."
           }
         },
-        "summary": "Update safe application settings",
+        "summary": "Update the signed-in user's safe settings",
         "tags": [
           "settings"
         ]

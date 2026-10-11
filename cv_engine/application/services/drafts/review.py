@@ -12,6 +12,7 @@ from ....domain.contracts.validation import ValidationReport
 from ....domain.document import content_check, preparation_state
 from ....domain.knowledge import Knowledge
 from ....util import new_id, utc_now
+from ...actor import Actor
 from ...commands import ApproveDocumentCommand, CheckDocumentCommand, DocumentCheckResult
 from ...errors import PreconditionFailed
 from ...ports import TransactionManager
@@ -89,7 +90,7 @@ class DraftReviewService:
             return None
         return cls._result(document, approval_basis, report)
 
-    def check_document(self, command: CheckDocumentCommand) -> DocumentCheckResult:
+    def check_document(self, actor: Actor, command: CheckDocumentCommand) -> DocumentCheckResult:
         """§15: run the validation contract and store `content_report`, `passed`, basis.
 
         `passed=false` is an outcome, not an error: the report is stored either way,
@@ -98,12 +99,14 @@ class DraftReviewService:
         nothing. No provider is called.
         """
         with self.transactions.read() as tx:
-            source = read_document_source(tx, self.documents, self.sources, command.application_id)
+            source = read_document_source(
+                tx, self.documents, self.sources, command.application_id, actor
+            )
         refuse_deleted(command.application_id, source.deleted_at)
         require_hash(source.document, command.expected_document_hash)
         if source.document.content is None:
             raise PreconditionFailed("the document has no content to check yet")
-        knowledge = load_knowledge(self.knowledge)
+        knowledge = load_knowledge(self.knowledge, actor)
         report = validate_document(source, knowledge)
         checked = current_basis(source.document, knowledge)
         with self.transactions.write() as tx:
@@ -117,7 +120,9 @@ class DraftReviewService:
             )
         return self._result(updated, checked, report)
 
-    def approve_document(self, command: ApproveDocumentCommand) -> DocumentCheckResult:
+    def approve_document(
+        self, actor: Actor, command: ApproveDocumentCommand
+    ) -> DocumentCheckResult:
         """§15: run `check_document`'s validation and approve in one action.
 
         The report and `checked_basis` are always stored when the check runs;
@@ -128,13 +133,15 @@ class DraftReviewService:
         record is appended.
         """
         with self.transactions.read() as tx:
-            source = read_document_source(tx, self.documents, self.sources, command.application_id)
+            source = read_document_source(
+                tx, self.documents, self.sources, command.application_id, actor
+            )
         refuse_deleted(command.application_id, source.deleted_at)
         document = source.document
         require_hash(document, command.expected_document_hash)
         if document.content is None:
             raise PreconditionFailed("the document has no content to approve yet")
-        knowledge: Knowledge = load_knowledge(self.knowledge)
+        knowledge: Knowledge = load_knowledge(self.knowledge, actor)
         approval_basis = current_basis(document, knowledge)
         existing = self._existing_approval(document, approval_basis)
         if existing is not None:

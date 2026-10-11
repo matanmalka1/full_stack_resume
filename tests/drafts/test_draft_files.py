@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from helpers import stored_document
+from helpers import actor_of, stored_document
 from helpers import working_claim as _working_claim
 
 from cv_engine.application.commands import ClaimPatch, UpdateDocumentCommand
@@ -16,6 +16,7 @@ def test_style_safe_composite_edit_joins_two_canonical_facts(drafted_application
     claim = _working_claim(services, app_id, "sales.metric.recurring_customers")
 
     services.draft_editing.update_document(
+        actor_of(services),
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=stored_document(services, app_id).document_hash,
@@ -26,7 +27,7 @@ def test_style_safe_composite_edit_joins_two_canonical_facts(drafted_application
                     template_id="canonical-renderings",
                 )
             ],
-        )
+        ),
     )
 
     assert (

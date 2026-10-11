@@ -23,5 +23,5 @@ class DraftHistoryApplicationReader(Protocol):
     """The Application's labels for the provenance export, read in one transaction."""
 
     def history_application(
-        self, tx: ReadTransaction, application_id: str
+        self, tx: ReadTransaction, application_id: str, user_id: str
     ) -> DraftHistoryApplication: ...

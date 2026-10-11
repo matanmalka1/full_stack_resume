@@ -29,6 +29,7 @@ from ..schemas.tracking import (
     SubmitApplicationRequest,
     TransitionStatusRequest,
 )
+from ..session_cookie import CurrentActor
 
 router = APIRouter(prefix="/applications", tags=["tracking"])
 
@@ -42,6 +43,7 @@ def transition_status(
     application_id: str,
     request: TransitionStatusRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> ApplicationMutationResponse:
     """`200`: asking for the status an Application already holds is not an error.
 
@@ -50,6 +52,7 @@ def transition_status(
     it already made does not write a duplicate into the trail.
     """
     result = services.recruitment.transition_status(
+        actor,
         RecruitmentStatusCommand(
             application_id=application_id,
             target_status=request.target_status,
@@ -57,7 +60,7 @@ def transition_status(
             occurred_at=request.occurred_at,
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return ApplicationMutationResponse.model_validate(result.model_dump(mode="json"))
 
@@ -72,9 +75,11 @@ def correct_status(
     application_id: str,
     request: CorrectStatusRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> ApplicationMutationResponse:
     """`201`: a correction appends an event; it never edits the one it corrects."""
     result = services.recruitment.correct_recruitment_status(
+        actor,
         RecruitmentCorrectionCommand(
             application_id=application_id,
             target_status=request.target_status,
@@ -83,7 +88,7 @@ def correct_status(
             occurred_at=request.occurred_at,
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return ApplicationMutationResponse.model_validate(result.model_dump(mode="json"))
 
@@ -98,6 +103,7 @@ def submit_application(
     application_id: str,
     request: SubmitApplicationRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> SubmissionResponse:
     """`201`: an immutable Submission of the content and rendered files (§18).
 
@@ -106,6 +112,7 @@ def submit_application(
     something the user never saw was sent.
     """
     result = services.submission.submit_application(
+        actor,
         SubmissionCommand(
             application_id=application_id,
             expected_document_hash=request.expected_document_hash,
@@ -113,7 +120,7 @@ def submit_application(
             metadata=request.metadata,
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return SubmissionResponse.model_validate(result.model_dump(mode="json"))
 
@@ -128,16 +135,18 @@ def record_external_submission(
     application_id: str,
     request: ExternalSubmissionRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> SubmissionResponse:
     """`201`: recorded without inventing content or files that never passed through here."""
     result = services.submission.record_external_submission(
+        actor,
         ExternalSubmissionCommand(
             application_id=application_id,
             submitted_at=request.submitted_at,
             metadata=request.metadata,
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return SubmissionResponse.model_validate(result.model_dump(mode="json"))
 
@@ -151,6 +160,7 @@ def set_next_action(
     application_id: str,
     request: NextActionRequest,
     services: Services,
+    actor: CurrentActor,
 ) -> ApplicationMutationResponse:
     """States what the one active next action now is, in whole.
 
@@ -161,12 +171,13 @@ def set_next_action(
     policy for one route's verb would be the wrong trade.
     """
     result = services.recruitment.set_next_action(
+        actor,
         NextActionCommand(
             application_id=application_id,
             next_action=request.next_action,
             next_action_date=request.next_action_date,
             actor_type="user",
             client="web",
-        )
+        ),
     )
     return ApplicationMutationResponse.model_validate(result.model_dump(mode="json"))

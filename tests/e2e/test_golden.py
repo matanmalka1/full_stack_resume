@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from helpers import approve_active_draft, seed_document, seed_draft, stored_document
+from helpers import actor_of, approve_active_draft, seed_document, seed_draft, stored_document
 
 from cv_engine.application.commands import RenderCommand
 from cv_engine.domain.draft_markdown import serialize_markdown
@@ -59,7 +59,7 @@ def _build_case(services, case: dict):
         emphasis_override=overrides.get("emphasis") or case["emphasis"],
         language_override=overrides.get("language") or case["language"],
     )
-    knowledge = services.knowledge.load()
+    knowledge = services.knowledge.load(actor_of(services).user_id)
     seed_draft(
         services,
         ingested.application_id,
@@ -148,10 +148,11 @@ def test_golden_outputs_pass_render_validation(
         approved = approve_active_draft(services, setup.document.application_id)
         assert approved.passed, approved.report
         rendered = services.rendering.render(
+            actor_of(services),
             RenderCommand(
                 application_id=setup.document.application_id,
                 expected_document_hash=setup.document.document_hash,
-            )
+            ),
         )
         document = stored_document(services, setup.document.application_id)
         assert document.html_path is not None

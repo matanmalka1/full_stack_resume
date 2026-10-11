@@ -23,6 +23,7 @@ from ....domain.knowledge import Knowledge
 from ....domain.knowledge_import import fact_from_row, fact_row, split_profile
 from ....domain.profiles import ProfileStore, attach_fact_to_section
 from ....util import new_id, utc_now
+from ...actor import Actor
 from ...commands import (
     ConfirmAndUseFactResult,
     FactAttachmentProfileTarget,
@@ -45,6 +46,7 @@ from ...errors import (
     KnowledgeRejected,
     UnknownRecord,
 )
+from ...ports.analysis_plans import AnalysisContextSourceReader
 from ...ports.documents import DocumentStore
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.transactions import ReadTransaction, TransactionManager, WriteTransaction
@@ -53,9 +55,9 @@ from ...ports.user_knowledge import StoredKnowledge, UserKnowledgeRepository, Us
 __all__ = ["FactLifecycleService", "InfrastructureFailure", "KnowledgeQueryService"]
 
 
-def _load(source: UserKnowledgeSource, tx: ReadTransaction | None = None) -> Knowledge:
+def _load(source: UserKnowledgeSource, actor: Actor) -> Knowledge:
     try:
-        return source.load(tx)
+        return source.load(actor.user_id)
     except OSError as exc:
         raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
     except ValueError as exc:
@@ -84,22 +86,24 @@ class FactLifecycleService:
         knowledge: UserKnowledgeSource,
         repository: UserKnowledgeRepository,
         documents: DocumentStore,
+        sources: AnalysisContextSourceReader,
     ) -> None:
         self.transactions = transactions
         self.store = store
         self._knowledge = knowledge
         self._repo = repository
         self.documents = documents
+        self._sources = sources
 
-    def load_knowledge(self) -> Knowledge:
-        return _load(self._knowledge)
+    def load_knowledge(self, actor: Actor) -> Knowledge:
+        return _load(self._knowledge, actor)
 
-    def knowledge(self) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
-        loaded = self.load_knowledge()
+    def knowledge(self, actor: Actor) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
+        loaded = self.load_knowledge(actor)
         return loaded.facts, loaded.profiles, loaded.policies
 
-    def fact_store(self) -> FactStore:
-        return self.load_knowledge().facts
+    def fact_store(self, actor: Actor) -> FactStore:
+        return self.load_knowledge(actor).facts
 
     # The one write path.
 
@@ -111,9 +115,9 @@ class FactLifecycleService:
         except ValueError as exc:
             raise KnowledgeRejected(str(exc)) from exc
 
-    def _state(self, tx: ReadTransaction) -> StoredKnowledge:
+    def _state(self, tx: ReadTransaction, actor: Actor) -> StoredKnowledge:
         try:
-            return self._knowledge.state(tx)
+            return self._knowledge.state(tx, actor.user_id)
         except ValueError as exc:
             raise KnowledgeRejected(str(exc)) from exc
 
@@ -200,6 +204,7 @@ class FactLifecycleService:
 
     def add_fact(
         self,
+        actor: Actor,
         source: str,
         payload: dict[str, Any],
         *,
@@ -214,7 +219,10 @@ class FactLifecycleService:
         every rendering path resolves facts with `canonical_only=True`.
         """
         with self.transactions.write() as tx:
-            current = self._state(tx)
+            if application_id is not None:
+                # The Application a new fact is recorded beside is the user's own.
+                self._sources.require_owned(tx, application_id, actor.user_id)
+            current = self._state(tx, actor)
             store = self._build(current).facts
             try:
                 record = build_new_fact(store, source, payload, canonical=canonical)
@@ -249,6 +257,7 @@ class FactLifecycleService:
 
     def create_pending_fact(
         self,
+        actor: Actor,
         source: str,
         payload: dict[str, Any],
         *,
@@ -259,6 +268,7 @@ class FactLifecycleService:
         if payload.get("fact_id"):
             raise KnowledgeRejected("fact identity is generated and is not user-editable")
         return self.add_fact(
+            actor,
             source,
             {**payload, "fact_id": new_id()},
             canonical=False,
@@ -281,6 +291,7 @@ class FactLifecycleService:
 
     def confirm_fact(
         self,
+        actor: Actor,
         fact_id: str,
         *,
         explicitly_confirmed: bool,
@@ -290,7 +301,7 @@ class FactLifecycleService:
         if not explicitly_confirmed:
             raise KnowledgeRejected("fact confirmation requires explicit confirmation")
         with self.transactions.write() as tx:
-            current = self._state(tx)
+            current = self._state(tx, actor)
             before, after = self._confirmed(self._build(current).facts, fact_id)
             knowledge, event_ids = self._commit(
                 tx,
@@ -309,6 +320,7 @@ class FactLifecycleService:
 
     def delete_fact(
         self,
+        actor: Actor,
         fact_id: str,
         *,
         explicitly_confirmed: bool,
@@ -324,7 +336,7 @@ class FactLifecycleService:
         if not explicitly_confirmed:
             raise KnowledgeRejected("fact deletion requires explicit confirmation")
         with self.transactions.write() as tx:
-            current = self._state(tx)
+            current = self._state(tx, actor)
             store = self._build(current).facts
             try:
                 before = store.get(fact_id)
@@ -348,6 +360,7 @@ class FactLifecycleService:
 
     def capture_claim_fact(
         self,
+        actor: Actor,
         application_id: str,
         claim_id: str,
         *,
@@ -371,6 +384,7 @@ class FactLifecycleService:
         so nothing is strengthened on the way in.
         """
         with self.transactions.read() as tx:
+            self._sources.require_owned(tx, application_id, actor.user_id)
             document = self.documents.document(tx, application_id)
         if document is None or document.content is None:
             raise UnknownRecord(f"application {application_id} has no document content")
@@ -402,6 +416,7 @@ class FactLifecycleService:
             if hebrew:
                 renderings["he"] = hebrew
         return self.add_fact(
+            actor,
             source,
             {
                 "fact_id": fact_id,
@@ -425,6 +440,7 @@ class FactLifecycleService:
 
     def create_fact_from_claim(
         self,
+        actor: Actor,
         application_id: str,
         claim_id: str,
         *,
@@ -439,6 +455,7 @@ class FactLifecycleService:
         reason: str = "",
     ) -> FactMutationResult:
         return self.capture_claim_fact(
+            actor,
             application_id,
             claim_id,
             source=source,
@@ -478,11 +495,11 @@ class FactLifecycleService:
         return replace(current, bindings=bindings), updated, origin
 
     def attach_fact(
-        self, fact_id: str, profile: str, section: str, *, pin: bool = False
+        self, actor: Actor, fact_id: str, profile: str, section: str, *, pin: bool = False
     ) -> FactAttachmentResult:
         """Offer a canonical fact to one Profile section's candidate pool."""
         with self.transactions.write() as tx:
-            current = self._state(tx)
+            current = self._state(tx, actor)
             loaded = self._build(current)
             try:
                 fact = loaded.facts.get(fact_id, canonical_only=True)
@@ -519,6 +536,7 @@ class FactLifecycleService:
 
     def confirm_and_use_fact(
         self,
+        actor: Actor,
         fact_id: str,
         *,
         application_id: str,
@@ -534,8 +552,9 @@ class FactLifecycleService:
         raising the pending-fact review reason, and the next draft can choose it.
         """
         with self.transactions.write() as tx:
+            self._sources.require_owned(tx, application_id, actor.user_id)
             document = self.documents.document(tx, application_id)
-            analysis_record = self.store.get_analysis(tx, job_analysis_id)
+            analysis_record = self.store.get_analysis(tx, job_analysis_id, application_id)
             if analysis_record["application_id"] != application_id:
                 raise KnowledgeRejected("job analysis belongs to another application")
             if document is None:
@@ -551,7 +570,7 @@ class FactLifecycleService:
                     f"analysis Profile {analysis.profile.value} does not match requested {profile}"
                 )
 
-            current = self._state(tx)
+            current = self._state(tx, actor)
             before, canonical = self._confirmed(self._build(current).facts, fact_id)
             confirmed = _with_fact(current, canonical)
             proposed, _updated, _origin = self._attached(
@@ -603,27 +622,27 @@ class KnowledgeQueryService:
         self.store = store
         self._knowledge = knowledge
 
-    def load_knowledge(self) -> Knowledge:
-        return _load(self._knowledge)
+    def load_knowledge(self, actor: Actor) -> Knowledge:
+        return _load(self._knowledge, actor)
 
-    def knowledge(self) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
-        loaded = self.load_knowledge()
+    def knowledge(self, actor: Actor) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
+        loaded = self.load_knowledge(actor)
         return loaded.facts, loaded.profiles, loaded.policies
 
-    def fact_store(self) -> FactStore:
+    def fact_store(self, actor: Actor) -> FactStore:
         try:
-            return self._knowledge.facts()
+            return self._knowledge.facts(actor.user_id)
         except ValueError as exc:
             raise KnowledgeRejected(str(exc)) from exc
 
-    def knowledge_versions(self) -> KnowledgeVersionsResult:
+    def knowledge_versions(self, actor: Actor) -> KnowledgeVersionsResult:
         """One hash surface per knowledge dependency an artifact can depend on."""
-        return KnowledgeVersionsResult.model_validate(self.load_knowledge().versions())
+        return KnowledgeVersionsResult.model_validate(self.load_knowledge(actor).versions())
 
-    def list_facts(self, status: str | None = None) -> FactListResult:
-        facts = self.fact_store()
+    def list_facts(self, actor: Actor, status: str | None = None) -> FactListResult:
+        facts = self.fact_store(actor)
         with self.transactions.read() as tx:
-            recorded = self.store.latest_fact_statuses(tx)
+            recorded = self.store.latest_fact_statuses(tx, actor.user_id)
         items = facts.by_status(status)
         if status is None:
             # No explicit filter excludes deleted facts by default (state-and-
@@ -636,19 +655,21 @@ class KnowledgeQueryService:
             ]
         )
 
-    def show_fact(self, fact_id: str) -> FactDetailResult:
-        facts = self.fact_store()
+    def show_fact(self, actor: Actor, fact_id: str) -> FactDetailResult:
+        facts = self.fact_store(actor)
         try:
             fact = facts.get(fact_id)
         except FactStoreError as exc:
             raise UnknownRecord(str(exc)) from exc
         with self.transactions.read() as tx:
-            events = self.store.fact_events(tx, fact_id)
+            events = self.store.fact_events(tx, actor.user_id, fact_id)
         return FactDetailResult(fact=fact, events=[fact_event_view(row) for row in events])
 
-    def fact_attachment_targets(self, fact_id: str | None = None) -> FactAttachmentTargetsResult:
+    def fact_attachment_targets(
+        self, actor: Actor, fact_id: str | None = None
+    ) -> FactAttachmentTargetsResult:
         """Read existing Profile sections without exposing mutable Profile documents."""
-        facts, profiles, _policies = self.knowledge()
+        facts, profiles, _policies = self.knowledge(actor)
         if fact_id is not None:
             try:
                 target = facts.get(fact_id)
@@ -681,12 +702,12 @@ class KnowledgeQueryService:
             ]
         )
 
-    def fact_history(self, fact_id: str | None = None) -> FactHistoryResult:
+    def fact_history(self, actor: Actor, fact_id: str | None = None) -> FactHistoryResult:
         with self.transactions.read() as tx:
-            events = self.store.fact_events(tx, fact_id)
+            events = self.store.fact_events(tx, actor.user_id, fact_id)
         return FactHistoryResult(events=[fact_event_view(row) for row in events])
 
-    def reconcile_facts(self) -> FactReconciliationResult:
+    def reconcile_facts(self, actor: Actor) -> FactReconciliationResult:
         """Check the persisted lifecycle against its audit trail.
 
         Three disagreements matter: a trail entry for a fact that no longer
@@ -694,9 +715,9 @@ class KnowledgeQueryService:
         that contradicts the last recorded one. Each means a status was changed
         outside the lifecycle, which is exactly what the trail exists to catch.
         """
-        facts = self.fact_store()
+        facts = self.fact_store(actor)
         with self.transactions.read() as tx:
-            recorded = self.store.latest_fact_statuses(tx)
+            recorded = self.store.latest_fact_statuses(tx, actor.user_id)
         problems: list[str] = []
         for fact_id, status in recorded.items():
             if fact_id not in facts.facts:

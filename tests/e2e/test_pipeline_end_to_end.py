@@ -11,6 +11,7 @@ import os
 
 from foreground import foreground_executor
 from helpers import (
+    actor_of,
     persisted_counts,
     seed_document,
     stored_document,
@@ -41,6 +42,7 @@ def test_pipeline_reaches_ready_and_reconciles(
     document = stored_document(services, app_id)
     fake_openai.script_draft()
     queued = services.operation_submissions.submit_draft(
+        actor_of(services),
         DraftCommand(application_id=app_id, expected_document_hash=document.document_hash),
         idempotency_key=new_id(),
         draft_service=services.drafts,
@@ -55,45 +57,57 @@ def test_pipeline_reaches_ready_and_reconciles(
         if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
     )
     edited = services.draft_editing.update_document(
+        actor_of(services),
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=document.document_hash,
             claim_orders={section.name: [c.claim_id for c in reversed(section.claims)]},
-        )
+        ),
     )
     token = edited.document_hash
     checked = services.draft_review.check_document(
-        CheckDocumentCommand(application_id=app_id, expected_document_hash=token)
+        actor_of(services),
+        CheckDocumentCommand(application_id=app_id, expected_document_hash=token),
     )
     assert checked.passed, checked.report
     approved = services.draft_review.approve_document(
-        ApproveDocumentCommand(application_id=app_id, expected_document_hash=token, client="web")
+        actor_of(services),
+        ApproveDocumentCommand(application_id=app_id, expected_document_hash=token, client="web"),
     )
     assert approved.passed, approved.report
     rendered = services.rendering.render(
-        RenderCommand(application_id=app_id, expected_document_hash=token)
+        actor_of(services), RenderCommand(application_id=app_id, expected_document_hash=token)
     )
     assert rendered.validation.passed, rendered.validation
-    assert services.queries.application_detail(app_id).preparation_state is PreparationState.READY
+    assert (
+        services.queries.application_detail(actor_of(services), app_id).preparation_state
+        is PreparationState.READY
+    )
     services.submission.submit_application(
+        actor_of(services),
         SubmissionCommand(
             application_id=app_id,
             expected_document_hash=token,
             submitted_at=utc_now(),
             client="web",
-        )
+        ),
     )
     (sent,) = stored_submissions(services, app_id)
     assert sent.content == stored_document(services, app_id).content
     assert sent.job_text_hash == ingested.job_text_hash
-    report = services.maintenance.reconcile()
+    report = services.maintenance.reconcile(
+        actor_of(services),
+    )
     assert report.passed, report.problems
     counts = persisted_counts(database_engine)
     submission_files = sum(path is not None for path in (sent.html_path, sent.pdf_path))
     assert report.payloads_checked == submission_files
     assert report.ai_calls_checked == counts["ai_calls"]
     assert services.maintenance.inspect_orphans().candidates == []
-    assert services.queries.application_detail(app_id).application.current_status == "applied"
+    assert (
+        services.queries.application_detail(actor_of(services), app_id).application.current_status
+        == "applied"
+    )
 
     # A logged call's response is checked against the hash it was logged under. The
     # log is append-only, so a tamper needs its trigger switched off - what a
@@ -110,7 +124,9 @@ def test_pipeline_reaches_ready_and_reconciles(
             )
         ).scalar_one()
         connection.execute(text("ALTER TABLE ai_calls ENABLE TRIGGER no_update_ai_calls"))
-    tampered_report = services.maintenance.reconcile()
+    tampered_report = services.maintenance.reconcile(
+        actor_of(services),
+    )
     assert not tampered_report.passed
     assert f"AI call response hash mismatch: {tampered}" in tampered_report.problems
 
@@ -123,7 +139,9 @@ def test_reconcile_reports_tampered_submission_without_repair(submitted_applicat
     path = services.paths.root / sent.pdf_path
     tampered = b"%PDF-1.4\n% not the submitted bytes\n"
     path.write_bytes(tampered)
-    report = services.maintenance.reconcile()
+    report = services.maintenance.reconcile(
+        actor_of(services),
+    )
     assert not report.passed
     assert any("hash mismatch" in problem for problem in report.problems)
     assert path.read_bytes() == tampered

@@ -1,4 +1,4 @@
-"""Stateless token adapter for safe application settings reads."""
+"""Stateless token adapter for one user's safe settings (`user_settings`)."""
 
 from __future__ import annotations
 
@@ -9,17 +9,17 @@ from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...application.settings import StoredSettings, UpdateSettings
 from ...util import utc_now
 from .connection import SqlAlchemyTransactionManager
-from .tables import app_settings
+from .tables import user_settings
 
 
 class SqlAlchemySettingsStore:
     def __init__(self, transactions: SqlAlchemyTransactionManager):
         self._transactions = transactions
 
-    def settings(self, tx: ReadTransaction) -> StoredSettings:
+    def settings(self, tx: ReadTransaction, user_id: str) -> StoredSettings:
         row = (
             self._transactions.connection_for(tx)
-            .execute(select(app_settings).where(app_settings.c.singleton_id == 1))
+            .execute(select(user_settings).where(user_settings.c.user_id == user_id))
             .mappings()
             .one_or_none()
         )
@@ -28,12 +28,16 @@ class SqlAlchemySettingsStore:
         return StoredSettings(**{key: row[key] for key in StoredSettings.model_fields})
 
     def update_settings(
-        self, tx: WriteTransaction, expected_edit_version: int, settings: UpdateSettings
+        self,
+        tx: WriteTransaction,
+        user_id: str,
+        expected_edit_version: int,
+        settings: UpdateSettings,
     ) -> StoredSettings:
         connection = self._transactions.connection_for(tx, access="write")
         current = (
             connection.execute(
-                select(app_settings.c.edit_version).where(app_settings.c.singleton_id == 1)
+                select(user_settings.c.edit_version).where(user_settings.c.user_id == user_id)
             )
             .mappings()
             .one_or_none()
@@ -57,9 +61,9 @@ class SqlAlchemySettingsStore:
             "updated_at": now,
         }
         if current is None:
-            connection.execute(insert(app_settings).values(singleton_id=1, **values))
+            connection.execute(insert(user_settings).values(user_id=user_id, **values))
         else:
             connection.execute(
-                update(app_settings).where(app_settings.c.singleton_id == 1).values(**values)
+                update(user_settings).where(user_settings.c.user_id == user_id).values(**values)
             )
         return StoredSettings(**values)

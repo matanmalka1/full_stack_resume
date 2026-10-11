@@ -1,7 +1,8 @@
-"""Reading and updating the safe application settings the Web client may change."""
+"""Reading and updating the signed-in user's safe settings the Web client may change."""
 
 from __future__ import annotations
 
+from ..actor import Actor
 from ..ai_configuration import (
     AI_MODELS,
     DEFAULT_AI_MODEL,
@@ -55,14 +56,16 @@ class SettingsService:
             provider_configured=self.provider_configured,
         )
 
-    def read(self) -> SettingsView:
+    def read(self, actor: Actor) -> SettingsView:
         with self.transactions.read() as tx:
-            stored = self.repo.settings(tx)
+            stored = self.repo.settings(tx, actor.user_id)
         return self._view(stored)
 
-    def update(self, expected_edit_version: int, command: UpdateSettings) -> SettingsView:
+    def update(
+        self, actor: Actor, expected_edit_version: int, command: UpdateSettings
+    ) -> SettingsView:
         normalize_ai_model(command.default_ai_model)
         normalize_reasoning_effort(command.default_reasoning_effort)
         with self.transactions.write() as tx:
-            stored = self.repo.update_settings(tx, expected_edit_version, command)
+            stored = self.repo.update_settings(tx, actor.user_id, expected_edit_version, command)
         return self._view(stored)

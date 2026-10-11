@@ -13,6 +13,7 @@ from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import utc_now
 from .connection import SqlAlchemyTransactionManager
 from .operation_sql import _operation_record
+from .ownership import owned
 from .tables import applications, operations
 
 
@@ -22,10 +23,12 @@ class SqlAlchemyOperationClientStore:
     def __init__(self, transactions: SqlAlchemyTransactionManager):
         self._transactions = transactions
 
-    def application(self, tx: ReadTransaction, application_id: str) -> dict[str, object]:
+    def application(
+        self, tx: ReadTransaction, application_id: str, user_id: str
+    ) -> dict[str, object]:
         row = (
             self._transactions.connection_for(tx)
-            .execute(select(applications).where(applications.c.id == application_id))
+            .execute(select(applications).where(owned(application_id, user_id)))
             .mappings()
             .one_or_none()
         )
@@ -37,6 +40,7 @@ class SqlAlchemyOperationClientStore:
         self,
         tx: WriteTransaction,
         request: CreateOperation,
+        user_id: str,
         *,
         operation_id: str,
         created_at: str | None = None,
@@ -46,7 +50,7 @@ class SqlAlchemyOperationClientStore:
         application = (
             connection.execute(
                 select(applications.c.id, applications.c.deleted_at)
-                .where(applications.c.id == request.application_id)
+                .where(owned(request.application_id, user_id))
                 .with_for_update()
             )
             .mappings()
@@ -59,6 +63,7 @@ class SqlAlchemyOperationClientStore:
         existing = (
             connection.execute(
                 select(operations).where(
+                    operations.c.application_id == request.application_id,
                     operations.c.operation_type == request.operation_type.value,
                     operations.c.idempotency_key == request.idempotency_key,
                 )
@@ -99,22 +104,31 @@ class SqlAlchemyOperationClientStore:
         )
         return _operation_record(row, connection)
 
-    def operation(self, tx: ReadTransaction, operation_id: str) -> PersistedOperation:
+    @staticmethod
+    def _owned_operation(operation_id: str, user_id: str):
+        """An Operation joined to its Application's owner in the same query (§18.3)."""
+        return (
+            select(operations)
+            .join(applications, applications.c.id == operations.c.application_id)
+            .where(operations.c.id == operation_id, applications.c.user_id == user_id)
+        )
+
+    def operation(self, tx: ReadTransaction, operation_id: str, user_id: str) -> PersistedOperation:
         connection = self._transactions.connection_for(tx)
         row = (
-            connection.execute(select(operations).where(operations.c.id == operation_id))
+            connection.execute(self._owned_operation(operation_id, user_id))
             .mappings()
             .one_or_none()
         )
         return _operation_record(row, connection)
 
     def request_cancellation(
-        self, tx: WriteTransaction, operation_id: str, *, now: str | None = None
+        self, tx: WriteTransaction, operation_id: str, user_id: str, *, now: str | None = None
     ) -> PersistedOperation:
         connection = self._transactions.connection_for(tx, access="write")
         timestamp = now or utc_now()
         row = (
-            connection.execute(select(operations).where(operations.c.id == operation_id))
+            connection.execute(self._owned_operation(operation_id, user_id))
             .mappings()
             .one_or_none()
         )

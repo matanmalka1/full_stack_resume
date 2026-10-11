@@ -7,6 +7,7 @@ from sqlalchemy import exists, insert, select, update
 from ...application.errors import StateConflict, UnknownRecord
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from .connection import SqlAlchemyTransactionManager
+from .ownership import owned
 from .tables import applications, submissions
 
 
@@ -21,6 +22,7 @@ class SqlAlchemyApplicationStore:
         tx: WriteTransaction,
         *,
         application_id: str,
+        user_id: str,
         company: str,
         target_role: str,
         notes: str,
@@ -33,6 +35,7 @@ class SqlAlchemyApplicationStore:
         self._transactions.connection_for(tx, access="write").execute(
             insert(applications).values(
                 id=application_id,
+                user_id=user_id,
                 company=company.strip(),
                 target_role=target_role.strip(),
                 current_status="saved",
@@ -47,10 +50,12 @@ class SqlAlchemyApplicationStore:
             )
         )
 
-    def get_application(self, tx: ReadTransaction, application_id: str) -> dict[str, Any]:
+    def get_application(
+        self, tx: ReadTransaction, application_id: str, user_id: str
+    ) -> dict[str, Any]:
         row = (
             self._transactions.connection_for(tx)
-            .execute(select(applications).where(applications.c.id == application_id))
+            .execute(select(applications).where(owned(application_id, user_id)))
             .mappings()
             .one_or_none()
         )
@@ -58,7 +63,9 @@ class SqlAlchemyApplicationStore:
             raise UnknownRecord(application_id)
         return dict(row)
 
-    def duplicate_application_inputs(self, tx: ReadTransaction) -> list[dict[str, Any]]:
+    def duplicate_application_inputs(
+        self, tx: ReadTransaction, user_id: str
+    ) -> list[dict[str, Any]]:
         rows = (
             self._transactions.connection_for(tx)
             .execute(
@@ -69,7 +76,7 @@ class SqlAlchemyApplicationStore:
                     applications.c.source_url,
                     applications.c.job_normalized_hash.label("normalized_hash"),
                 )
-                .where(applications.c.deleted_at.is_(None))
+                .where(applications.c.user_id == user_id, applications.c.deleted_at.is_(None))
                 .order_by(applications.c.created_at, applications.c.id)
             )
             .mappings()
@@ -81,6 +88,7 @@ class SqlAlchemyApplicationStore:
         self,
         tx: WriteTransaction,
         application_id: str,
+        user_id: str,
         *,
         job_text: str,
         job_text_hash: str,
@@ -99,7 +107,7 @@ class SqlAlchemyApplicationStore:
         current = (
             connection.execute(
                 select(applications.c.job_text_hash)
-                .where(applications.c.id == application_id)
+                .where(owned(application_id, user_id))
                 .with_for_update()
             )
             .mappings()
@@ -136,6 +144,7 @@ class SqlAlchemyApplicationStore:
         self,
         tx: WriteTransaction,
         application_id: str,
+        user_id: str,
         notes: str,
         expected_notes: str,
         *,
@@ -144,15 +153,12 @@ class SqlAlchemyApplicationStore:
         connection = self._transactions.connection_for(tx, access="write")
         result = connection.execute(
             update(applications)
-            .where(
-                applications.c.id == application_id,
-                applications.c.notes == expected_notes,
-            )
+            .where(owned(application_id, user_id), applications.c.notes == expected_notes)
             .values(notes=notes, updated_at=updated_at)
         )
         if result.rowcount != 1:
             exists_row = connection.execute(
-                select(applications.c.id).where(applications.c.id == application_id)
+                select(applications.c.id).where(owned(application_id, user_id))
             ).scalar_one_or_none()
             if exists_row is None:
                 raise UnknownRecord(application_id)

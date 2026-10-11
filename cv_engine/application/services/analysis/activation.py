@@ -8,6 +8,7 @@ own write scope.
 from __future__ import annotations
 
 from ....util import utc_now
+from ...actor import Actor
 from ...commands import AnalysisResult, AnalyzeCommand
 from ...errors import PreconditionFailed, StateConflict
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisStore
@@ -29,7 +30,11 @@ class AnalysisActivation:
         self.documents = documents
 
     def activate(
-        self, tx: WriteTransaction, command: AnalyzeCommand, prepared: PreparedAnalysis
+        self,
+        tx: WriteTransaction,
+        actor: Actor,
+        command: AnalyzeCommand,
+        prepared: PreparedAnalysis,
     ) -> AnalysisResult:
         """Write one immutable JobAnalysis; create the document if there is none (§13).
 
@@ -40,8 +45,8 @@ class AnalysisActivation:
         """
         # The runner takes this lock as its first statement; direct callers get the
         # same ordering here before reading any source or allocating any version.
-        self.analyses.lock_application(tx, command.application_id)
-        source = self.sources.job_text_source(tx, command.application_id)
+        self.analyses.lock_application(tx, command.application_id, actor.user_id)
+        source = self.sources.job_text_source(tx, command.application_id, actor.user_id)
         refuse_deleted(command.application_id, source.deleted_at)
         if source.job_text_hash != command.job_text_hash:
             raise StateConflict("the job text changed before the analysis activated")
@@ -57,6 +62,7 @@ class AnalysisActivation:
         analysis_id = self.analyses.save_analysis(
             tx,
             command.application_id,
+            actor.user_id,
             command.job_text_hash,
             prepared.result,
             provider=prepared.provider,
@@ -64,7 +70,9 @@ class AnalysisActivation:
             expected_analysis_id=command.expected_analysis_id,
             refuse_matching_context_operation=command.refuse_matching_context_operation,
         )
-        self.analyses.set_normalized_role(tx, command.application_id, prepared.normalized_role)
+        self.analyses.set_normalized_role(
+            tx, command.application_id, actor.user_id, prepared.normalized_role
+        )
         created = False
         if document is None:
             document = self.documents.create_document(
