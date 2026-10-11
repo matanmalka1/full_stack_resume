@@ -288,14 +288,14 @@ this list it touches.
 - **Authentication.** Login; wrong password and unknown email give the same answer;
   logout; logout-all; expired and revoked sessions are `401`; change password needs the
   current one and revokes the other sessions; `set-password` revokes every session;
-  `deactivate_account` changes exactly the fields §23 lists, leaves every immutable
-  record byte-identical, and sign-in is refused afterwards; `create-user` refuses a second user before isolation ships.
+  `create-user` refuses a second user, and a second `users` row is refused by the
+  database itself, until `users_single_user` is dropped; `--password-stdin` and the
+  prompt set the same password.
 - **Secrets.** No password or session secret appears in the database, the logs,
   Problem Details, or Operation payloads; the cookie carries `HttpOnly`, `Secure`, and
   `SameSite=Lax`.
 - **Limits.** Sign-in answers `429` with `Retry-After` past its limit, across both
-  processes, and recovers when the window passes; the AI quota refuses the Operation past
-  the limit and queues nothing.
+  processes, and recovers when the window passes.
 - **Transport.** A foreign `Host` and a mutation without an allowed `Origin` are refused
   before routing, `login` included.
 - **Pipeline.** `tests/e2e/test_pipeline_end_to_end.py` runs as a signed-in user and still

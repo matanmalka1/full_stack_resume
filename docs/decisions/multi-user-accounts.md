@@ -1,6 +1,8 @@
 # Decision: user accounts and per-user isolation
 
-Status: **approved, not implemented** (2026-09-30). The specifications carry the binding
+Status: **approved, not implemented** (2026-09-30; delivery order and scope revised
+2026-10-11: login first, held to one user by the database, and what a single user does
+not need deferred to §6). The specifications carry the binding
 rules, each marked *designed, not built* until it ships:
 [`product-spec.md`](../spec/product-spec.md) §22,
 [`state-and-use-cases.md`](../spec/state-and-use-cases.md) §23,
@@ -61,17 +63,12 @@ isolation.
    from `import-knowledge` and changes only through `attach_fact` and
    `confirm_and_use_fact`; nothing derives it automatically. Web editing of Profiles
    stays a non-goal.
-9. **An account ends by deactivation, never deletion.** The contract is deactivate,
-   revoke every session, and anonymize the PII in a named list of mutable fields
-   (state-and-use-cases §23). Immutable triggers are not bypassed for a user lifecycle, and immutable records (Submissions and the job text they
-   locked, the AI call log, audit, fact events) stay, owned by a user row that no longer
-   identifies anyone. A hard delete is only ever an explicit, separately approved
-   operator procedure, never part of the API.
-10. **Rate limiting and AI quota live in PostgreSQL.** There is no Redis (architecture
+9. **Ending an account is deferred (§6).** With one user there is no account to end.
+   Whatever contract returns keeps two rules: immutability triggers are never bypassed
+   for a user lifecycle, and a hard delete is never part of the API.
+10. **The sign-in rate limit lives in PostgreSQL.** There is no Redis (architecture
     §2). Sign-in is the only rate-limited route: a fixed window, a temporary throttle,
-    no permanent lockout. A per-user AI quota
-    is counted from the user's own Operations, so no counter can drift from the work it
-    counts.
+    no permanent lockout. A per-user AI quota is deferred (§6).
 11. **The first user is created by CLI.** An existing single-candidate installation is
     assigned to that user. The CLI requires a real email address; the migration never
     invents one.
@@ -80,12 +77,19 @@ isolation.
     verification, reset by email, email change, single-use tokens, and SMTP — is not
     built. A forgotten password is reset with `set-password` on the CLI. A new user's
     first facts come from `import-knowledge`, so onboarding needs no new screen.
-13. **Keep the account model minimal.** A session has one absolute lifetime (no idle
-    timeout, no refresh). Account events store the event and the user only, no IP or
-    email. Password hashes use the library defaults, with no rehash policy.
+13. **Keep the account model minimal.** A user row is its email, its password hash, and
+    when it was created; nothing else has a reader yet. A session has one absolute
+    lifetime (no idle timeout, no refresh). There is no account-event table: a failed
+    sign-in is a server-log line without credentials. Password hashes use the library
+    defaults, with no rehash policy.
+14. **Login ships before isolation, and the database holds the system to one user until
+    isolation is complete.** Identity without isolation is a leak only once a second
+    user exists. A unique index over a constant (`users_single_user`) makes a second
+    `users` row impossible rather than refused by a check that a race could pass. The
+    step that completes isolation drops it in its own migration, so the limit cannot
+    lapse by accident. Login is useful on its own, and so is each step after it.
 
-Defaults adopted with this decision: the exact limits (session lifetime, sign-in window,
-quota size) are configuration with the defaults stated in architecture §18.
+Defaults adopted with this decision: the exact limits (session lifetime, sign-in window) are configuration with the defaults stated in architecture §18.
 
 ## 3. Rejected
 
@@ -105,88 +109,99 @@ quota size) are configuration with the defaults stated in architecture §18.
   strong second line, but the worker and the transaction-token model would both need a
   per-transaction user setting before it helps. Isolation is enforced in the application
   layer and proved by a derived cross-user test (test plan §3.11). This can be revisited.
+- **Isolation before any sign-in surface** (the original order). It held a working login
+  behind the largest steps for a risk that one database constraint removes while there
+  is one user (decision 14).
+- **Building quota, worker fairness, account events, and deactivation before a second
+  user exists.** None of them has a reader or a threat with one user; each returns on a
+  stated condition (§6).
 - **Keeping facts in files, one directory per user.** Not transactional with the
   database, and it keeps the journal and quarantine machinery alive only to paper over
   that.
 
 ## 4. Mapping the single-candidate installation
 
-A fresh installation starts empty, and nothing below applies to it. For an existing
-installation:
+A fresh installation starts empty, and nothing below applies to it beyond creating its
+one user. For an existing installation, in delivery order (§5):
 
-1. **Schema step one:** create the account tables (`users`, `user_sessions`,
-   `auth_events`, `rate_limit_buckets`) and the per-user Knowledge and settings tables.
-2. **Operator:** `create-user --email <real address>` creates the one user and prompts
-   for a password.
-3. **Operator:** `import-knowledge --user <id> --from base/` reads `base/*.json`,
+1. **Login step:** the revision creates `users` and `user_sessions`. The operator runs
+   `create-user --email <real address>`, which prompts for a password. From then on
+   every route but sign-in and health needs a session.
+2. **Knowledge step:** the revision creates the per-user Knowledge tables. The operator
+   runs `import-knowledge --user <id> --from base/`, which reads `base/*.json`,
    `base/candidate.json`, and the candidate-specific parts of `profiles/*.yaml` into that
-   user's Knowledge in one transaction. It refuses when the user already has facts.
+   user's Knowledge in one transaction, and refuses when the user already has facts.
    Existing semantic fact IDs (`common.contact.email`, …) keep their exact spelling for
    that user, so every existing document, Submission, and fact event still resolves.
-4. **Schema step two:** add `applications.user_id`, assign every existing row to the one
-   user, then make it `NOT NULL`. The revision refuses when rows exist and the user
-   count is not exactly one. The owner is derived from the fact that the installation
-   had one candidate; nothing is guessed.
-5. `fact_events` rows without an `application_id` get their owner through a *permitted
-   transition*: the guard allows exactly `user_id: NULL → value`, once, with no other
-   column changing. That is the same pattern that already guards terminal Operation rows
-   (architecture §6.1), not a trigger bypass.
-6. `app_settings` (one row) becomes that user's `user_settings` row, keyed by
-   `user_id`. Existing
-   `knowledge_mutation_journal` rows stay read-only history. A `PREPARED` or
-   `QUARANTINED` entry refuses the upgrade until an operator resolves it on the old
-   version.
-7. Storage keys do not change. They already embed the Application ID, and ownership of
+   `fact_events` rows get their owner through a *permitted transition*: the guard allows
+   exactly `user_id: NULL → value`, once, with no other column changing — the pattern
+   that already guards terminal Operation rows (architecture §6.1), not a trigger
+   bypass. Existing `knowledge_mutation_journal` rows stay read-only history; a
+   `PREPARED` or `QUARANTINED` entry refuses the upgrade until an operator resolves it on
+   the old version.
+3. **Ownership step:** add `applications.user_id`, assign every existing row to the one
+   user, then make it `NOT NULL`. The revision refuses when rows exist and the user count
+   is not exactly one. The owner is derived from the fact that the installation had one
+   candidate; nothing is guessed. `app_settings` (one row) becomes that user's
+   `user_settings` row, keyed by `user_id`.
+4. Storage keys do not change. They already embed the Application ID, and ownership of
    a payload comes from its registered reference, not from its key (architecture §6.2).
 
-After the upgrade, `base/` and the candidate-specific parts of `profiles/` are import
-input only. They are no longer read at runtime.
+After the Knowledge step, `base/` and the candidate-specific parts of `profiles/` are
+import input only. They are no longer read at runtime.
 
 ## 5. Delivery order
 
 Each step is its own pull request and brings the focused tests for what it changes, as
-`CLAUDE.md` requires. Data model and isolation come before any sign-in surface: a
-system that can identify a user but does not yet isolate their data is the state to
-avoid.
+`CLAUDE.md` requires. Until step 6 ships, the database admits one user (decision 14),
+so no step before it can expose one user's data to another.
 
-1. **Specs and decision records** (this change). Documentation only.
-2. **Users, sessions, bootstrap CLI:** `users`, `user_sessions`, `auth_events`;
-   `create-user` and `set-password`. No route yet.
-3. **Per-user Knowledge:** `facts`, `candidate_contexts`, `profile_bindings`
+1. **Specs and decision records.** Documentation only.
+2. **Login, backend:** `users`, `user_sessions`, and the `users_single_user` index;
+   `create-user` and `set-password` (`--password-stdin` as well as a prompt); `login`,
+   `logout`, `logout-all`, `me`, `change-password`; the session dependency that makes
+   every route but sign-in and health answer `401` without a session.
+3. **Login, frontend:** the sign-in screen, the auth state, private routes, a `401`
+   clearing the auth state and the query cache, sign-out clearing per-user browser
+   state.
+4. **Per-user Knowledge:** `facts`, `candidate_contexts`, `profile_bindings`
    (architecture §18.2); `import-knowledge`; the journal retired; the Profile
    template/binding split. The riskiest step for fact semantics.
-4. **Ownership on Application and settings:** `applications.user_id`, `user_settings`,
-   the existing installation assigned to its one user (§4).
-5. **Repository and query isolation:** every service resolves through the `Actor`
-   (architecture §18.3); every list, count, and duplicate check scoped.
-6. **Idempotency, fairness, and worker isolation:** the per-Application idempotency key,
-   fairness between users in the claim order (a user with nothing running is served
-   first; architecture §18.3), owner derived from the Operation's Application. The
-   per-user AI slot first planned here is replaced: the lease table it would have used
-   is gone, and a slot would leave a thread idle while a lone user waits.
-7. **Auth API and frontend:** `login`, `logout`, `logout-all`, `me`, `change-password`,
-   `deactivate_account`; the sign-in and account screens, the auth state, clearing
-   per-user browser state. From here every route requires a session.
-8. **Email verification and reset — not scheduled.** Decision 12 leaves them out while
-   users are created by the operator. They return only with a decision to open sign-up.
-9. **Quotas and rate limiting:** the sign-in limit and the per-user AI quota.
-10. **Renderer hardening** (architecture §18.6).
-11. **Derived isolation gates made complete and blocking:** the cross-user route
-    matrix, the schema ownership guard, and the persistence-port guard over the whole
-    surface, in CI. Steps 5 and 6 already introduce them for what they touch; this step
-    closes their exception lists. Only after it does `create-user` accept a second
-    user.
-12. **Hosted deployment:** public origin, Host allowlist, HSTS, and the hosting
-    decisions in §6.
+5. **Ownership and isolation:** `applications.user_id` and `user_settings` with the
+   existing installation assigned to its one user (§4); every service resolving through
+   the `Actor` (architecture §18.3), every list, count, and duplicate check scoped; the
+   per-Application idempotency key; the worker deriving the owner from the Operation's
+   Application. The derived isolation guards arrive with what they cover.
+6. **Second user enabled:** the cross-user route matrix, the schema ownership guard, and
+   the persistence-port guard made complete and blocking in CI; the sign-in rate limit;
+   renderer hardening (architecture §18.6); then a migration drops `users_single_user`.
+7. **Hosted deployment:** public origin, Host allowlist, HSTS, and the hosting decisions
+   in §6.
 
-## 6. Open items
+## 6. Deferred and open items
 
-1. **PII retained in immutable records after deactivation.** Job text locked by a
-   Submission, Submissions, the AI call log (`ai_calls`), and `fact_events.fact_json` keep the candidate's name
-   and contacts. Anonymization makes them unreachable and unlinked to an identity; it
-   does not erase them. Whether that is acceptable matters once there is a second user;
-   it is a legal decision, not a technical one.
-2. **Numeric limits.** The defaults in architecture §18 are starting values, not
+**Deferred.** Each is out of the delivery order until its condition holds. Its earlier
+design is in Git history at `3bf3034` (architecture §18, state-and-use-cases §23); it
+returns as a change to the specifications first.
+
+- **Ending an account** (deactivation and anonymization of mutable personal data) —
+  when a user other than the operator must be able to leave, or before the product
+  opens to people the operator does not know. Its open question returns with it:
+  Submissions, the job text they locked, the AI call log, and `fact_events.fact_json`
+  keep a candidate's name and contacts, and whether anonymization without erasure is
+  acceptable is a legal decision, not a technical one.
+- **Per-user AI quota** — when a user exists whose provider spend the operator does not
+  want to trust.
+- **Fairness between users in the worker's claim order** — when one user's queue is
+  seen holding back another's. Until then the claim order stays oldest first.
+- **Account events** (an append-only sign-in and password audit) — when the server log
+  is not enough to answer who signed in and when.
+- **Email verification and reset by email** — only with a decision to open sign-up
+  (decision 12).
+
+**Open.**
+
+1. **Numeric limits.** The defaults in architecture §18 are starting values, not
    measured ones.
-3. **Hosting.** Where it runs, who terminates TLS, and PostgreSQL and bucket backup are
-   the operator's choice and are not specified here; step 12 needs them decided.
+2. **Hosting.** Where it runs, who terminates TLS, and PostgreSQL and bucket backup are
+   the operator's choice and are not specified here; step 7 needs them decided.

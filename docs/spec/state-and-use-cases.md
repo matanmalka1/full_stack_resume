@@ -1014,7 +1014,7 @@ The status comes from the refusal's class, never its message:
 | `412` | a named state cannot satisfy the command: missing precondition, blocker, review reason, intake refusal, lineage or Knowledge refusal |
 | `413` | body limit exceeded |
 | `422` | request does not match the schema (`REQUEST_VALIDATION_FAILED`) |
-| `429` | *designed, not built:* rate limit (`RATE_LIMITED`) or AI quota (`AI_QUOTA_EXCEEDED`), with `Retry-After` |
+| `429` | *designed, not built:* sign-in rate limit (`RATE_LIMITED`), with `Retry-After` |
 | `500` | infrastructure failure |
 | `503` | a required collaborator is not configured |
 
@@ -1050,15 +1050,15 @@ a body. `login` is the only route that needs no session.
 
 `POST /auth/login`. Rate limited first: past the limit it is `429 RATE_LIMITED` with
 `Retry-After`, whatever the credentials. On success creates a new session, sets its
-cookie, records `login`, and returns `me`. On any failure — unknown email, wrong
-password, deactivated account — answers `401 INVALID_CREDENTIALS` with the same body and
-comparable timing, and records `failed_login`.
+cookie, and returns `me`. On any failure — unknown email or wrong password — answers
+`401 INVALID_CREDENTIALS` with the same body and comparable timing, and logs the failure
+without the password.
 
 ### `logout()` / `logout_all()`
 
 `POST /auth/logout` revokes the current session and clears the cookie.
 `POST /auth/logout-all` revokes every session of the user, the current one included.
-Both `204` and record `logout`.
+Both `204`.
 
 ### `me()`
 
@@ -1069,30 +1069,11 @@ Web client calls it at startup to choose between the signed-in and signed-out sh
 
 `POST /auth/change-password`. A wrong current password is `401 REAUTHENTICATION_FAILED`
 and changes nothing; a new password outside the policy is `422 PASSWORD_POLICY_FAILED`,
-naming only the rule. On success revokes every other session, rotates the current one,
-and records `password_changed`.
+naming only the rule. On success revokes every other session and rotates the current
+one.
 
-### `deactivate_account(current_password)`
-
-`POST /auth/account/deactivate`. There is no account deletion; this is the whole
-contract. It re-authenticates (`401 REAUTHENTICATION_FAILED` changes nothing), then in
-one transaction:
-
-1. **Deactivate:** `is_active = false`, `deactivated_at` set; sign-in is refused from
-   now on with the ordinary `INVALID_CREDENTIALS`.
-2. **Revoke sessions:** every session of the user, the current one included.
-3. **Anonymize permitted PII** — only mutable fields, each named here:
-   `users.email` becomes a non-deliverable pseudonym derived from the user ID;
-   `users.password_hash` becomes NULL; every Application's `notes`, `next_action`, and
-   `next_action_date` become NULL; every CVDocument's `content` becomes empty; every
-   fact's content columns are erased (status kept); the `candidate_contexts` and
-   `profile_bindings` rows and the user's `user_settings` row are deleted.
-4. **Record** `account_deactivated` in `auth_events`.
-
-Nothing immutable is touched: Submissions, the job text a Submission locked, the AI call log,
-`fact_events`, recruitment and audit events, and terminal Operations stay as written,
-owned by the now-anonymous user (product-spec.md §22). `204`; the cookie is cleared.
-There is no reactivation.
+Ending an account is deferred (`../decisions/multi-user-accounts.md` §6); no route
+deactivates or deletes one.
 
 ### Operator commands
 
@@ -1103,8 +1084,5 @@ There is no reactivation.
 
 ```text
 AUTHENTICATION_REQUIRED     INVALID_CREDENTIALS       REAUTHENTICATION_FAILED
-PASSWORD_POLICY_FAILED      RATE_LIMITED              AI_QUOTA_EXCEEDED
+PASSWORD_POLICY_FAILED      RATE_LIMITED
 ```
-
-`AI_QUOTA_EXCEEDED` (429) is returned by any command that would queue an AI Operation
-(§11), including `retry_operation`, when the user's quota is spent; nothing is queued.
