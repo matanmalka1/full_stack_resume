@@ -189,8 +189,6 @@ Analysis issues, low Fit, and hard gaps are diagnostics, not review reasons. The
 visible and block nothing. Missing evidence is not evidence of missing experience: an
 uncertain requirement stays `unknown`.
 
-`KNOWLEDGE_RECONCILIATION_REQUIRED` is not projected as a review reason. It is the
-refusal `approve_document` returns while any Knowledge mutation is quarantined (§15).
 
 ## 8. Warnings, blockers, and failures
 
@@ -677,10 +675,8 @@ Synchronous. Validates and approves in one action:
 1. Refuses a deleted Application, a hash mismatch, and `content IS NULL`.
 2. If `approved_basis` and `checked_basis` already equal the basis, returns the
    existing approval: `approved_at` is not rewritten and no audit record is added.
-3. Refuses with `KNOWLEDGE_RECONCILIATION_REQUIRED` (412) while any Knowledge mutation
-   is quarantined.
-4. Refuses with the first review reason's code (412).
-5. Runs validation, then under the document row lock stores the report and
+3. Refuses with the first review reason's code (412).
+4. Runs validation, then under the document row lock stores the report and
    `checked_basis`, and — only when the report passed — `approved_basis` and
    `approved_at`, with an audit record.
 
@@ -728,10 +724,9 @@ dependent facts, and stored content report. Writes nothing.
 ## 17. Knowledge commands
 
 Facts are the user's, in PostgreSQL, and every fact mutation is one transaction
-(architecture.md §7.2). The cross-store journal is retired; no entry can be prepared or
-quarantined any more. An entry left unresolved in its history still refuses every fact
-mutation (`KNOWLEDGE_REJECTED`, 412) and approval (§15); retiring those two refusals is
-a cleanup of its own. Attachment targets are the user's Profile binding over the shared
+(architecture.md §7.2). The cross-store journal is retired with its refusals: its rows
+are history that reconciliation reports (§19b) and that blocks no mutation and no
+approval. Attachment targets are the user's Profile binding over the shared
 templates. *Designed, not built (§23):* the signed-in user's facts; a `fact_id` is
 unique per user, and another user's fact is 404.
 
@@ -1049,8 +1044,7 @@ A refusal's `code` defaults to its class name in upper snake case (`STATE_CONFLI
 DOCUMENT_CHANGED                    DOCUMENT_NOT_APPROVED
 DOCUMENT_NOT_READY                  MISSING_FACT_RENDERING
 DUPLICATE_ACKNOWLEDGEMENT_REQUIRED  IDEMPOTENCY_KEY_REUSED
-KNOWLEDGE_RECONCILIATION_REQUIRED   PENDING_FACT_REQUIRES_RESOLUTION
-FACT_DELETED_REQUIRES_RESOLUTION
+PENDING_FACT_REQUIRES_RESOLUTION    FACT_DELETED_REQUIRES_RESOLUTION
 ```
 
 Review reasons, warnings, and validation issues are data in the projection, not

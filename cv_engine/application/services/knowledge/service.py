@@ -7,7 +7,8 @@ the candidate context as loading always has - and only then writes the rows that
 changed, advances the user's `fact_store_version`, and appends the fact events. A
 proposal that does not build is refused and nothing is written.
 
-The cross-store journal this replaced (§7.2) is retired; its rows stay as history.
+The cross-store journal this replaced (§7.2) is retired; its rows stay as history and
+block nothing.
 """
 
 from __future__ import annotations
@@ -111,16 +112,6 @@ class FactLifecycleService:
             raise KnowledgeRejected(str(exc)) from exc
 
     def _state(self, tx: ReadTransaction) -> StoredKnowledge:
-        """The rows a mutation starts from, refused while the retired journal is unresolved.
-
-        No new journal entry can arise, and `import-knowledge` refuses over one; an entry
-        left unresolved still refuses every mutation, as it did, until it is resolved.
-        """
-        unresolved = self.store.prepared_mutations(tx) + self.store.quarantined_mutations(tx)
-        if unresolved:
-            raise KnowledgeRejected(
-                f"Knowledge mutations are quarantined by mutation {unresolved[0].id}"
-            )
         try:
             return self._knowledge.state(tx)
         except ValueError as exc:

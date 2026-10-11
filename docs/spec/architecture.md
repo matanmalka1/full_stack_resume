@@ -380,9 +380,8 @@ the later is refused (`StateConflict`) before it writes a row.
 
 The cross-store journal (`knowledge_mutation_journal`) that guarded file-backed
 Knowledge is retired with its recovery at composition. Its rows stay as read-only
-history: `import-knowledge` refuses while one is `PREPARED` or `QUARANTINED`,
-reconciliation still reports one, and approval stays blocked by a quarantined one
-(state-and-use-cases.md §17), none of which can arise any more.
+history: `import-knowledge` refuses while one is `PREPARED` or `QUARANTINED`, and
+reconciliation still reports one. Neither a fact mutation nor an approval consults it.
 
 ## 8. Domain lineage and provenance
 

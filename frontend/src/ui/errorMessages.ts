@@ -55,10 +55,6 @@ const problemMessages: Record<string, ProblemMessage> = {
     action: "יש להוסיף לה ניסוח בשפת המסמך ולנסות שוב.",
   },
   KNOWLEDGE_REJECTED: { reason: "השינוי בעובדה נדחה, והעובדה לא השתנתה.", action: "יש לבדוק את הפרטים ולנסות שוב." },
-  KNOWLEDGE_RECONCILIATION_REQUIRED: {
-    reason: "מאגר העובדות אינו תואם ליומן השינויים שלו.",
-    action: "יש להשלים את התאמת מאגר העובדות לפני שממשיכים.",
-  },
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: {
     reason: "נמצאה מועמדות דומה.",
     action: "יש לבדוק את ההתאמות ולאשר אם ליצור מועמדות נוספת.",

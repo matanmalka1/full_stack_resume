@@ -486,8 +486,7 @@ blocker or review reason, not a warning.
 
 Approval is always an explicit user action. It stamps `approved_basis` and `approved_at`
 on the document when the check passes and no blocker or review reason exists. It does
-not freeze or copy content. It is refused while a Knowledge mutation is quarantined
-(§17). Approving an already-approved basis is a no-op.
+not freeze or copy content. Approving an already-approved basis is a no-op.
 
 Rendering is a separate Operation, available only while the document is approved. It
 revalidates against current Knowledge, renders HTML and PDF to a fresh per-attempt
@@ -744,10 +743,6 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
 
 There are no archive, withdrawal, retirement, or known-incorrect transitions, and no
 client may present them.
-
-A quarantined entry left in the retired journal's history still refuses every
-approval; reads, history, export, and recruitment tracking continue. None can arise
-any more, and `import-knowledge` refuses while one exists.
 
 Commands re-read their dependencies rather than trusting a cache; a dependent change
 moves the document's basis, and a change under a running analysis fails it with

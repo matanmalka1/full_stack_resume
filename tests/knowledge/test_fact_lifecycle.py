@@ -23,7 +23,6 @@ from cv_engine.api.schemas.facts import CaptureClaimFactRequest
 from cv_engine.application.commands import AnalyzeCommand, BuildFromAnalysisCommand
 from cv_engine.application.errors import (
     KnowledgeRejected,
-    PreconditionFailed,
     StateConflict,
     UnknownRecord,
 )
@@ -161,7 +160,9 @@ def test_audit_failure_writes_no_part_of_the_mutation(
     assert "situational.postgres" not in _reload(services).facts
 
 
-def test_quarantine_blocks_approval_but_keeps_history_readable(drafted_application) -> None:
+def test_a_quarantined_journal_entry_is_history_and_blocks_nothing(drafted_application) -> None:
+    """The retired journal's rows are history (architecture §7.2): one left quarantined
+    is reported by reconciliation, and blocks neither approval nor a fact mutation."""
     setup = drafted_application("Quarantine Co")
     services, application_id = setup
     request = PrepareKnowledgeMutation(
@@ -183,8 +184,11 @@ def test_quarantine_blocks_approval_but_keeps_history_readable(drafted_applicati
         store.quarantine_mutation(tx, request.mutation_id, "unrecoverable")
 
     assert services.knowledge_queries.fact_history().events == []
-    with pytest.raises(PreconditionFailed, match="approval blocked by quarantined Knowledge"):
-        approve_active_draft(services, application_id)
+    assert approve_active_draft(services, application_id).passed
+    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+    reconciliation = services.knowledge_queries.reconcile_facts()
+    assert reconciliation.journal_quarantined == 1
+    assert not reconciliation.passed
 
 
 def test_confirm_and_use_is_one_journaled_fact_and_profile_command(
