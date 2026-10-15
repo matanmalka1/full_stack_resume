@@ -1,166 +1,43 @@
 # Project Agent Instructions
 
-How coding agents work in this repository. This is the whole rule set.
+A CV tailoring tool: FastAPI backend, React frontend, PostgreSQL, a separate worker
+for AI Operations. Multi-user; each user reaches only their own data.
 
-## What this system is
+## Running
 
-A CV tailoring tool.
+- API: `uvicorn cv_engine.runtime.asgi:app` — serves HTTP, queues Operations.
+- Worker: `python -m cv_engine.worker` — executes Operations.
+- Frontend: `cd frontend && npm run dev`.
+- Setup and the rest: `README.md`.
 
-- **Current implementation:** authenticated multi-user, one candidate per user, each
-  reaching only their own data (`docs/decisions/multi-user-accounts.md`, product-spec
-  §22). Knowledge lives in PostgreSQL per user; `base/` and the candidate parts of
-  `profiles/` are only `import-knowledge` input. The database starts empty.
-- **Still open:** hosted deployment (the decision's step 7) and `edit_fact`
-  (`docs/decisions/editable-facts.md`).
+## Tests
 
-Spec sections marked *designed, not built* describe open work. It follows its
-decision's delivery order; do not build part of it ahead of its step.
+The user runs tests locally; hand over the exact commands. In a cloud container
+(`CLAUDE_CODE_REMOTE=true`) there is no user terminal: run `./scripts/cloud-db.sh`
+first, then run the tests yourself and report the commands with their real output.
 
-Cross-user isolation sits beside immutable records as the place where care belongs: a
-record reachable by another user is a data leak, not a re-run.
+- Run the focused tests for what the diff touched, not the whole suite.
+- Backend: `./.venv/bin/python -m pytest -q <paths>`.
+- Frontend: `npm --prefix frontend run check` (typecheck, lint, unit tests).
+- Schema change (`alembic/`): also run `tests/platform/test_schema.py` and an
+  upgrade of an empty database.
+- Rendering change: also run the golden tests (`tests/e2e/test_golden.py`) and the
+  relevant browser tests. Golden hashes move only when the output was meant to change.
+- Never report a failing test as passing or as a warning.
 
-Almost everything the engine produces is regenerable in seconds — drafts, selections,
-renders, projections. Getting one wrong costs a re-run. Calibrate effort to that.
+## Hard rules
 
-One thing is not regenerable, and that is where care belongs:
+- **User isolation.** Every query and command is scoped to the signed-in user. A record
+  reachable by another user is a bug of the highest severity.
+- **Don't destroy history.** Submissions, their files, and the AI call log are records
+  of what happened. Don't rewrite or delete them.
+- **React talks to the backend only through the FastAPI API.** Logic lives in the
+  application layer, not in routers.
+- **Cloud work** lands on its own branch and reaches `main` through a pull request.
 
-**Immutable records already written** — what left the system: a Submission (the CV
-content that was sent, its HTML and PDF copies and their checksums), the job text it
-was sent for, the AI call log (every provider call attempt, in `ai_calls`), and past
-application history. The job text is an ordinary editable field on the Application
-until the first Submission, which locks it (`docs/decisions/editable-job-text.md`); from
-then on it preserves the posting that was applied to, even after it vanishes from the
-web. The CV document itself is mutable until it is submitted: approval and Ready are stamps derived against its
-current basis, not frozen revisions. Never overwrite or relocate one; overwriting destroys evidence
-nothing else can reproduce. Never invent a value a record never carried — a field that
-cannot be derived stays NULL. This does not freeze an application's current status: a
-status field may transition per the lifecycle rules in `docs/spec/state-and-use-cases.md`.
-What is immutable is the history and artifacts already written, not the live state that
-lifecycle transitions are defined to change.
+## Working with the docs
 
-## Specifications
-
-`docs/spec/` holds the binding specifications. They are not required reading before every
-task. Read the one that owns what you are changing — `docs/README.md` maps topics to the
-owning document.
-
-If a specification conflicts with existing behavior, say so. Do not reinterpret a
-conflict silently.
-
-## Gates
-
-The user runs every gate. You never run tests — you hand over the commands.
-
-**Cloud exception.** In a cloud agent container (Claude Code on the web, where
-`CLAUDE_CODE_REMOTE=true`, or Codex cloud) the user has no terminal, so you run the
-focused tests yourself and report the exact commands with their real output. Run
-`./scripts/cloud-db.sh` first — cloud containers do not keep PostgreSQL running. Every
-other rule in this section still holds: focused tests only, broaden only for a stated
-reason, and never relabel a failure. Boundary gates the user wants as fresh evidence are
-still handed over for them to run locally. Cloud work always lands on its own branch
-and reaches `main` only through a pull request.
-
-Every change needs the focused tests for what it touched. A **boundary** is a delivery
-point — the work handed back to the user as done, whether that's a task, a PR, or an
-explicit checkpoint the user names. It is not any internal step inside that work.
-Choose gates from the actual diff and affected behavior:
-
-- Frontend-only changes need frontend checks only.
-- Backend-only changes need backend checks only.
-- Changes affecting both need checks for both, including shared contracts where touched.
-- Prefer focused tests for the affected behavior. A boundary does not automatically
-  require a full frontend, backend, or combined suite. Broaden only for a concrete
-  uncovered risk, a failure, or an explicit CI/release requirement; state why.
-- Documentation-only changes need consistency review, not product test suites.
-
-Three kinds of change need additional focused evidence:
-
-- **A schema change** (`alembic/`) also needs the migration-topology and empty-database
-  upgrade checks, with the generated schema diff stated.
-- **A change to rendering or an artifact path** also needs the golden hashes and the
-  relevant browser tests.
-- **A change to a stored value's meaning, a public application/API signature, or a projection field**
-  also needs the pipeline test against a fresh PostgreSQL database
-  (`tests/e2e/test_pipeline_end_to_end.py`) — `ingest → analyze → draft → validate → approve
-  → render → ready → reconcile`, `OPENAI_API_KEY` unset. It drives the application
-  services directly, so it proves the engine works rather than that one client knows how
-  to call it. Analysis and drafting are the steps that need a provider (see Facts and AI
-  boundaries); the test seeds the analysis and answers the draft through the scripted
-  transport, and everything
-  downstream of existing content reaches Ready without AI.
-
-While iterating, hand over only the focused commands. Hand over the boundary's scoped gates
-once, when the work closes, ordered, with what each command proves. A gate that already
-passed under the same conditions is not fresh evidence — check the diff and the test count
-against its baseline before asking for a re-run.
-
-Golden hashes must not move unless output was meant to change. Records that must never
-be rewritten are protected by immutability triggers, not by convention.
-
-**Derived guards.** Derive a check from the code or schema rather than maintaining a list
-by hand. Where a guard needs a list, make it a list of deliberate exceptions, so
-forgetting to register something fails instead of passing.
-
-Add regression coverage for a material bug only when existing coverage would miss it.
-Extend the closest test rather than adding another.
-
-Report what passed, what failed, and what remains. Never claim completion with
-"implemented" alone. A hard failure is never relabelled as a warning.
-
-## Facts and AI boundaries
-
-- Never invent, strengthen, merge, or "improve" candidate facts — the fact and its
-  meaning must not change. Rewording and combining sentences to fit a role is allowed
-  when the fact and its meaning are unchanged and the validation contract accepts it;
-  the restriction is on the fact, not on prose.
-- One fact has one canonical location. Profiles may reference it; they may not create
-  conflicting copies.
-- New facts follow `pending -> canonical`, on an explicit confirmation, unless the user
-  confirms in the same message.
-- Unsupported factual claims block approval and `ready_qualified`. No chained or
-  no-pause flow may bypass that; a blocker refuses whatever is driving it.
-- AI proposes classification, selection, wording, and — per `docs/spec/product-spec.md`
-  §2 "Semantic analysis authority" — requirement extraction, interpretation, and which
-  canonical facts answer a requirement. Creating a new analysis or drafting content needs a
-  provider; there is no rules-based fallback for either, silent or otherwise. Canonical facts and
-  deterministic validation stay authoritative — authoritative over meaning, not over
-  exact wording. Deterministic validation may enforce semantic equivalence to the
-  canonical fact; it is not required to demand verbatim copying, and a check that does
-  so is enforcing more than this rule requires.
-- Deterministic policy keeps every check it can run itself: source attestation against
-  the exact job text the analysis read, canonical-fact eligibility, requirement identity, structural
-  completeness, numeric and compositional consistency, boundary-fact applicability, Fit
-  calculation, review routing, and every approval boundary. A proposal may be narrowed
-  by those checks; it may never be widened by them. The closed concept vocabulary in
-  `config/requirements.json` no longer decides coverage — it states boundary
-  applicability and scale ordering, both of which only lower a verdict.
-- Preserve canonical job titles, dates, metrics, uncertainty, and source provenance.
-
-## Working rules
-
-- Stop for a blocker, an unresolved specification conflict, an *unapproved* semantic
-  deviation, or material data-loss risk. Explain the issue and its consequences first.
-  Implementing a deviation the spec or the user has already approved is not a stop
-  condition — that is just the task.
-- Internal implementation details may change freely when observable behavior, safety, and
-  product semantics stay the same.
-- Do not silently change workflow, validation behavior, fact semantics, application
-  statuses, or artifact lifecycle.
-- React is the product interface and FastAPI is the only user-facing adapter; React
-  reaches the system through it and nowhere else. The worker calls the same application
-  layer as an internal execution host, not as a second client. A second user-facing
-  surface for a use-case the API already owns is not added.
-- The system runs as two processes sharing one PostgreSQL database, neither
-  supervising the other: `uvicorn cv_engine.runtime.asgi:app` serves HTTP and creates
-  Operations; `python -m cv_engine.worker` executes them through the Operation runner,
-  and may queue only the draft an analysis continues into (architecture.md §1).
-  The API starts no background work.
-- The project root is fixed at the installed code location. It is not selectable by
-  argument, setting, or environment variable. A test needing another root injects
-  `AppPaths.from_root(...)` into composition.
-- Routers map HTTP to a use-case and back. Logic belongs to the application layer,
-  which the API calls directly. Analysis and drafting are AI-only; once content exists,
-  the rest of the workflow reaches Ready with no AI key.
-- Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
-- Add a dependency only when it enforces a contract, reduces rendering risk, or gives a
-  concrete portability benefit. The baseline is `docs/spec/architecture.md` section 2.
+`docs/` describes the current design. It is a description, not a law: when it is
+wrong, outdated, or gets in the way of what the user asks, say so and propose a change
+instead of defending it. Judge a design by the code and by what the user wants from
+the product.
