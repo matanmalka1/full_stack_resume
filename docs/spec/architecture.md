@@ -435,7 +435,8 @@ Application.
   `ordinal`, `created_at`, and refuses deletes.
 - **`fact_events`** (immutable): lifecycle history with `user_id` and `fact_json`.
 - **`candidate_contexts`** (mutable, `user_id` primary key): `name_fact_id`,
-  `contact_fact_ids`, `track_contact_fact_ids`, `link_schemes`, `filename_language`,
+  `filename_name`, `contact_fact_ids`, `track_contact_fact_ids`, `link_schemes`,
+  `filename_language`,
   `locale`, `timezone`, `context_version`, `fact_store_version`, `updated_at`.
   Referenced facts must be the user's canonical facts. Written only by
   `import-knowledge`.
