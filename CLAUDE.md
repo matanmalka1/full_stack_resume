@@ -12,9 +12,8 @@ for AI Operations. Multi-user; each user reaches only their own data.
 
 ## Tests
 
-The user runs tests locally; hand over the exact commands. In a cloud container
-(`CLAUDE_CODE_REMOTE=true`) there is no user terminal: run `./scripts/cloud-db.sh`
-first, then run the tests yourself and report the commands with their real output.
+Run the tests yourself and report the commands with their real output. In a cloud
+container (`CLAUDE_CODE_REMOTE=true`), run `./scripts/cloud-db.sh` first.
 
 - Run the focused tests for what the diff touched, not the whole suite.
 - Backend: `./.venv/bin/python -m pytest -q <paths>`.
