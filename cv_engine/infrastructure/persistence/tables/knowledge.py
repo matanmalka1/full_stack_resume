@@ -56,7 +56,7 @@ FACT_STATUSES = ("pending", "canonical", "deleted")
 RESUME_STYLES = ("paragraph", "heading", "date", "bullet", "item", "contact")
 
 #: One row per fact of a user, at its current status and content. A fact is edited in
-#: place (docs/decisions/editable-facts.md), so a trigger guards only its identity - `id`,
+#: place, so a trigger guards only its identity - `id`,
 #: `user_id`, `fact_id`, `source`, `ordinal`, `created_at` - and refuses every delete:
 #: deletion is a status.
 facts = Table(

@@ -2,7 +2,7 @@
 
 `users` and `user_sessions` are mutable: a password changes and a session is revoked.
 `users_single_user` is a unique index over a constant, so the database admits one user
-until isolation is complete (docs/decisions/multi-user-accounts.md decision 14); the
+until isolation is complete; the
 revision that completes isolation drops it.
 
 Revision ID: 0003

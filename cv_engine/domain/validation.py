@@ -322,7 +322,7 @@ def _sections_match_profile(context: _ValidationContext) -> None:
                     f"claim {claim.claim_id} links facts outside {section.name}: {disallowed}",
                 )
         # Section budgets, per-role minimums, tags and pins are guidance the writer
-        # received (docs/decisions/ai-owned-selection.md). What is checked here is
+        # received (product-spec §10). What is checked here is
         # structure: no role title stands without evidence, and no line sits under a
         # role its facts do not belong to.
         trailing_structural = dangling_heading(section.claims)

@@ -427,7 +427,7 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
 - **Create.** New facts are `pending` with a generated ID. `en` rendering is required,
   `he` optional.
 - **Confirm.** `pending -> canonical` on explicit confirmation.
-- **Edit.** *Not built* (`../decisions/editable-facts.md`). Today a correction is a new
+- **Edit.** *Not built:* editing a fact in place. Today a correction is a new
   fact with `replaces`; confirming it raises `FACT_SUPERSEDED` on documents using the
   original.
 - **Delete.** Confirmed soft delete, allowed even when in use; affected documents

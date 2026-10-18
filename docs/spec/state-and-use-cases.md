@@ -547,7 +547,7 @@ documents using the original.
 
 ### `edit_fact(fact_id, changes, confirm)`
 
-*Not built* (`../decisions/editable-facts.md`). Changes meaning, renderings, tags,
+*Not built.* Changes meaning, renderings, tags,
 provenance, dates, `resume_style`, or link target in place; not the ID or source. A
 canonical fact needs `confirm: true` and stays canonical. Deleted facts and empty edits
 are refused. Appends a `fact_edited` event; dependent documents' basis moves.

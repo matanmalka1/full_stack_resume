@@ -209,7 +209,7 @@ class DraftAuthoringService:
 
         The engine lays out every section's whole pool as canonical claims, and
         `draft_resume` chooses among them and words the ones it keeps, in one call
-        (docs/decisions/ai-owned-selection.md). Every provider attempt is logged against
+        (product-spec §10). Every provider attempt is logged against
         `operation_id`; `still_owned` must hold before any retry.
         """
         source = self._target(actor, command.application_id, command.expected_document_hash)

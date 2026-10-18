@@ -1,7 +1,7 @@
 """postgresql baseline
 
 Squashes the former 0001-0005 chain into one baseline: the single-document model
-(docs/decisions/single-document-model.md) with no idempotency receipts, payload write
+with no idempotency receipts, payload write
 leases, or operation heartbeat/lease expiry.
 
 Revision ID: 0001
