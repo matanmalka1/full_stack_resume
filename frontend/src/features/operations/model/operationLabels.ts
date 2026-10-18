@@ -158,6 +158,7 @@ const reasonDetails: Record<FailureReason["code"], string | null> = {
   pdf_page_limit: null,
   missing_fact_rendering: null,
   pdf_text_coverage: "לא ניתן לחלץ מספיק מהטקסט בקובץ ה־PDF. יש לבדוק את מבנה התוכן לפני יצירה מחדש.",
+  pdf_date_range: "טווח תאריכים בקובץ ה־PDF לא נקרא ברצף, ולכן מערכת ATS לא תזהה אותו כתאריך.",
   pdf_link_targets: "בקובץ ה־PDF חסר לפחות קישור קשר צפוי אחד.",
   content_overflow: "חלק מהתוכן חורג מגבולות העמוד.",
   document_direction: "כיוון המסמך אינו מתאים לשפתו.",

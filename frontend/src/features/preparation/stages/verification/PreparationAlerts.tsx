@@ -7,7 +7,24 @@ import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
 import { ReasonCallout } from "../../components/ReasonCallout";
 import { type PreparationScreen, actionDestination, screenPath } from "../../model/actionDestinations";
-import { actionLabel, blockedReasonLabel, warningDetail, warningTitle } from "../../model/preparationLabels";
+import {
+  type MissingRequirement,
+  actionLabel,
+  blockedReasonLabel,
+  missingRequirement,
+  warningDetail,
+  warningTitle,
+} from "../../model/preparationLabels";
+
+/* The dropped requirement is the posting's own words, often English, so it is isolated in
+   <bdi> to keep its direction inside the Hebrew sentence. */
+const MissingRequirementDetail = ({ missing }: { missing: MissingRequirement }) => (
+  <>
+    הדרישה <bdi>{missing.requirementText}</bdi> מכוסה בעובדות שלכם, אבל אף אחת מהן לא נכללה בקורות החיים.
+    {missing.others > 0 ? ` ועוד ${missing.others} דרישות חובה במצב דומה.` : null} אפשר לערוך את הטיוטה ולהוסיף שורה
+    שמציגה אותה. האזהרה אינה חוסמת אישור.
+  </>
+);
 
 /* A review reason is reported as a short title plus the control that resolves it. The server's complete message stays
    available behind a disclosure: it is useful evidence when a reader needs it, but does
@@ -111,6 +128,7 @@ export const PreparationAlerts = ({
           evidence stays reachable without several of them becoming a wall of text. */}
       {detail.warnings.map((warning) => {
         const localized = warningDetail(warning.code, "");
+        const missing = warning.code === "REQUIREMENT_NOT_IN_DOCUMENT" ? missingRequirement(warning, detail) : null;
         /* The older-analysis warning has an explicit answer, `build_from_analysis`, which
            lives beside the analysis. Offered from another screen only while the projection
            offers the action, and never as a link to the screen the reader is on. */
@@ -132,7 +150,9 @@ export const PreparationAlerts = ({
             title={warningTitle(warning.code)}
             tone="warning"
           >
-            {localized === "" ? (
+            {missing !== null ? (
+              <MissingRequirementDetail missing={missing} />
+            ) : localized === "" ? (
               <Disclosure summary="פרטי האזהרה">
                 <p dir="auto">{warning.message}</p>
               </Disclosure>

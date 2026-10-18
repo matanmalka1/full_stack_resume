@@ -210,7 +210,10 @@ The matching form (`apply_analysis_decisions`) changes Track, Profile, language,
 Emphasis by creating a new JobAnalysis without calling the provider.
 
 Fit, gaps, and analysis issues are shown but never block anything. An uncertain
-requirement stays `unknown`.
+requirement stays `unknown`. Once the document has content, a covered mandatory
+requirement whose supporting facts the content no longer links - dropped while drafting,
+by the page-fit trim (§10), or by editing - is reported as `REQUIREMENT_NOT_IN_DOCUMENT`, a warning that
+blocks nothing.
 
 Review reasons — a fact the document uses that is pending or deleted
 (state-and-use-cases.md §7) — block approve, render, and submit.
@@ -326,6 +329,20 @@ Rendering is an Operation, available while the document is approved. It revalida
 renders HTML and PDF, and checks layout, page count, extracted text, links, direction,
 and filename metadata. Success stamps `rendered_basis`; failure keeps the approval and
 shows the reason.
+
+The extracted-text (ATS) check has two parts. Coverage: nearly every claim is
+recoverable from the PDF text; a Hebrew claim is compared as tokens, because extractors
+reorder bidi runs. Date ranges: every date line must come out of the PDF as one run,
+differing at most in whitespace, in every language, because an ATS computes experience
+from the range; a failure is `date-range`.
+
+In a Hebrew document a date line is displayed numerically, `MM/YYYY – MM/YYYY`, as one
+isolated left-to-right run: "אוגוסט 2020 - ינואר 2025" shows as `08/2020 – 01/2025`. A
+month name beside digits splits into bidi runs that extractors scatter. A lone
+`<month> YYYY` and a `YYYY - YYYY` range convert too; a line that is not wholly such a
+date ("היום", free text) is shown as written, never partly converted. This is
+presentation only, like keyword emphasis: facts, claims, and the Markdown export keep
+the user's wording, and both checks look for the displayed form. English is unchanged.
 
 A document is **Ready** when `approved_basis` and `rendered_basis` both equal the current
 basis.

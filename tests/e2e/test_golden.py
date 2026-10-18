@@ -5,12 +5,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from helpers import actor_of, approve_active_draft, seed_document, seed_draft, stored_document
+from pypdf import PdfReader
 
 from cv_engine.application.commands import RenderCommand
+from cv_engine.domain.date_display import numeric_date
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.drafts import draft_claims
 from cv_engine.infrastructure.rendering import render_html
-from cv_engine.util import sha256_text
+from cv_engine.util import normalized_text, sha256_text
 
 GOLDEN_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "golden"
 
@@ -163,3 +165,30 @@ def test_golden_outputs_pass_render_validation(
         )
         assert rendered.validation.passed, rendered.validation.model_dump()
         assert rendered.validation.evidence["page_count"] in {1, 2}
+        if case["language"] == "he":
+            assert document.pdf_path is not None
+            _assert_dates_extract_whole(services.paths.root / document.pdf_path, setup.draft)
+
+
+def _assert_dates_extract_whole(pdf_path: Path, draft) -> None:
+    """Each role's date range comes out of the real PDF as one numeric run.
+
+    Read with pypdf, independently of the render report: this is the ATS view of
+    the delivered file. Month names beside digits came out scattered across bidi
+    runs ("2025 - ינואר2020אוגוסט"), so a Hebrew range must be numeric and whole.
+    """
+    extracted = normalized_text(
+        "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf_path)).pages)
+    )
+    dates = [
+        claim.text
+        for section in draft.sections
+        for claim in section.claims
+        if claim.style == "date"
+    ]
+    assert dates
+    for text in dates:
+        numeric = numeric_date(text, draft.language)
+        assert numeric is not None, text
+        assert "–" in numeric, numeric
+        assert numeric in extracted, (numeric, extracted)

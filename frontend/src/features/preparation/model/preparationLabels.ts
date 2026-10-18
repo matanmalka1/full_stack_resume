@@ -1,4 +1,5 @@
-import type { PreparationState } from "@/api/contracts";
+import { classificationFromAnalysis } from "@/api/analyses";
+import type { ApplicationDetail, PreparationState } from "@/api/contracts";
 import { BadgeCheck, CircleCheck, Clock, FilePen, FilePlus2, type LucideIcon } from "lucide-react";
 
 import type { Tone } from "@/ui/tone";
@@ -110,6 +111,7 @@ const warningTitles: Record<string, string> = {
   PROFILE_CHANGED: "הפרופיל השתנה מאז שהמסמך נבנה",
   FACT_SUPERSEDED: "עובדה בטיוטה הוחלפה בגרסה חדשה יותר",
   FACT_KNOWN_INCORRECT: "עובדה בטיוטה סומנה כשגויה",
+  REQUIREMENT_NOT_IN_DOCUMENT: "דרישת חובה מהמשרה לא מופיעה בקורות החיים",
 };
 
 export const warningTitle = (code: string): string => warningTitles[code] ?? "כדאי לשים לב";
@@ -122,6 +124,34 @@ const warningDetails: Record<string, string> = {
 };
 
 export const warningDetail = (code: string, fallback: string): string => warningDetails[code] ?? fallback;
+
+/* REQUIREMENT_NOT_IN_DOCUMENT is one warning for every covered mandatory requirement the
+   CV no longer evidences: it references the first and counts them all. The requirement's
+   text is read from the analysis the warning cites, which is the latest one - the
+   projection never raises it for a document on an older analysis. `null` when that text is
+   not at hand, and the caller falls back to the server's message. */
+export interface MissingRequirement {
+  requirementText: string;
+  others: number;
+}
+
+export const missingRequirement = (
+  warning: ApplicationDetail["warnings"][number],
+  detail: ApplicationDetail,
+): MissingRequirement | null => {
+  const references = warning.entity_references;
+  if (references.job_analysis_id === undefined || references.job_analysis_id !== detail.latest_analysis_id) {
+    return null;
+  }
+  const requirement = classificationFromAnalysis(detail)?.requirements.find(
+    (candidate) => candidate.requirementId === references.requirement_id,
+  );
+  if (requirement === undefined) {
+    return null;
+  }
+  const count = Number.parseInt(references.requirement_count ?? "1", 10);
+  return { requirementText: requirement.text, others: Number.isFinite(count) && count > 1 ? count - 1 : 0 };
+};
 
 /* A face per preparation state, for the same reason the recruitment axis has one: the
    two badges sit side by side in every row, and the icon is what separates "where the CV
