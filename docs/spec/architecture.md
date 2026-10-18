@@ -498,6 +498,11 @@ analysis = analyses.get_for_application(tx, analysis_id, application.id)
 ### 18.6 Renderer isolation
 
 - The page loads only its own `file://` HTML; every other request is aborted.
+- Chosen templates live in `rendering/templates/catalog/`: one shared page
+  (`base.html.j2`) and one CSS file per design, mirrored for RTL with logical
+  properties. A Hebrew document draws every font stack from faces with Hebrew glyphs;
+  a Latin-only face makes Chromium fall back word by word and the extractors read the
+  words in visual order.
 - Templates fetch no external asset; needed assets ship in `rendering/` and are copied
   into the attempt directory.
 - CSP `script-src 'none'`; only the renderer's own measurement script runs.

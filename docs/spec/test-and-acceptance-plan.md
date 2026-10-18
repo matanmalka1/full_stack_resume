@@ -177,6 +177,12 @@ prove each role's date range is extracted as one numeric `MM/YYYY – MM/YYYY` r
 `garbled-text`, and `reading-order` checks and that coverage looks for the displayed date. The browser test
 fails a template whose headings pdfminer reads letter by letter.
 
+`tests/fixtures/template_snapshots.json` pins every catalog template over every golden
+document by its HTML hash, and a browser test runs each of those 40 renders through the
+full render validation. `tests/artifacts/test_templates.py` covers the catalog, the
+side-column rule, and per-column reading order; `tests/drafts/test_document_template.py`
+covers the hash, the default, and the command.
+
 A golden hash that moves without an intended output change is a failure. An intended
 move is stated in the commit.
 
