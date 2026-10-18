@@ -294,8 +294,8 @@ The default run is the fast, non-browser suite:
 
 It covers unit contracts, the default workflow with deterministic renderer doubles,
 golden Development/English Sales/Hebrew Sales/Tech Sales cases, migration,
-immutability, and targeted regressions. Tests marked `browser` are deselected by the
-default `pyproject.toml` configuration.
+immutability, and targeted regressions. Tests marked `browser` or `eval` are deselected
+by the default `pyproject.toml` configuration.
 
 `.github/workflows/ci.yml` runs the browser-complete gate below (on `main`, and on
 pull requests that touch rendering or browser tests; the default suite otherwise), the
@@ -316,8 +316,9 @@ completion:
 env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q -m ""
 ```
 
-The empty marker expression overrides the default `not browser` selection, so this
-runs the entire suite, including rendering, PDF, and ATS acceptance checks.
+The empty marker expression overrides the default `not browser and not eval` selection,
+so this runs the entire suite, including rendering, PDF, and ATS acceptance checks. The
+paid live eval is collected too and skips, because it needs `CV_RUN_PAID_EVAL=1`.
 `CV_REQUIRE_BROWSER=1` makes the run fail immediately if browser tests are still
 deselected.
 
@@ -346,6 +347,21 @@ Both Playwright configurations launch the Chromium that `npx playwright install 
 placed, unless `CV_PLAYWRIGHT_CHROMIUM` names another executable. In a cloud agent
 container (`CLAUDE_CODE_REMOTE=true`) they use the preinstalled
 `$PLAYWRIGHT_BROWSERS_PATH/chromium` instead (`frontend/playwright.chromium.ts`).
+
+### Evaluating prompt changes
+
+Before and after changing `ai/prompts/system.md`, `ai/contracts/task_contracts.json`, or
+the model, run the paid live eval and compare the two reports. It runs three fixed
+postings through the real OpenAI provider and renderer, costs roughly $0.50–$1.50 per
+run, and writes `tmp/evals/<UTC timestamp>.json`:
+
+```bash
+CV_RUN_PAID_EVAL=1 OPENAI_API_KEY=... ./.venv/bin/python -m pytest -q -s -m eval tests/evals
+./.venv/bin/python scripts/compare_evals.py tmp/evals/<before>.json tmp/evals/<after>.json
+```
+
+What it scores, its floors, and what stays manual: `docs/spec/test-and-acceptance-plan.md`
+§6.1.
 
 ## Historical artifacts
 
