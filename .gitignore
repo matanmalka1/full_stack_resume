@@ -29,3 +29,8 @@ frontend/index.d.ts
 frontend/tsconfig.ds-emit.json
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# Locally installed agent skills (UI Skills, UI UX Pro Max)
+.claude/skills/*
+!.claude/skills/playwright-cli/
+.agents/
