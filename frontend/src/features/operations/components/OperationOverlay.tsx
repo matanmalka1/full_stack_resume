@@ -12,7 +12,14 @@ import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { StatusSlot } from "@/ui/StatusSlot";
 import { type Tone, toneBorderClasses, tonePresentation, toneTextClasses } from "@/ui/tone";
-import { operationTypeLabels, statusLabels, statusTones, withheldLabel } from "../model/operationLabels";
+import {
+  operationTypeLabels,
+  pageFitLabel,
+  pageFitNotice,
+  statusLabels,
+  statusTones,
+  withheldLabel,
+} from "../model/operationLabels";
 import { isOperationStarting } from "../model/operationLive";
 import { operationProgressLabel } from "../model/operationProgress";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
@@ -51,8 +58,12 @@ const SUCCESS_LINGER_MS = 3_000;
 const withheldCount = (operation: Operation): number =>
   operation.status === "succeeded" ? (operation.withheld_claims?.claims.length ?? 0) : 0;
 
+/* A succeeded draft that was trimmed to its page limit, is still over it, or could not be
+   measured: the document is not quite what the run's success alone would suggest, so the
+   reader is shown why, as for withheld lines. */
 const needsReader = (operation: Operation): boolean =>
-  isTerminalOperation(operation) && (operation.status !== "succeeded" || withheldCount(operation) > 0);
+  isTerminalOperation(operation) &&
+  (operation.status !== "succeeded" || withheldCount(operation) > 0 || pageFitNotice(operation) !== null);
 
 /* Work in progress, beside the screen that queued it rather than over it.
 
@@ -166,7 +177,7 @@ export const OperationOverlay = ({
       dialogOpen: outcome !== undefined && needsReader(outcome),
       historyId: null,
       panelHidden: false,
-      succeededId: outcome?.status === "succeeded" && withheldCount(outcome) === 0 ? outcome.id : null,
+      succeededId: outcome?.status === "succeeded" && !needsReader(outcome) ? outcome.id : null,
     });
   }
 
@@ -199,12 +210,20 @@ export const OperationOverlay = ({
   const retryableRefusal =
     record?.status === "failed" && record.failure_code === "PROVIDER_NOT_CONFIGURED" && ai === "available";
   const withheld = record === undefined ? 0 : withheldCount(record);
+  const pageFit = record === undefined ? null : pageFitNotice(record);
+  /* What a succeeded run left for the reader to look at, in the status row's few words. */
+  const succeededNotes = [
+    ...(withheld > 0 ? [withheldLabel(withheld)] : []),
+    ...(pageFit === null ? [] : [pageFitLabel(pageFit)]),
+  ];
   const tone: Tone =
     record === undefined || continuing
       ? "progress"
-      : retryableRefusal || withheld > 0
+      : retryableRefusal || withheld > 0 || pageFit?.status === "trimmed" || pageFit?.status === "over"
         ? "warning"
-        : statusTones[record.status];
+        : pageFit?.status === "unavailable"
+          ? "info"
+          : statusTones[record.status];
   const statusText =
     record === undefined
       ? PENDING_LABEL
@@ -213,8 +232,8 @@ export const OperationOverlay = ({
         : isTerminalOperation(record)
           ? retryableRefusal
             ? `${statusLabels[record.status]} · אפשר לנסות שוב`
-            : withheld > 0
-              ? `${statusLabels[record.status]} · ${withheldLabel(withheld)}`
+            : succeededNotes.length > 0
+              ? [statusLabels[record.status], ...succeededNotes].join(" · ")
               : statusLabels[record.status]
           : operationProgressLabel(record);
   /* A.5: the live region is mounted for as long as there is anything to report, so it is

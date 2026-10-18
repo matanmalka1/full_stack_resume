@@ -12,6 +12,7 @@ from ...application.operations import (
     OperationFailureCode,
     OperationPhase,
     OperationStatus,
+    PageFitReport,
     PersistedOperation,
 )
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
@@ -277,6 +278,7 @@ class SqlAlchemyOperationExecutionStore:
         *,
         runner_id: str,
         withheld_claims: ClaimReviewReason | None = None,
+        page_fit: PageFitReport | None = None,
         now: str | None = None,
     ) -> PersistedOperation:
         timestamp = now or utc_now()
@@ -298,8 +300,9 @@ class SqlAlchemyOperationExecutionStore:
             status = OperationStatus.CANCELLED.value
             failure_code = OperationFailureCode.CANCELLED_BEFORE_ACTIVATION.value
             message = "Cancelled before output activation."
-            # Nothing activated, so nothing was withheld from anything written.
+            # Nothing activated, so nothing was withheld from or fitted in anything written.
             withheld_claims = None
+            page_fit = None
         else:
             status = OperationStatus.SUCCEEDED.value
             failure_code = None
@@ -322,6 +325,7 @@ class SqlAlchemyOperationExecutionStore:
                 withheld_claims=(
                     null() if withheld_claims is None else withheld_claims.model_dump(mode="json")
                 ),
+                page_fit=null() if page_fit is None else page_fit.model_dump(mode="json"),
                 lease_owner=None,
             )
         )

@@ -325,7 +325,7 @@ and cancelled Operations have none. Every provider attempt is in the AI call log
 by Operation.
 
 The Operation read returns status, phase, message, timestamps, failure code, failure
-detail, structured `failure_reason`, `withheld_claims`, retry reference, cancellation
+detail, structured `failure_reason`, `withheld_claims`, `page_fit`, retry reference, cancellation
 state, outputs, provider/model/effort, summed usage and cost (NULL if any attempt's
 value is unknown, except attempts never delivered), and `available_actions` (`cancel`,
 `retry`). Clients explain failures from `failure_reason`, not the text.
@@ -339,6 +339,14 @@ meaning, and rendering as read, the reviewer's `rationale` (nullable), and `prob
 outside the pool, no linked fact, edit-path refusal) has verdict `refused`. This is
 recorded at the time and never reconstructed. `withheld_claims` is NULL except on
 succeeded writing Operations.
+
+**Page fit.** A succeeded `create_draft` records `page_fit` (`code=page_fit`): `status`
+(`fits`, `trimmed`, `over`, or `unavailable`), the last page count measured (`pages`,
+NULL if none), the Profile's `maximum`, and `trimmed`, one entry per line dropped to fit
+- claim ID, section, preceding heading, and text as it read before it was dropped
+(product-spec §10). A dropped line is removed from `withheld_claims`. Recorded at the
+time, never reconstructed. `page_fit` is NULL on every other Operation, on any
+Operation that did not succeed, and on one cancelled before activation.
 
 ## 12. Application commands
 

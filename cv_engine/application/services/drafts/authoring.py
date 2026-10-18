@@ -21,11 +21,14 @@ from ....domain.contracts.knowledge import EmphasisPolicy, Profile, ResumeSectio
 from ....domain.contracts.providers import ClaimSupportProposal, ProposedClaim
 from ....domain.drafts import (
     draft_claims,
+    drop_claims,
     keep_frame_claims,
     restore_claims,
 )
 from ....domain.frame import dangling_heading
 from ....domain.knowledge import Knowledge
+from ....domain.page_fit import next_trim, trimmed_line
+from ....domain.render_validation import page_limit
 from ...actor import Actor
 from ...commands import (
     DraftCommand,
@@ -33,13 +36,14 @@ from ...commands import (
     RegenerateSectionCommand,
 )
 from ...errors import (
+    InfrastructureFailure,
     PreconditionFailed,
     ProposalRejected,
     ProviderNotConfigured,
     StateConflict,
     UnknownRecord,
 )
-from ...operations import ClaimReviewReason
+from ...operations import ClaimReviewReason, PageFitReport, PageFitStatus, TrimmedClaim
 from ...ports import (
     AIAttempt,
     AIProvider,
@@ -47,6 +51,7 @@ from ...ports import (
     DraftResumeContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
+    Renderer,
     TransactionManager,
 )
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
@@ -72,6 +77,10 @@ from ..proposals import (
 from .inputs import PreparedDraft, PreparedRegeneration
 
 ProposalT = TypeVar("ProposalT", bound=StrictModel)
+
+#: How many times one draft's pages are measured while it is fitted: the first count
+#: and up to five more, one after each line dropped. Each one starts a browser.
+MAX_PAGE_MEASUREMENTS = 6
 
 
 def _owned() -> bool:
@@ -100,7 +109,11 @@ def _named_claim_ids(draft: DraftDocument, proposed: list[ProposedClaim]) -> set
 
 
 def _section_guidance(spec: ResumeSectionSpec) -> dict:
-    """What a section's Profile prefers; the writer weighs it, nothing enforces it."""
+    """What a section's Profile prefers; the writer weighs it, nothing enforces it.
+
+    The page limit is the one length rule that is enforced, and not through this: the
+    draft the writer chose is measured afterwards and trimmed to fit (`_fit_to_pages`).
+    """
     return {
         "max_claims": spec.max_claims,
         "min_claims_per_role": spec.min_claims_per_role,
@@ -133,6 +146,7 @@ class DraftAuthoringService:
         knowledge: AnalysisKnowledgeSource,
         provider: AIProvider | None,
         ai_calls: AICallRunner,
+        renderer: Renderer,
     ):
         self.transactions = transactions
         self.documents = documents
@@ -140,6 +154,7 @@ class DraftAuthoringService:
         self._knowledge = knowledge
         self._provider = provider
         self.ai_calls = ai_calls
+        self.renderer = renderer
 
     @property
     def provider(self) -> AIProvider:
@@ -227,7 +242,7 @@ class DraftAuthoringService:
             source.analysis,
             knowledge,
         )
-        content, withheld = self._propose_draft(
+        content, withheld, page_fit = self._propose_draft(
             actor,
             operation_id,
             frame,
@@ -242,6 +257,7 @@ class DraftAuthoringService:
             expected_document_hash=command.expected_document_hash,
             content=content,
             withheld_claims=withheld,
+            page_fit=page_fit,
         )
 
     def _propose_draft(
@@ -255,8 +271,8 @@ class DraftAuthoringService:
         still_owned: Callable[[], bool],
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> tuple[DraftDocument, ClaimReviewReason | None]:
-        """`draft_resume`: choose from the frame and word the choice.
+    ) -> tuple[DraftDocument, ClaimReviewReason | None, PageFitReport]:
+        """`draft_resume`: choose from the frame and word the choice, then fit it to its pages.
 
         The provider keeps the claims it wants and words them; a claim it leaves out
         is a fact the document does not use. The engine then narrows the frame to the
@@ -265,7 +281,8 @@ class DraftAuthoringService:
         is refused. Every line comes
         back through `apply_claim_edit`, and wording its facts do not support goes to
         semantic review; a line neither authorizes keeps its frame wording and is
-        listed as withheld.
+        listed as withheld. What is left is fitted to the Profile's page limit
+        (`_fit_to_pages`).
         """
         analysis = source.analysis
         profile = knowledge.profiles.get(analysis.profile)
@@ -348,7 +365,82 @@ class DraftAuthoringService:
             model=model,
             reasoning_effort=reasoning_effort,
         )
-        return updated, reason
+        return self._fit_to_pages(updated, reason, profile, knowledge)
+
+    def _fit_to_pages(
+        self,
+        draft: DraftDocument,
+        withheld: ClaimReviewReason | None,
+        profile: Profile,
+        knowledge: Knowledge,
+    ) -> tuple[DraftDocument, ClaimReviewReason | None, PageFitReport]:
+        """Measure the draft and drop lines until it fits its Profile's page limit.
+
+        Section budgets are guidance the writer weighs; the page limit is enforced here,
+        before anything is written, so approval does not discover an overflow only when
+        the PDF is rendered. `next_trim` names each line to drop (domain/page_fit.py),
+        and the draft is measured again after each one, up to `MAX_PAGE_MEASUREMENTS`.
+
+        Nothing changes silently: the report lists every dropped line. A draft still
+        over the limit with nothing left to drop - or when the measurements run out -
+        is written as trimmed as it got, and reported `over`. A measurement that fails
+        (no browser, say) never fails the draft: it is written untrimmed and reported
+        `unavailable`. A dropped line is no longer in the document, so it leaves the
+        withheld lines too.
+        """
+        assert_external_io_allowed("draft page measurement")
+        maximum = page_limit(profile)
+        candidate = knowledge.candidate
+
+        def measure(document: DraftDocument) -> int | None:
+            try:
+                pages = self.renderer.measure_pages(document, candidate)
+            except InfrastructureFailure:
+                return None
+            return pages if pages >= 1 else None
+
+        first = measure(draft)
+        if first is None:
+            return draft, withheld, PageFitReport(status="unavailable", maximum=maximum)
+        pages, measurements = first, 1
+        fitted = draft
+        trimmed: list[TrimmedClaim] = []
+        while pages > maximum and measurements < MAX_PAGE_MEASUREMENTS:
+            claim_id = next_trim(fitted, profile, knowledge.facts)
+            if claim_id is None:
+                break
+            line = trimmed_line(fitted, claim_id)
+            trimmed.append(
+                TrimmedClaim(
+                    claim_id=line.claim_id,
+                    section=line.section,
+                    heading=line.heading,
+                    text=line.text,
+                )
+            )
+            fitted = drop_claims(fitted, profile, {claim_id})
+            remeasured = measure(fitted)
+            measurements += 1
+            if remeasured is None:
+                return (
+                    draft,
+                    withheld,
+                    PageFitReport(status="unavailable", pages=first, maximum=maximum),
+                )
+            pages = remeasured
+        status: PageFitStatus
+        if pages > maximum:
+            status = "over"
+        elif trimmed:
+            status = "trimmed"
+        else:
+            status = "fits"
+        report = PageFitReport(status=status, pages=pages, maximum=maximum, trimmed=trimmed)
+        dropped = {item.claim_id for item in trimmed}
+        if withheld is not None and dropped:
+            remaining = [item for item in withheld.claims if item.claim_id not in dropped]
+            withheld = withheld.model_copy(update={"claims": remaining}) if remaining else None
+        return fitted, withheld, report
 
     def _regeneration_target(
         self, actor: Actor, application_id: str, expected_document_hash: str

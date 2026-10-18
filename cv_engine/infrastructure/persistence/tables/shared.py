@@ -189,6 +189,9 @@ operations = Table(
     # the refused wording and the sources read - the success-side twin of a
     # `claim_review` failure reason.
     Column("withheld_claims", JSONB),
+    # How a succeeded `create_draft` was fitted to its page limit, and the lines it
+    # dropped to get there.
+    Column("page_fit", JSONB),
     Column("technical_log_reference", Text),
     Column("retry_of_operation_id", UUID(as_uuid=False), ForeignKey("operations.id")),
     CheckConstraint(
@@ -247,6 +250,11 @@ operations = Table(
         "withheld_claims IS NULL OR "
         "(jsonb_typeof(withheld_claims) = 'object' AND withheld_claims ? 'code')",
         name="withheld_claims_shape",
+    ),
+    CheckConstraint("page_fit IS NULL OR status = 'succeeded'", name="page_fit_status"),
+    CheckConstraint(
+        "page_fit IS NULL OR (jsonb_typeof(page_fit) = 'object' AND page_fit ? 'code')",
+        name="page_fit_shape",
     ),
     # Every Operation belongs to an Application, so its key is scoped there (§18.3).
     UniqueConstraint("application_id", "operation_type", "idempotency_key"),

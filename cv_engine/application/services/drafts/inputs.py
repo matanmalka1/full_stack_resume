@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ....domain.contracts.drafts import DraftDocument
-from ...operations import ClaimReviewReason
+from ...operations import ClaimReviewReason, PageFitReport
 
 
 @dataclass(frozen=True)
@@ -22,6 +22,8 @@ class PreparedDraft:
     content: DraftDocument
     #: Proposed lines withheld from `content`; each kept its frame wording.
     withheld_claims: ClaimReviewReason | None = None
+    #: How `content` was fitted to its Profile's page limit, and what that dropped.
+    page_fit: PageFitReport | None = None
 
 
 @dataclass(frozen=True)

@@ -14,6 +14,7 @@ import { OperationActions } from "./OperationActions";
 import { ClaimReviewClarification } from "./ClaimReviewClarification";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
+import { PageFitNotice } from "./PageFitNotice";
 import {
   outputLabels,
   failurePresentations,
@@ -21,6 +22,7 @@ import {
   joinHebrewList,
   failureReasonDetail,
   missingProviderPresentation,
+  pageFitNotice,
   providerNowConfiguredPresentation,
   statusLabels,
   statusTones,
@@ -119,6 +121,9 @@ export const OperationReport = ({
   /* A run that succeeded with some proposed lines withheld: the result stands, and those
      lines - each back to its wording before the run - are listed so none changes unseen. */
   const withheld = operation.status === "succeeded" ? (operation.withheld_claims ?? null) : null;
+  /* A new draft fitted to its page limit: the lines dropped to fit, a draft still too
+     long, or a length that could not be checked. One that fit as written says nothing. */
+  const pageFit = pageFitNotice(operation);
   const produced = outputLabels(operation);
   /* A finished run says what it came to in one line - unless it failed, where the reason
      below is that line and a second, vaguer one above it only delayed it. */
@@ -206,6 +211,8 @@ export const OperationReport = ({
           <ClaimReviewClarification onNavigate={onNavigate} operation={operation} reason={withheld} withheld />
         </>
       )}
+
+      {pageFit === null ? null : <PageFitNotice report={pageFit} />}
 
       {operation.cancellation_requested_at != null && !operation.is_terminal ? (
         <Callout title="בקשת הביטול התקבלה" tone="info">

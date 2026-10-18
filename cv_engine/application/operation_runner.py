@@ -14,6 +14,7 @@ from .operations import (
     OperationOutputReference,
     OperationStatus,
     OperationType,
+    PageFitReport,
     PersistedOperation,
 )
 from .ports.operation_execution import OperationExecutionStore
@@ -56,6 +57,8 @@ class PreparedOperation:
     value: Any = None
     #: Proposed lines the execution withheld; recorded only if the Operation succeeds.
     withheld_claims: ClaimReviewReason | None = None
+    #: How a new draft was fitted to its page limit; recorded only if it succeeds.
+    page_fit: PageFitReport | None = None
 
 
 class OperationHandler(Protocol):
@@ -312,6 +315,7 @@ class OperationRunner:
                     operation.id,
                     runner_id=self.runner_id,
                     withheld_claims=prepared.withheld_claims,
+                    page_fit=prepared.page_fit,
                 )
         if result.status is OperationStatus.SUCCEEDED:
             try:

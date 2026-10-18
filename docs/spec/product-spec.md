@@ -52,7 +52,8 @@ ordering only.
 `draft_resume` chooses which facts go in each section and words them (§10). The engine
 refuses a fact that is not canonical, not in the section's pool, or has no rendering in
 the document language, and keeps the document structure intact. Section budgets, tags,
-per-role minimums, and Profile pins are sent as guidance and not enforced.
+per-role minimums, and Profile pins are sent as guidance and not enforced. The page
+limit is: the new draft is measured and trimmed to fit before it is written (§10).
 
 There is no rules-based analysis or drafting. Without a provider, new analyses and
 drafts are unavailable and the UI offers configuration or retry; a provider failure
@@ -232,6 +233,33 @@ refused; a chosen fact with no rendering in the document language fails the draf
 (`MISSING_FACT_RENDERING`). Guidance is not enforced. Chosen facts are laid out in pool
 order so each role keeps its title, dates, and bullets together. New wording goes
 through §10.1.
+
+The page limit (two pages when the Profile sets `allow_two_pages`, otherwise one) is
+enforced on the new draft before it is written, so an overflow is not first discovered
+when the approved document is rendered. After review the engine renders the draft through the same
+browser the approved render uses (no preview stamp, nothing stored) and counts its
+pages. While it is over the limit, the engine drops one line and measures again, at
+most six measurements in all. The line to drop:
+
+- only a section's evidence lines may go - never the headline, a contact, a heading,
+  or a date - and never a line linked to a fact its section pins;
+- a role keeps at least `max(1, min_claims_per_role)` lines under its title and any
+  other heading keeps one, so no heading is left with nothing under it; lines above a
+  section's first heading may all go; a section with no headings keeps one line unless
+  the Profile marks it optional, in which case it may lose them all and is dropped;
+- among the blocks (a heading and its lines, or a section's unheaded lines) that hold a
+  removable line, the one furthest above its floor; on a tie, the later one in the
+  document (an older role, a later section). Within it, its last removable line, which
+  is the one its pool ranks lowest.
+
+The Operation records the outcome as `page_fit`, with every dropped line (section,
+heading, wording): `fits` (nothing dropped), `trimmed` (lines dropped until it fit),
+`over` (still over the limit with nothing left that may go, or the measurements ran
+out; the most trimmed draft is written, and rendering will fail until the user
+shortens it), or `unavailable` (the pages could not be measured, for example no browser; the
+draft is written untrimmed and the draft never fails for this). A dropped line leaves
+the Operation's withheld lines too. The UI lists the dropped lines; a line the user adds back
+by editing is a new pending line (§10.1). `regenerate_section` and `regenerate_claim` are not fitted.
 
 The editor shows sections and claims; each claim has its text, linked facts, status,
 warnings, and edit, regenerate, and remove controls. Section order comes from the

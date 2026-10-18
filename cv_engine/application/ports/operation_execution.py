@@ -8,6 +8,7 @@ from ..operations import (
     ClaimReviewReason,
     FailureReason,
     OperationFailureCode,
+    PageFitReport,
     PersistedOperation,
 )
 from .transactions import ReadTransaction, WriteTransaction
@@ -55,6 +56,7 @@ class OperationExecutionStore(Protocol):
         *,
         runner_id: str,
         withheld_claims: ClaimReviewReason | None = None,
+        page_fit: PageFitReport | None = None,
         now: str | None = None,
     ) -> PersistedOperation: ...
     def fail_operation(

@@ -347,6 +347,26 @@ def keep_frame_claims(
     return _reseal(narrowed)
 
 
+def drop_claims(draft: DraftDocument, profile: Profile, claim_ids: set[str]) -> DraftDocument:
+    """`draft` without the named section claims, resealed.
+
+    The same narrowing `keep_frame_claims` applies to a writer's choice: every other
+    claim keeps its identity and place, structure stays, and an optional section
+    left with nothing is dropped. Structure cannot be named here - a heading, date or
+    contact line is never dropped, and neither is the headline.
+    """
+    held = {claim.claim_id: claim for section in draft.sections for claim in section.claims}
+    unknown = sorted(claim_ids - set(held))
+    if unknown:
+        raise KeyError(f"not section claims of this document: {', '.join(unknown)}")
+    structural = sorted(
+        claim_id for claim_id in claim_ids if held[claim_id].style in STRUCTURAL_STYLES
+    )
+    if structural:
+        raise ValueError(f"structure cannot be dropped: {', '.join(structural)}")
+    return keep_frame_claims(draft, profile, set(held) - claim_ids)
+
+
 def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) -> None:
     if draft.headline.claim_id == claim_id:
         draft.headline = replacement

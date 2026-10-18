@@ -11,7 +11,10 @@ What stays here is what stops an invented fact and keeps a role readable:
   together and no bullet lands under another role.
 
 Section budgets, tags, per-role minimums and Profile pins are guidance the request
-carries. Nothing here enforces them.
+carries. Nothing here enforces them. The page limit is enforced, after the writer has
+chosen: `create_draft` measures the draft and drops lines until it fits, and the rule
+for which line goes - which reads per-role minimums and pins as floors - is
+`page_fit.py`.
 """
 
 from __future__ import annotations

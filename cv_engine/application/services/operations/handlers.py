@@ -154,7 +154,9 @@ class AITaskHandler:
 
     def prepared(self, value: Any) -> PreparedOperation:
         return PreparedOperation(
-            value=value, withheld_claims=getattr(value, "withheld_claims", None)
+            value=value,
+            withheld_claims=getattr(value, "withheld_claims", None),
+            page_fit=getattr(value, "page_fit", None),
         )
 
     def _classified(

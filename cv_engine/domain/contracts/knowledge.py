@@ -99,7 +99,9 @@ class ResumeSectionSpec(StrictModel):
     dates, contacts) are always present.
 
     The rest is guidance the writer receives and nothing enforces
-    (product-spec §10): `max_claims` is the section budget,
+    (product-spec §10) - except that when a new draft runs past its page limit, the
+    lines dropped to fit it never take a role below `min_claims_per_role` or a pinned
+    fact out (`domain/page_fit.py`): `max_claims` is the section budget,
     `pinned_fact_ids` the facts the Profile prefers to keep, `min_claims_per_role`
     and `min_quantitative_per_role` the floors a role block should reach, and
     `max_claims_per_role` the ceiling that stops one role absorbing the section.

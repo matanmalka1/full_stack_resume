@@ -26,6 +26,7 @@ export type ApplicationPreset = ApiSchemas["ApplicationPreset"];
 export type ApplicationListItem = ApiSchemas["ApplicationListItemResponse"];
 export type Operation = ApiSchemas["OperationResponse"];
 export type OperationOutput = ApiSchemas["OperationOutputResponse"];
+export type PageFitReport = ApiSchemas["PageFitReport"];
 export type OperationStatus = ApiSchemas["OperationStatus"];
 export type OperationPhase = ApiSchemas["OperationPhase"];
 export type OperationType = ApiSchemas["OperationType"];
