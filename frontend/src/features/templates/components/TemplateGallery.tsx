@@ -29,8 +29,21 @@ interface TemplateGalleryProps {
 /* One radio per template, each with what it looks like. A thumbnail is a sandboxed frame
    (no scripts, no same origin), out of the tab order and hidden from assistive tech: the
    radio and its name are the control, the picture only shows it. */
-export const TemplateGallery = ({ disabled = false, name, onChange, options, previewSrc, value }: TemplateGalleryProps) => {
-  const cards: { columns: number; description: string; id: TemplateName | null; label: string; preview: PreviewTemplate }[] = [
+export const TemplateGallery = ({
+  disabled = false,
+  name,
+  onChange,
+  options,
+  previewSrc,
+  value,
+}: TemplateGalleryProps) => {
+  const cards: {
+    columns: number;
+    description: string;
+    id: TemplateName | null;
+    label: string;
+    preview: PreviewTemplate;
+  }[] = [
     { columns: 1, description: TRACK_TEMPLATE_DESCRIPTION, id: null, label: TRACK_TEMPLATE_LABEL, preview: "track" },
     ...options.map((option) => ({ ...option, preview: option.id })),
   ];

@@ -110,7 +110,11 @@ export const DraftTemplateControl = ({ disabled, draft, onApply, stamped }: Draf
             value={selected}
           />
           {error === null ? null : (
-            <ErrorCallout error={error} fallbackDetail="התבנית לא הוחלפה. אפשר לנסות שוב." title="לא ניתן להחליף תבנית" />
+            <ErrorCallout
+              error={error}
+              fallbackDetail="התבנית לא הוחלפה. אפשר לנסות שוב."
+              title="לא ניתן להחליף תבנית"
+            />
           )}
         </div>
       </Dialog>
