@@ -51,9 +51,10 @@ include = ["cv_engine*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = '-ra --strict-markers -m "not browser"'
+addopts = '-ra --strict-markers -m "not browser and not eval"'
 markers = [
   "browser: needs a real headless Chromium/Chrome process (blocked by OS sandboxes)",
+  "eval: live tailoring eval against the real OpenAI provider; paid, opt-in (CV_RUN_PAID_EVAL=1)",
 ]
 
 [tool.ruff]
