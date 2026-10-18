@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ...domain.templates import TEMPLATES
 from ..actor import Actor
 from ..ai_configuration import (
     AI_MODELS,
@@ -13,7 +14,13 @@ from ..ai_configuration import (
 )
 from ..ports.settings import SettingsRepository
 from ..ports.transactions import TransactionManager
-from ..settings import AIModelOption, SettingsView, StoredSettings, UpdateSettings
+from ..settings import (
+    AIModelOption,
+    SettingsView,
+    StoredSettings,
+    TemplateOption,
+    UpdateSettings,
+)
 
 
 class SettingsService:
@@ -52,6 +59,15 @@ class SettingsService:
                     pricing_source=PRICING_SOURCE,
                 )
                 for item in AI_MODELS
+            ],
+            available_templates=[
+                TemplateOption(
+                    id=spec.id,
+                    label=spec.label,
+                    description=spec.description,
+                    columns=spec.columns,
+                )
+                for spec in TEMPLATES.values()
             ],
             provider_configured=self.provider_configured,
         )

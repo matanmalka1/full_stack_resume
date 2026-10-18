@@ -422,6 +422,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/document/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose the template the CV renders with
+         * @description `200` with the new hash; an approved or ready document returns to draft.
+         */
+        post: operations["set_document_template_api_v1_applications__application_id__document_template_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}/external-submissions": {
         parameters: {
             query?: never;
@@ -1764,6 +1784,8 @@ export interface components {
             } | null;
             outline?: components["schemas"]["DraftOutlineResponse"] | null;
             preparation_state: components["schemas"]["PreparationState"];
+            /** Template */
+            template?: ("single-column" | "two-column" | "modern" | "modern-two-column" | "clean" | "latex" | "vivid" | "vivid-single" | "deedy" | "modern-deedy") | null;
             /** Updated At */
             updated_at: string;
         };
@@ -2549,12 +2571,24 @@ export interface components {
              */
             code: "content_overflow" | "direction_isolation" | "document_direction" | "html_missing" | "pdf_corrupt" | "pdf_date_range" | "pdf_filename" | "pdf_link_targets" | "pdf_missing" | "pdf_text_coverage" | "render_validation";
         };
+        /**
+         * SetDocumentTemplateRequest
+         * @description Choose the render template; null returns to the track's own.
+         */
+        SetDocumentTemplateRequest: {
+            /** Expected Document Hash */
+            expected_document_hash: string;
+            /** Template */
+            template: ("single-column" | "two-column" | "modern" | "modern-two-column" | "clean" | "latex" | "vivid" | "vivid-single" | "deedy" | "modern-deedy") | null;
+        };
         /** SettingsResponse */
         SettingsResponse: {
             /** Auto Generate When Review Not Required */
             auto_generate_when_review_not_required: boolean;
             /** Available Ai Models */
             available_ai_models: components["schemas"]["AIModelOptionResponse"][];
+            /** Available Templates */
+            available_templates: components["schemas"]["TemplateOptionResponse"][];
             /**
              * Default Ai Model
              * @enum {string}
@@ -2565,6 +2599,8 @@ export interface components {
              * @enum {string}
              */
             default_reasoning_effort: "low" | "medium" | "high";
+            /** Default Template */
+            default_template: ("single-column" | "two-column" | "modern" | "modern-two-column" | "clean" | "latex" | "vivid" | "vivid-single" | "deedy" | "modern-deedy") | null;
             /** Edit Version */
             edit_version: number;
             /** Provider Configured */
@@ -2637,6 +2673,20 @@ export interface components {
             };
             /** Submitted At */
             submitted_at: string;
+        };
+        /** TemplateOptionResponse */
+        TemplateOptionResponse: {
+            /** Columns */
+            columns: number;
+            /** Description */
+            description: string;
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "single-column" | "two-column" | "modern" | "modern-two-column" | "clean" | "latex" | "vivid" | "vivid-single" | "deedy" | "modern-deedy";
+            /** Label */
+            label: string;
         };
         /**
          * Track
@@ -2758,6 +2808,8 @@ export interface components {
              * @enum {string}
              */
             default_reasoning_effort: "low" | "medium" | "high";
+            /** Default Template */
+            default_template: ("single-column" | "two-column" | "modern" | "modern-two-column" | "clean" | "latex" | "vivid" | "vivid-single" | "deedy" | "modern-deedy") | null;
             /**
              * Ui Density
              * @enum {string}
@@ -3709,6 +3761,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    set_document_template_api_v1_applications__application_id__document_template_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetDocumentTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentMutationResponse"];
                 };
             };
             /** @description No valid session (`AUTHENTICATION_REQUIRED`). */

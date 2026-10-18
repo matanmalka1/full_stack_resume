@@ -153,6 +153,7 @@ def document_view(
         application_id=document.application_id,
         analysis_id=document.analysis_id,
         document_hash=document.document_hash,
+        template=document.template,
         built_with=BuiltWithView(profile_version=document.built_with.profile_version),
         language=language,
         content=document.content,

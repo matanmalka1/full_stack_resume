@@ -40,15 +40,22 @@ class ContentCheck(StrEnum):
     PASSED = "passed"
 
 
-def document_hash(analysis_id: str, content: DraftDocument | None) -> str:
-    return sha256_text(
-        canonical_json(
-            {
-                "analysis_id": analysis_id,
-                "content": None if content is None else content.model_dump(mode="json"),
-            }
-        )
-    )
+def document_hash(
+    analysis_id: str, content: DraftDocument | None, template: str | None = None
+) -> str:
+    """The document's concurrency token, and the part of its basis it owns.
+
+    A chosen template is part of it, since it changes the rendered CV; the track's
+    own template (`None`) adds nothing, so a document that never chose one keeps
+    the hash it had before templates could be chosen.
+    """
+    hashed: dict[str, object] = {
+        "analysis_id": analysis_id,
+        "content": None if content is None else content.model_dump(mode="json"),
+    }
+    if template is not None:
+        hashed["template"] = template
+    return sha256_text(canonical_json(hashed))
 
 
 def dependent_fact_ids(content: DraftDocument | None) -> frozenset[str]:

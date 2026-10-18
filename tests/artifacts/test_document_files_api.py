@@ -207,3 +207,39 @@ def test_decision_markdown_exports_the_documents_provenance(
 
 
 # --- artifact access, by ID and only by ID -----------------------------------
+
+
+def test_the_template_is_chosen_over_http_and_moves_the_token(
+    api_worker, drafted_application
+) -> None:
+    setup = drafted_application("Template Http Co")
+    path = f"/applications/{setup.application_id}/document"
+    read = _get(api_worker, path)
+    assert read.json()["template"] is None
+
+    refused = _post(
+        api_worker,
+        f"{path}/template",
+        {"expected_document_hash": setup.document_hash, "template": "not-a-template"},
+    )
+    assert refused.status_code == 422, refused.text
+
+    chosen = _post(
+        api_worker,
+        f"{path}/template",
+        {"expected_document_hash": setup.document_hash, "template": "deedy"},
+    )
+    assert chosen.status_code == 200, chosen.text
+    token = chosen.json()["document_hash"]
+    assert token != setup.document_hash
+    assert chosen.headers["ETag"] == f'"{token}"'
+    read = _get(api_worker, path)
+    assert (read.json()["template"], read.json()["document_hash"]) == ("deedy", token)
+    assert 'class="page t-deedy"' in _get(api_worker, f"{path}/preview").text
+
+    stale = _post(
+        api_worker,
+        f"{path}/template",
+        {"expected_document_hash": setup.document_hash, "template": None},
+    )
+    assert stale.status_code == 409, stale.text

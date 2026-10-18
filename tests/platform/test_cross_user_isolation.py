@@ -102,6 +102,7 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
             ui_density=owner_settings.ui_density,
             ui_text_size=owner_settings.ui_text_size,
             ui_theme="dark",
+            default_template=None,
         ),
     )
 
@@ -163,6 +164,11 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
                 "POST",
                 f"{API_PREFIX}/applications/{setup.application_id}/document/build-from-analysis",
                 {**action, "analysis_id": setup.analysis_id},
+            ),
+            ("POST", "/api/v1/applications/{application_id}/document/template"): ForeignRequest(
+                "POST",
+                f"{API_PREFIX}/applications/{setup.application_id}/document/template",
+                {**action, "template": "latex"},
             ),
             ("POST", "/api/v1/applications/{application_id}/document/check"): ForeignRequest(
                 "POST", f"{API_PREFIX}/applications/{setup.application_id}/document/check", action

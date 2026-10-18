@@ -136,6 +136,8 @@ class DocumentView(BoundaryDTO):
     application_id: str
     analysis_id: str
     document_hash: str
+    #: The chosen render template; `None` is the track's own.
+    template: str | None = None
     built_with: BuiltWithView
     language: str
     content: DraftDocument | None = None

@@ -27,6 +27,7 @@ from ...application.commands import (
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
+    SetDocumentTemplateCommand,
     UpdateDocumentCommand,
 )
 from ...util import new_id
@@ -44,6 +45,7 @@ from ..schemas.documents import (
     DocumentResponse,
     RegenerateDocumentClaimRequest,
     RegenerateDocumentSectionRequest,
+    SetDocumentTemplateRequest,
     UpdateDocumentRequest,
 )
 from ..schemas.operations import OperationResponse
@@ -168,6 +170,31 @@ def preview_document_pdf(application_id: str, services: Services, actor: Current
             "ETag": document_etag(result.document_hash),
         },
     )
+
+
+@router.post(
+    "/template",
+    response_model=DocumentMutationResponse,
+    summary="Choose the template the CV renders with",
+)
+def set_document_template(
+    application_id: str,
+    request: SetDocumentTemplateRequest,
+    services: Services,
+    actor: CurrentActor,
+    response: Response,
+) -> DocumentMutationResponse:
+    """`200` with the new hash; an approved or ready document returns to draft."""
+    result = services.draft_editing.set_document_template(
+        actor,
+        SetDocumentTemplateCommand(
+            application_id=application_id,
+            **request.model_dump(mode="python"),
+            actor_type="user",
+            client="web",
+        ),
+    )
+    return _mutation(response, result)
 
 
 @router.post(

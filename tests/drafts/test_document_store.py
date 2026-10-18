@@ -43,6 +43,7 @@ def test_every_hash_guarded_write_refuses_a_moved_document_and_writes_nothing(
     arguments = {
         "update_body": (body,),
         "repin": (body, document.built_with),
+        "set_template": ("modern",),
         "stamp_check": (ValidationReport.from_findings({"content": True}, []), MOVED),
         "stamp_approval": (MOVED,),
         "activate_render": (MOVED, RenderedFiles(html="h", pdf="p")),

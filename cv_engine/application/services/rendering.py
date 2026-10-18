@@ -161,7 +161,8 @@ class RenderingService:
         )
         try:
             try:
-                self.renderer.render_html(content, html_path, candidate)
+                template = prepared.source.document.template
+                self.renderer.render_html(content, html_path, candidate, template)
                 geometry = self.renderer.render_pdf(html_path, pdf_path)
                 report = self.renderer.validate_rendered(
                     content,
@@ -171,6 +172,7 @@ class RenderingService:
                     geometry,
                     candidate,
                     prepared.recruiter_pdf_filename,
+                    template,
                 )
             except ApplicationError:
                 raise
@@ -303,7 +305,7 @@ class RenderingService:
             document_id=document.id,
             document_hash=document.document_hash,
             language=content.language,
-            html=self.renderer.preview_html(content, knowledge.candidate),
+            html=self.renderer.preview_html(content, knowledge.candidate, document.template),
         )
 
     def preview_document_pdf(self, actor: Actor, application_id: str) -> DocumentPdfPreviewView:
@@ -313,7 +315,7 @@ class RenderingService:
             application_id=application_id,
             document_id=document.id,
             document_hash=document.document_hash,
-            pdf=self.renderer.preview_pdf(content, knowledge.candidate),
+            pdf=self.renderer.preview_pdf(content, knowledge.candidate, document.template),
         )
 
     def _previewable(self, actor: Actor, application_id: str):

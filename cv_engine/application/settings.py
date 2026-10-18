@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from ..domain.templates import TemplateName
 from .ai_configuration import DEFAULT_REASONING_EFFORT, AIModel, ReasoningEffort
 from .commands import BoundaryDTO
 
@@ -20,6 +21,8 @@ class StoredSettings(BoundaryDTO):
     ui_density: UiDensity = "comfortable"
     ui_text_size: UiTextSize = "normal"
     ui_theme: UiTheme = "system"
+    #: The template a new CV document starts with; `None` is the track's own.
+    default_template: TemplateName | None = None
     updated_at: str | None = None
 
 
@@ -32,6 +35,8 @@ class SettingsView(BoundaryDTO):
     ui_density: UiDensity
     ui_text_size: UiTextSize
     ui_theme: UiTheme
+    default_template: TemplateName | None
+    available_templates: list[TemplateOption]
     provider_configured: bool
     updated_at: str | None = None
 
@@ -43,6 +48,14 @@ class UpdateSettings(BoundaryDTO):
     ui_density: UiDensity
     ui_text_size: UiTextSize
     ui_theme: UiTheme
+    default_template: TemplateName | None
+
+
+class TemplateOption(BoundaryDTO):
+    id: TemplateName
+    label: str
+    description: str
+    columns: int
 
 
 class AIModelOption(BoundaryDTO):

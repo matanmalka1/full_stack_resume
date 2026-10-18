@@ -25,7 +25,11 @@ from .values import ArtifactStream
 
 @dataclass(frozen=True)
 class DocumentBody:
-    """The hashed part of the document. The store derives `document_hash` from it."""
+    """The hashed part of the document a body write replaces.
+
+    The store derives `document_hash` from it and the document's template, which a
+    body write keeps and only `set_template` changes.
+    """
 
     analysis_id: str
     content: DraftDocument | None
@@ -63,8 +67,25 @@ class DocumentStore(Protocol):
         *,
         created_at: str,
         document_id: str | None = None,
+        template: str | None = None,
     ) -> CVDocument:
         """Create the Application's only document; a second one is a `StateConflict`."""
+        ...
+
+    def set_template(
+        self,
+        tx: WriteTransaction,
+        application_id: str,
+        expected_document_hash: str,
+        template: str | None,
+        *,
+        updated_at: str,
+    ) -> CVDocument:
+        """Choose the render template; the hash moves, so every stamp is outdated.
+
+        Stamps are kept, as with a body update: the basis moved, so they no longer
+        match it.
+        """
         ...
 
     def update_body(

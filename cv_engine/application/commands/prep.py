@@ -19,6 +19,7 @@ from pydantic import Field, model_validator
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.validation import ValidationReport
 from ...domain.document import ContentCheck, PreparationState
+from ...domain.templates import TemplateName
 from ._base import BoundaryDTO, DuplicateMatchReason, WriteClient
 
 SOURCE_URL_MAX_CHARACTERS = 2048
@@ -134,6 +135,20 @@ class BuildFromAnalysisCommand(BoundaryDTO):
 
     application_id: str
     analysis_id: str = Field(min_length=1)
+    expected_document_hash: str = DocumentHash
+    actor_type: Literal["user", "system"] = "user"
+    client: WriteClient = "web"
+
+
+class SetDocumentTemplateCommand(BoundaryDTO):
+    """Choose the document's render template; `None` is the track's own.
+
+    Presentation only, yet part of the basis: the PDF it renders is what approval
+    and Ready vouch for, so a change outdates both.
+    """
+
+    application_id: str
+    template: TemplateName | None
     expected_document_hash: str = DocumentHash
     actor_type: Literal["user", "system"] = "user"
     client: WriteClient = "web"

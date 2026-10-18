@@ -17,8 +17,23 @@ to read them; each column must read in its own order, while the two may interlea
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal, get_args
 
 from .contracts.drafts import DraftDocument, ResumeSection
+
+TemplateName = Literal[
+    "single-column",
+    "two-column",
+    "modern",
+    "modern-two-column",
+    "clean",
+    "latex",
+    "vivid",
+    "vivid-single",
+    "deedy",
+    "modern-deedy",
+]
+TEMPLATE_NAMES: tuple[str, ...] = get_args(TemplateName)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +81,10 @@ TEMPLATES: dict[str, TemplateSpec] = {
         TemplateSpec("modern-deedy", "Deedy מודרני", "צפוף, טור יחיד, כותרות אפורות."),
     )
 }
+
+
+if tuple(TEMPLATES) != TEMPLATE_NAMES:
+    raise RuntimeError("TemplateName and TEMPLATES must name the same templates in one order")
 
 
 def template_spec(template: str | None) -> TemplateSpec | None:
