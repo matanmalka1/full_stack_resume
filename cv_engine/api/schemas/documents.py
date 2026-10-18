@@ -15,7 +15,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from ...domain.document import ContentCheck, PreparationState
-from ...domain.templates import TemplateName
+from ...domain.templates import PreviewTemplate, TemplateName
 from .drafts import (
     ContentPatchRequest,
     DraftFactResponse,
@@ -25,6 +25,8 @@ from .drafts import (
 from .health import HttpSchema
 
 Sha256 = Field(pattern=r"^[0-9a-f]{64}$")
+#: What a template preview may name: a catalog template, or `track` for the track's own.
+PreviewTemplateParameter = PreviewTemplate
 
 
 class DocumentActionRequest(HttpSchema):

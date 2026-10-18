@@ -30,7 +30,6 @@ from ...application.commands import (
     SetDocumentTemplateCommand,
     UpdateDocumentCommand,
 )
-from ...domain.templates import PreviewTemplate
 from ...util import new_id
 from ..dependencies import Services
 from ..etags import DocumentIfMatch, document_etag, parse_document_etag
@@ -44,6 +43,7 @@ from ..schemas.documents import (
     DocumentCheckResponse,
     DocumentMutationResponse,
     DocumentResponse,
+    PreviewTemplateParameter,
     RegenerateDocumentClaimRequest,
     RegenerateDocumentSectionRequest,
     SetDocumentTemplateRequest,
@@ -139,7 +139,7 @@ def preview_document(
     application_id: str,
     services: Services,
     actor: CurrentActor,
-    template: PreviewTemplate | None = None,
+    template: PreviewTemplateParameter | None = None,
 ) -> HTMLResponse:
     """`200` and the document itself; `412` before content exists. Nothing is stored.
 

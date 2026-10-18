@@ -11,8 +11,8 @@ from typing import Literal
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
-from ...domain.templates import PreviewTemplate
 from ..dependencies import Services
+from ..schemas.documents import PreviewTemplateParameter
 
 router = APIRouter(prefix="/templates", tags=["templates"])
 
@@ -38,7 +38,7 @@ _SAMPLE_HEADERS = {
     },
 )
 def sample_template(
-    template: PreviewTemplate, services: Services, language: Literal["en", "he"] = "en"
+    template: PreviewTemplateParameter, services: Services, language: Literal["en", "he"] = "en"
 ) -> HTMLResponse:
     """`200` and the sample CV; `track` is the track's own template."""
     return HTMLResponse(
