@@ -470,7 +470,6 @@ state-and-use-cases.md §22.
   approve → render in the Web client; user accounts and per-user isolation.
 - **Not built:** hosted deployment (public origin, Host allowlist, HSTS) and editing a
   fact in place.
-- Live AI runs are recorded in `../acceptance/`.
 
 ## 21. Changing this document
 
