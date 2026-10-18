@@ -170,8 +170,9 @@ section (fixture input), the Markdown body, and the HTML hash; a browser test re
 the HTML hash and the PDF layout/ATS report, and reads the Sales Hebrew PDF with pypdf to
 prove each role's date range is extracted as one numeric `MM/YYYY – MM/YYYY` run.
 `tests/artifacts/test_date_display.py` covers the Hebrew date transform;
-`tests/artifacts/test_rendering.py` covers the `date-range` check and that coverage
-looks for the displayed date.
+`tests/artifacts/test_rendering.py` covers the `date-range`, `section-headings`, and
+`garbled-text` checks and that coverage looks for the displayed date. The browser test
+fails a template whose headings pdfminer reads letter by letter.
 
 A golden hash that moves without an intended output change is a failure. An intended
 move is stated in the commit.

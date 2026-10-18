@@ -9,6 +9,7 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 from markupsafe import Markup
+from pdfminer.high_level import extract_text as layout_extract_text
 from pypdf import PdfReader
 
 from ..application.errors import InfrastructureFailure
@@ -385,6 +386,7 @@ def collect_render_evidence(
     pdf_size = pdf_path.stat().st_size if pdf_exists else 0
     page_count = 0
     extracted = ""
+    layout_text = ""
     pdf_error = None
     html_text = ""
     pdf_sha256 = None
@@ -393,6 +395,7 @@ def collect_render_evidence(
             reader = PdfReader(str(pdf_path))
             page_count = len(reader.pages)
             extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
+            layout_text = layout_extract_text(str(pdf_path))
         except Exception as exc:
             pdf_error = str(exc)
         html_text = html_path.read_text(encoding="utf-8")
@@ -410,6 +413,7 @@ def collect_render_evidence(
         pdf_error=pdf_error,
         page_count=page_count,
         extracted_text=extracted,
+        layout_text=layout_text,
         pdf_sha256=pdf_sha256,
         geometry=RenderGeometry(
             scroll_width=geometry.get("scrollWidth", 0),

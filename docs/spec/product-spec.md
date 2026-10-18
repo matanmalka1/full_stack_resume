@@ -330,11 +330,17 @@ renders HTML and PDF, and checks layout, page count, extracted text, links, dire
 and filename metadata. Success stamps `rendered_basis`; failure keeps the approval and
 shows the reason.
 
-The extracted-text (ATS) check has two parts. Coverage: nearly every claim is
-recoverable from the PDF text; a Hebrew claim is compared as tokens, because extractors
-reorder bidi runs. Date ranges: every date line must come out of the PDF as one run,
-differing at most in whitespace, in every language, because an ATS computes experience
-from the range; a failure is `date-range`.
+The extracted-text (ATS) check reads the PDF twice: with pypdf, as the text runs are
+drawn, and with pdfminer's layout analysis, which builds words from glyph spacing as
+ATS parsers do. It has four parts. Coverage: nearly every claim is recoverable from the
+pypdf text; a Hebrew claim is compared as tokens, because extractors reorder bidi runs.
+Date ranges: every date line must come out of the PDF as one run, differing at most in
+whitespace, in every language, because an ATS computes experience from the range; a
+failure is `date-range`. Section headings: every section heading must be a line of its
+own in both readings, ignoring case (pdfminer applies no bidi, so a Hebrew heading may
+come out reversed); letter-spaced headings read as "E D U C AT I O N" fail as
+`section-headings`. Garbled text: a glyph extracted as `(cid:N)` or U+FFFD in either
+reading fails as `garbled-text`.
 
 In a Hebrew document a date line is displayed numerically, `MM/YYYY – MM/YYYY`, as one
 isolated left-to-right run: "אוגוסט 2020 - ינואר 2025" shows as `08/2020 – 01/2025`. A

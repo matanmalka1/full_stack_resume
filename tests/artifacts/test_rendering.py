@@ -81,8 +81,11 @@ def test_rtl_ats_comparison_accepts_bidi_token_reordering() -> None:
     assert not _claim_recoverable(source, "שיפור חלקי בלבד", rtl=True)
 
 
-def _evidence(setup, extracted_text: str) -> RenderEvidence:
-    """Render evidence that passes every check but the text the PDF yields."""
+def _evidence(setup, extracted_text: str, layout_text: str | None = None) -> RenderEvidence:
+    """Render evidence that passes every check but the text the PDF yields.
+
+    `layout_text` is pdfminer's reading, the same text unless a test sets it apart.
+    """
     links = [
         href
         for claim in setup.draft.contacts
@@ -101,6 +104,7 @@ def _evidence(setup, extracted_text: str) -> RenderEvidence:
         pdf_error=None,
         page_count=1,
         extracted_text=extracted_text,
+        layout_text=extracted_text if layout_text is None else layout_text,
         pdf_sha256=None,
         geometry=RenderGeometry(
             scroll_width=100,
@@ -120,9 +124,15 @@ def _displayed_lines(draft) -> list[str]:
         draft.headline.text,
         *(claim.text for claim in draft.contacts),
         *(
-            displayed_claim_text(claim.style, claim.text, draft.language)
+            line
             for section in draft.sections
-            for claim in section.claims
+            for line in (
+                section.name,
+                *(
+                    displayed_claim_text(claim.style, claim.text, draft.language)
+                    for claim in section.claims
+                ),
+            )
         ),
     ]
 
@@ -200,6 +210,69 @@ def test_a_date_range_may_differ_only_in_whitespace(draft_factory) -> None:
         setup.draft, setup.profile, _evidence(setup, "\n".join(reordered)), setup.candidate
     )
     assert {issue.code for issue in report.issues} == {"date-range"}
+
+
+def test_a_heading_spread_into_letters_fails_the_ats_check(draft_factory) -> None:
+    setup = draft_factory("Account Manager retention portfolio")
+    lines = _displayed_lines(setup.draft)
+    heading = setup.draft.sections[0].name
+    # Letter-spaced headings read whole in pypdf and letter by letter in pdfminer.
+    spaced = [" ".join(heading.upper()) if line == heading else line for line in lines]
+    report = validate_render_evidence(
+        setup.draft,
+        setup.profile,
+        _evidence(setup, "\n".join(lines), layout_text="\n".join(spaced)),
+        setup.candidate,
+    )
+    assert report.groups["ats"] is False
+    assert [issue.code for issue in report.issues] == ["section-headings"]
+    assert report.issues[0].message.endswith(heading)
+
+    # Upper case, as the LTR templates display a heading, is the same heading.
+    upper = [line.upper() if line == heading else line for line in lines]
+    report = validate_render_evidence(
+        setup.draft,
+        setup.profile,
+        _evidence(setup, "\n".join(upper), layout_text="\n".join(upper)),
+        setup.candidate,
+    )
+    assert report.passed, report.issues
+
+
+def test_a_hebrew_heading_may_come_out_in_visual_order(draft_factory) -> None:
+    setup = draft_factory("Account Manager retention portfolio", language_override="he")
+    lines = _displayed_lines(setup.draft)
+    names = {section.name for section in setup.draft.sections}
+    visual = [line[::-1] if line in names else line for line in lines]
+    report = validate_render_evidence(
+        setup.draft,
+        setup.profile,
+        _evidence(setup, "\n".join(lines), layout_text="\n".join(visual)),
+        setup.candidate,
+    )
+    assert report.passed, report.issues
+
+    # Merged into the line below it, the heading is no longer a line of its own.
+    first = setup.draft.sections[0].name
+    merged = "\n".join(lines).replace(f"{first}\n", f"{first} ", 1)
+    report = validate_render_evidence(
+        setup.draft, setup.profile, _evidence(setup, merged), setup.candidate
+    )
+    assert "section-headings" in {issue.code for issue in report.issues}
+
+
+def test_a_glyph_extracted_without_a_character_fails_the_ats_check(draft_factory) -> None:
+    setup = draft_factory("Account Manager retention portfolio")
+    text = "\n".join(_displayed_lines(setup.draft))
+    report = validate_render_evidence(
+        setup.draft,
+        setup.profile,
+        _evidence(setup, text, layout_text=text + "\n(cid:42)\ufffd"),
+        setup.candidate,
+    )
+    assert report.groups["ats"] is False
+    assert [issue.code for issue in report.issues] == ["garbled-text"]
+    assert report.issues[0].message.startswith("2 ")
 
 
 def test_render_findings_keep_their_existing_failed_groups(

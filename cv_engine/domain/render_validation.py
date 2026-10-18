@@ -22,6 +22,9 @@ RENDER_VALIDATION_GROUPS = (
     "filename",
 )
 
+# What an extractor emits for a glyph whose font maps to no character.
+GARBLED_GLYPH = re.compile(r"\(cid:\d+\)|\ufffd")
+
 
 @dataclass(frozen=True, slots=True)
 class RenderGeometry:
@@ -48,6 +51,9 @@ class RenderEvidence:
     pdf_error: str | None
     page_count: int
     extracted_text: str
+    # The same PDF read by pdfminer's layout analysis, which groups glyphs into words
+    # by their spacing, as ATS parsers do; pypdf reads the text runs as drawn.
+    layout_text: str
     pdf_sha256: str | None
     geometry: RenderGeometry
 
@@ -117,6 +123,34 @@ def validate_render_evidence(
                 group="ats",
                 code="text-coverage",
                 message=f"PDF text coverage is {coverage:.1%}",
+            )
+        )
+
+    # A section heading must come out of both readings as a line of its own: spaced
+    # letters ("E D U C AT I O N") pass pypdf but leave an ATS without the section.
+    extractions = (evidence.extracted_text, evidence.layout_text)
+    broken_headings = [
+        section.name
+        for section in draft.sections
+        if not all(_heading_line_found(section.name, text) for text in extractions)
+    ]
+    if broken_headings:
+        groups["ats"] = False
+        issues.append(
+            ValidationIssue(
+                group="ats",
+                code="section-headings",
+                message="Headings not extracted as one line: " + "; ".join(broken_headings),
+            )
+        )
+    garbled = sum(len(GARBLED_GLYPH.findall(text)) for text in extractions)
+    if garbled:
+        groups["ats"] = False
+        issues.append(
+            ValidationIssue(
+                group="ats",
+                code="garbled-text",
+                message=f"{garbled} glyphs extracted without a character",
             )
         )
 
@@ -228,6 +262,14 @@ def _claim_recoverable(text: str, normalized_pdf: str, rtl: bool) -> bool:
         return False
     recovered = sum(token in normalized_pdf for token in tokens)
     return recovered / len(tokens) >= 0.9
+
+
+def _heading_line_found(heading: str, extracted: str) -> bool:
+    # pdfminer applies no bidi algorithm, so a Hebrew line comes out in visual order,
+    # its characters reversed; that is still the whole heading on one line.
+    expected = normalized_text(heading)
+    lines = {normalized_text(line) for line in extracted.splitlines()}
+    return expected in lines or expected[::-1] in lines
 
 
 def _without_whitespace(value: str) -> str:

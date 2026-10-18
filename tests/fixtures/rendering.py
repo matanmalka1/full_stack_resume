@@ -41,9 +41,15 @@ def deterministic_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
                 draft.headline.text,
                 *(claim.text for claim in draft.contacts),
                 *(
-                    displayed_claim_text(claim.style, claim.text, draft.language)
+                    line
                     for section in draft.sections
-                    for claim in section.claims
+                    for line in (
+                        section.name,
+                        *(
+                            displayed_claim_text(claim.style, claim.text, draft.language)
+                            for claim in section.claims
+                        ),
+                    )
                 ),
             ]
         )
@@ -65,6 +71,7 @@ def deterministic_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
             pdf_error=None,
             page_count=1,
             extracted_text=extracted_text,
+            layout_text=extracted_text,
             pdf_sha256="deterministic-integrity-double",
             geometry=RenderGeometry(
                 scroll_width=complete_geometry["scrollWidth"],
