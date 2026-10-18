@@ -210,6 +210,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
             ui_density="comfortable",
             ui_text_size="normal",
             ui_theme="system",
+            default_template=None,
         ),
     )
     fake_openai.script("propose_analysis", ANALYSIS)
@@ -229,6 +230,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
             ui_density="comfortable",
             ui_text_size="normal",
             ui_theme="system",
+            default_template=None,
         ),
     )
     completed = _run(ai_services, queued)

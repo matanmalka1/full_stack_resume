@@ -244,7 +244,7 @@ def test_a_trimmed_line_leaves_the_withheld_lines(ai_services, also_withheld: bo
     assert math.ceil(lines / renderer.claims_per_page) > maximum
 
     fitted, remaining, report = ai_services.drafts._fit_to_pages(
-        frame, withheld, profile, knowledge
+        frame, withheld, profile, knowledge, None
     )
 
     assert report.status == "trimmed"

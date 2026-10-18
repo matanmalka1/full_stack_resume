@@ -18,6 +18,7 @@ from ...domain.contracts.knowledge import Profile
 from ...domain.contracts.validation import ValidationReport
 from ...domain.document import DocumentState, document_state
 from ...domain.knowledge import Knowledge
+from ...domain.templates import SampleLanguage, preview_template, template_spec
 from ...util import new_id, utc_now
 from ..actor import Actor
 from ..artifacts import DocumentPdfDelivery
@@ -161,7 +162,8 @@ class RenderingService:
         )
         try:
             try:
-                self.renderer.render_html(content, html_path, candidate)
+                template = prepared.source.document.template
+                self.renderer.render_html(content, html_path, candidate, template)
                 geometry = self.renderer.render_pdf(html_path, pdf_path)
                 report = self.renderer.validate_rendered(
                     content,
@@ -171,6 +173,7 @@ class RenderingService:
                     geometry,
                     candidate,
                     prepared.recruiter_pdf_filename,
+                    template,
                 )
             except ApplicationError:
                 raise
@@ -291,19 +294,24 @@ class RenderingService:
             stream=stream,
         )
 
-    def preview_document(self, actor: Actor, application_id: str) -> DocumentPreviewView:
+    def preview_document(
+        self, actor: Actor, application_id: str, template: str | None = None
+    ) -> DocumentPreviewView:
         """The current content as HTML, through the render composition; stored nowhere.
 
         No browser starts and nothing is written: no document field, Artifact, or
-        Operation. No approval is needed.
+        Operation. No approval is needed. `template` previews the content in another
+        template (`track` for the track's own) without choosing it; by default the
+        document's own.
         """
         document, content, knowledge = self._previewable(actor, application_id)
+        chosen = document.template if template is None else preview_template(template)
         return DocumentPreviewView(
             application_id=application_id,
             document_id=document.id,
             document_hash=document.document_hash,
             language=content.language,
-            html=self.renderer.preview_html(content, knowledge.candidate),
+            html=self.renderer.preview_html(content, knowledge.candidate, chosen),
         )
 
     def preview_document_pdf(self, actor: Actor, application_id: str) -> DocumentPdfPreviewView:
@@ -313,8 +321,16 @@ class RenderingService:
             application_id=application_id,
             document_id=document.id,
             document_hash=document.document_hash,
-            pdf=self.renderer.preview_pdf(content, knowledge.candidate),
+            pdf=self.renderer.preview_pdf(content, knowledge.candidate, document.template),
         )
+
+    def sample_template(self, template: str, language: SampleLanguage) -> str:
+        """A fictional CV in one template, for choosing a template with no CV yet.
+
+        It reads nothing of any user's: the content is the shipped sample.
+        """
+        template_spec(preview_template(template))
+        return self.renderer.sample_html(preview_template(template), language)
 
     def _previewable(self, actor: Actor, application_id: str):
         document = self._source(actor, application_id).document

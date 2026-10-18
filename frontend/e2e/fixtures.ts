@@ -71,6 +71,15 @@ export const test = base.extend<{ api: Api }>({
         json({ id: "user-1", email: "candidate@example.com", created_at: "2026-10-11T12:00:00+00:00" }),
       );
       api.stub("GET /api/v1/settings", json(settings()));
+      /* Settings frame the sample CV in every template of the default catalog, in both
+         languages; the frames are presentation only, so a blank page answers them. */
+      for (const template of ["track", ...settings().available_templates.map((option) => option.id)]) {
+        for (const language of ["en", "he"]) {
+          api.stub(`GET /api/v1/templates/${template}/sample?language=${language}`, (route) =>
+            route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>sample</title>" }),
+          );
+        }
+      }
 
       await context.route(
         (url) => url.pathname.startsWith("/api/"),

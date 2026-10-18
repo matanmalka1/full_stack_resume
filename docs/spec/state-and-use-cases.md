@@ -44,15 +44,18 @@ job text (on the Application)  ->  JobAnalysis (immutable, names the job_text_ha
 CVDocument (mutable, one per Application)
   analysis_id                       the analysis it is pinned to
   content                           the DraftDocument; NULL until generated
+  template                          the chosen render template; NULL = the track's own
   built_with                        profile_version
-  document_hash                     stored: hash(analysis_id, content)
+  document_hash                     stored: hash(analysis_id, content, template)
   content_report, passed, checked_basis
   approved_basis, approved_at
   rendered_basis, html_path, pdf_path, last_render_error
 ```
 
-`document_hash` is the SHA-256 of the canonical JSON of `analysis_id` and `content`,
-rewritten by every command that changes either. A command that changes the document
+`document_hash` is the SHA-256 of the canonical JSON of `analysis_id`, `content`, and
+`template` when one is set (a NULL template adds no key, so a document that never chose
+one keeps the hash it had before templates existed), rewritten by every command that
+changes any of them. A command that changes the document
 carries `expected_document_hash`; a mismatch is `DOCUMENT_CHANGED` (409) and writes
 nothing.
 
@@ -117,7 +120,8 @@ An outdated report is still returned for display; it authorizes nothing.
 
 ## 6. Why nothing goes stale
 
-- A content edit or re-pin changes `document_hash`, outdating every stamp.
+- A content edit, re-pin, or template change changes `document_hash`, outdating every
+  stamp.
 - A change to a dependent fact changes `facts_hash`, outdating every stamp. An
   unrelated fact does not.
 - A newer analysis or edited job text is the `DOCUMENT_ON_OLDER_ANALYSIS` warning.
@@ -218,6 +222,10 @@ allows none.
 | `create_draft` | a document exists and `content IS NULL` |
 | `confirm_and_use_fact` | a review reason names it |
 | `edit`, `regenerate_section`, `regenerate_claim` | `content IS NOT NULL` |
+
+`set_document_template` (§14) is not a projected action: like an edit it is guarded by
+`expected_document_hash`, so an Operation queued against the old hash discards its
+result.
 | `check` | `content IS NOT NULL` and `content_check != passed` |
 | `approve` | `preparation_state = draft_in_progress` |
 | `render` | `preparation_state = approved` |
@@ -458,6 +466,15 @@ it belongs elsewhere or is already pinned). Sets `analysis_id`, fresh `built_wit
 `content = NULL`, and clears the report, all stamps, file paths, and
 `last_render_error`. Old rendered files are deleted after commit.
 
+### `set_document_template(application_id, template, expected_document_hash)`
+
+Synchronous. Chooses the template the document renders with: one of the catalog's
+(`cv_engine/domain/templates.py`) or `null` for the track's own. Allowed in every state,
+as an edit is; the hash moves, so an approved or Ready document returns to draft and is
+approved and rendered again. Choosing the template it has changes nothing. Content,
+stamps, and files are kept. A new document starts with the user's `default_template`
+(product-spec §15), copied when the first analysis creates it.
+
 ### `create_draft(application_id, expected_document_hash, provider, model?, reasoning_effort?)`
 
 Operation, only while `content IS NULL`; `provider` is `openai`. Sends each section's
@@ -483,8 +500,14 @@ pending claim linked to at least one fact.
 
 ### Previews
 
-`preview` (HTML) and `preview.pdf` render the current content marked as a draft. No
-approval needed, nothing stored. 412 while `content IS NULL`.
+`preview` (HTML) and `preview.pdf` render the current content marked as a draft, in
+the document's template. No approval needed, nothing stored. 412 while `content IS NULL`.
+`preview?template=<name>` (`track` for the track's own) shows the content in another
+template without choosing it, for the template picker.
+
+`GET /templates/{template}/sample?language=en|he` renders a fictional sample CV
+(`rendering/samples/template-sample.json`) in one template, so Settings can show a
+template before any CV exists. It reads no user's data.
 
 ## 15. Check and approval commands
 

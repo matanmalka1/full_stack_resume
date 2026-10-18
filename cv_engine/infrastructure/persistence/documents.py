@@ -40,6 +40,7 @@ def _document_record(row: Any) -> CVDocument:
         content=(
             None if record["content"] is None else DraftDocument.model_validate(record["content"])
         ),
+        template=record["template"],
         built_with=BuiltWith(profile_version=record["profile_version"]),
         document_hash=record["document_hash"],
         content_report=(
@@ -60,11 +61,12 @@ def _document_record(row: Any) -> CVDocument:
     )
 
 
-def _body_values(body: DocumentBody) -> dict[str, Any]:
+def _body_values(body: DocumentBody, template: str | None) -> dict[str, Any]:
+    """The body's columns and the hash over them and the document's template."""
     return {
         "analysis_id": body.analysis_id,
         "content": None if body.content is None else body.content.model_dump(mode="json"),
-        "document_hash": document_hash(body.analysis_id, body.content),
+        "document_hash": document_hash(body.analysis_id, body.content, template),
     }
 
 
@@ -153,6 +155,7 @@ class SqlAlchemyDocumentStore:
         *,
         created_at: str,
         document_id: str | None = None,
+        template: str | None = None,
     ) -> CVDocument:
         connection = self._transactions.connection_for(tx, access="write")
         _require_owned_analysis(connection, application_id, body.analysis_id)
@@ -162,7 +165,8 @@ class SqlAlchemyDocumentStore:
                 insert(cv_documents).values(
                     id=identity,
                     application_id=application_id,
-                    **_body_values(body),
+                    **_body_values(body, template),
+                    template=template,
                     profile_version=built_with.profile_version,
                     created_at=created_at,
                     updated_at=created_at,
@@ -194,7 +198,33 @@ class SqlAlchemyDocumentStore:
             )
         if body.content is None and row["content"] is not None:
             raise LineageBroken("only build_from_analysis removes a document's content")
-        return _write(connection, row["id"], {**_body_values(body), "updated_at": updated_at})
+        return _write(
+            connection,
+            row["id"],
+            {**_body_values(body, row["template"]), "updated_at": updated_at},
+        )
+
+    def set_template(
+        self,
+        tx: WriteTransaction,
+        application_id: str,
+        expected_document_hash: str,
+        template: str | None,
+        *,
+        updated_at: str,
+    ) -> CVDocument:
+        connection = self._transactions.connection_for(tx, access="write")
+        row = _locked(connection, application_id, expected_document_hash)
+        content = None if row["content"] is None else DraftDocument.model_validate(row["content"])
+        return _write(
+            connection,
+            row["id"],
+            {
+                "template": template,
+                "document_hash": document_hash(row["analysis_id"], content, template),
+                "updated_at": updated_at,
+            },
+        )
 
     def repin(
         self,
@@ -216,7 +246,7 @@ class SqlAlchemyDocumentStore:
             connection,
             row["id"],
             {
-                **_body_values(body),
+                **_body_values(body, row["template"]),
                 "profile_version": built_with.profile_version,
                 **_CLEARED_STAMPS,
                 "updated_at": updated_at,

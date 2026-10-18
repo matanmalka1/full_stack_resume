@@ -234,6 +234,7 @@ def test_user_settings_default_read_is_pure_and_updates_are_optimistic_and_atomi
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         "ui_theme": "system",
+        "default_template": None,
         "updated_at": None,
     }
     with database_engine.connect() as connection:
@@ -251,6 +252,7 @@ def test_user_settings_default_read_is_pure_and_updates_are_optimistic_and_atomi
                 ui_density="compact",
                 ui_text_size="large",
                 ui_theme="system",
+                default_template=None,
             ),
         )
     assert first.edit_version == 1
@@ -271,6 +273,7 @@ def test_user_settings_default_read_is_pure_and_updates_are_optimistic_and_atomi
                     ui_density="comfortable",
                     ui_text_size="normal",
                     ui_theme="system",
+                    default_template=None,
                 ),
             )
     with transactions.read() as tx:
@@ -292,6 +295,7 @@ def test_user_settings_default_read_is_pure_and_updates_are_optimistic_and_atomi
                 ui_density="comfortable",
                 ui_text_size="normal",
                 ui_theme="system",
+                default_template=None,
             ),
         )
     assert second.edit_version == 2

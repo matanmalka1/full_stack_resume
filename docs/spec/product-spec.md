@@ -325,6 +325,16 @@ Warnings never block. Anything that needs a decision is a blocker or review reas
 
 Approval is an explicit user action that stamps `approved_basis` and `approved_at`.
 
+Each document renders in a template: the track's own (`development_ltr`, `sales_ltr`,
+`sales_rtl`) unless it chose one of the catalog's ten, ported from Resume Matcher
+(single-column, two-column, modern, modern-two-column, clean, latex, vivid,
+vivid-single, deedy, modern-deedy; attribution in `rendering/templates/catalog/NOTICE.md`).
+Each renders in both directions. A two-column template places list sections (every
+line an `item`: education, skills, tools, languages) in its side column, and its
+reading order is checked per column. The template is part of the document hash
+(state-and-use-cases.md §3), so changing it outdates approval and Ready. The editor's
+picker shows the user's own CV in each template; Settings show a sample CV.
+
 Rendering is an Operation, available while the document is approved. It revalidates,
 renders HTML and PDF, and checks layout, page count, extracted text, links, direction,
 and filename metadata. Success stamps `rendered_basis`; failure keeps the approval and
@@ -446,7 +456,11 @@ Per-user settings (optimistic, a stale write is a conflict):
 
 - `auto_generate_when_review_not_required` (§9), off by default;
 - `default_ai_model` and `default_reasoning_effort`, from allowlists;
-- `ui_theme`, `ui_density`, `ui_text_size`.
+- `ui_theme`, `ui_density`, `ui_text_size`;
+- `default_template`, the render template a new CV document starts with (null: the
+  track's own). Changing it never changes an existing document (§11).
+
+The settings read also carries `available_templates`, the template catalog.
 
 `provider_configured` is read-only; AI actions are disabled without a provider.
 

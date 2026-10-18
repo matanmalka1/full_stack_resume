@@ -1,0 +1,12 @@
+{% extends "catalog/base.html.j2" %}
+{#- Resume Matcher modern-deedy: a dense single column, centered header, light gray uppercase headings, uppercase roles. -#}
+{% block design %}
+    :root { --head-font: var(--display); --body-font: var(--display); }
+    body { line-height: 1.26; }
+    .cv-header { text-align: center; }
+    h1 { font-weight: 400; }
+    .headline, .contacts { color: var(--muted); }
+    h2 { color: #9a9fa6; font-weight: 300; text-transform: uppercase; font-size: 12pt; margin-bottom: 1mm; }
+    h3 { text-transform: uppercase; font-size: 9.3pt; }
+    section { margin-top: 3mm; }
+{% endblock %}

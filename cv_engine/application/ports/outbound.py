@@ -28,6 +28,7 @@ from ...domain.contracts.providers import (
 )
 from ...domain.contracts.validation import ValidationReport
 from ...domain.knowledge import Knowledge
+from ...domain.templates import SampleLanguage
 from .values import TaskContracts
 
 
@@ -75,15 +76,31 @@ class Renderer(Protocol):
     depend on Playwright being present.
     """
 
+    # `template` names a chosen template (cv_engine/domain/templates.py); `None` is
+    # the track's own.
     def render_html(
-        self, draft: DraftDocument, output_path: Path, candidate: CandidateContext
+        self,
+        draft: DraftDocument,
+        output_path: Path,
+        candidate: CandidateContext,
+        template: str | None = None,
     ) -> Path: ...
 
-    def preview_html(self, draft: DraftDocument, candidate: CandidateContext) -> str: ...
+    def preview_html(
+        self, draft: DraftDocument, candidate: CandidateContext, template: str | None = None
+    ) -> str: ...
 
-    def preview_pdf(self, draft: DraftDocument, candidate: CandidateContext) -> bytes: ...
+    def preview_pdf(
+        self, draft: DraftDocument, candidate: CandidateContext, template: str | None = None
+    ) -> bytes: ...
 
-    def measure_pages(self, draft: DraftDocument, candidate: CandidateContext) -> int:
+    def sample_html(self, template: str | None, language: SampleLanguage) -> str:
+        """A fictional CV in `template`, for choosing one before any CV exists."""
+        ...
+
+    def measure_pages(
+        self, draft: DraftDocument, candidate: CandidateContext, template: str | None = None
+    ) -> int:
         """How many pages `draft` renders to, through the same browser; nothing is stored.
 
         Raises `InfrastructureFailure` when the page count cannot be measured.
@@ -101,6 +118,7 @@ class Renderer(Protocol):
         geometry: dict[str, Any],
         candidate: CandidateContext,
         delivered_pdf_filename: str | None = None,
+        template: str | None = None,
     ) -> ValidationReport: ...
 
     def filename_for(self, normalized_role: str, candidate: CandidateContext) -> str: ...

@@ -14,11 +14,12 @@ from pypdf import PdfReader
 
 from ..application.errors import InfrastructureFailure
 from ..domain.candidate import contact_href
-from ..domain.contracts.drafts import DraftDocument
+from ..domain.contracts.drafts import ClaimLine, ClaimStyle, DraftDocument, ResumeSection
 from ..domain.contracts.knowledge import (
     CandidateContext,
     Profile,
 )
+from ..domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from ..domain.contracts.validation import ValidationReport
 from ..domain.date_display import numeric_date
 from ..domain.render_validation import (
@@ -30,7 +31,13 @@ from ..domain.render_validation import (
 from ..domain.render_validation import (
     _claim_recoverable as _claim_recoverable,
 )
-from ..util import sha256_file
+from ..domain.templates import (
+    SampleLanguage,
+    is_side_section,
+    section_columns,
+    template_spec,
+)
+from ..util import sha256_file, sha256_text
 
 MIXED_LTR = re.compile(
     r"(?:https?://\S+|[\w.+-]+@[\w.-]+|\+\d(?:[\d() .-]*\d)?|\b(?:B2B|CRM|ERP|KPIs?|SaaS|"
@@ -169,7 +176,9 @@ def _contact_html(claim: Any, rtl: bool, candidate: CandidateContext) -> Markup:
     return Markup(f'<a href="{html.escape(href)}">{_bidi(text, rtl)}</a>')
 
 
-def compose_html(draft: DraftDocument, repo: Path, candidate: CandidateContext) -> str:
+def compose_html(
+    draft: DraftDocument, repo: Path, candidate: CandidateContext, template: str | None = None
+) -> str:
     """The rendered document itself, before anything decides where it lives.
 
     Split out of `render_html` so the editor's preview and the approved render
@@ -178,7 +187,10 @@ def compose_html(draft: DraftDocument, repo: Path, candidate: CandidateContext) 
     approving would not be the thing that was approved.
     """
     rtl = draft.language == "he"
-    if draft.track.value == "development":
+    spec = template_spec(template)
+    if spec is not None:
+        template_name = f"catalog/{spec.id}.html.j2"
+    elif draft.track.value == "development":
         template_name = "development_ltr.html.j2"
     elif rtl:
         template_name = "sales_rtl.html.j2"
@@ -189,10 +201,11 @@ def compose_html(draft: DraftDocument, repo: Path, candidate: CandidateContext) 
         autoescape=select_autoescape(("html", "j2")),
         undefined=StrictUndefined,
     )
-    template = environment.get_template(template_name)
+    page = environment.get_template(template_name)
     emphasis = _emphasis_config(repo, draft.track.value)
-    sections = [
-        {
+
+    def section_view(section: Any) -> dict[str, Any]:
+        return {
             "name": section.name,
             "claims": [
                 {
@@ -202,22 +215,115 @@ def compose_html(draft: DraftDocument, repo: Path, candidate: CandidateContext) 
                 for claim in section.claims
             ],
         }
-        for section in draft.sections
-    ]
-    return template.render(
-        name=draft.name,
-        headline=_bidi(draft.headline.text, rtl),
-        headline_text=draft.headline.text,
-        layout_class=_layout_class(draft),
-        contacts=[_contact_html(claim, rtl, candidate) for claim in draft.contacts],
-        sections=sections,
+
+    common = {
+        "name": draft.name,
+        "headline": _bidi(draft.headline.text, rtl),
+        "headline_text": draft.headline.text,
+        "contacts": [_contact_html(claim, rtl, candidate) for claim in draft.contacts],
+    }
+    if spec is None:
+        return page.render(
+            **common,
+            layout_class=_layout_class(draft),
+            sections=[section_view(section) for section in draft.sections],
+        )
+    name_first, _, name_rest = draft.name.partition(" ")
+    return page.render(
+        **common,
+        lang=draft.language,
+        dir="rtl" if rtl else "ltr",
+        template=spec.id,
+        marker=spec.marker,
+        name_first=name_first,
+        name_rest=name_rest,
+        columns=[
+            {
+                "kind": "side" if column and is_side_section(column[0]) else "main",
+                "sections": [section_view(section) for section in column],
+            }
+            for column in section_columns(draft, spec.id)
+        ],
     )
 
 
+#: Who the sample CV is about: a context with no links, so its contacts are plain text.
+_SAMPLE_CANDIDATE = CandidateContext(
+    context_version="template-sample",
+    name_fact_id="sample.name",
+    locale="en-IL",
+    timezone="Asia/Jerusalem",
+    contact_fact_ids=[],
+)
+#: The sample's track per language: the English one in the Development wording the
+#: emphasis rules know, the Hebrew one in Sales, as the CVs a user writes are.
+_SAMPLE_CLASSIFICATION = {
+    "en": (Track.DEVELOPMENT, ProfileName.DEVELOPMENT, Emphasis.DEVELOPMENT_BALANCED),
+    "he": (Track.SALES, ProfileName.ACCOUNT_MANAGER, Emphasis.ACCOUNT_GROWTH),
+}
+
+
+def sample_draft(repo: Path, language: SampleLanguage) -> DraftDocument:
+    """A fictional CV (rendering/samples/template-sample.json) as a document.
+
+    Presentation input for the template picker, not a record: it belongs to no
+    Application, cites no fact, and is never stored or validated.
+    """
+    data = json.loads(
+        (repo / "rendering" / "samples" / "template-sample.json").read_text(encoding="utf-8")
+    )[language]
+    track, profile, emphasis = _SAMPLE_CLASSIFICATION[language]
+
+    def line(index: str, style: ClaimStyle, text: str) -> ClaimLine:
+        return ClaimLine(
+            claim_id=f"sample-{index}",
+            style=style,
+            text=text,
+            fact_ids=[f"sample.{index}"],
+            claim_type="canonical",
+            text_hash=sha256_text(text),
+        )
+
+    return DraftDocument(
+        application_id="template-sample",
+        job_text_hash="0" * 64,
+        job_analysis_id="template-sample",
+        language=language,
+        track=track,
+        profile=profile,
+        emphasis=emphasis,
+        name=data["name"],
+        headline=line("headline", "headline", data["headline"]),
+        contacts=[
+            line(f"contact-{index}", "contact", text) for index, text in enumerate(data["contacts"])
+        ],
+        sections=[
+            ResumeSection(
+                name=section["name"],
+                claims=[
+                    line(f"{number}-{index}", claim["style"], claim["text"])
+                    for index, claim in enumerate(section["claims"])
+                ],
+            )
+            for number, section in enumerate(data["sections"])
+        ],
+        fact_store_version="template-sample",
+    )
+
+
+def compose_sample_html(repo: Path, template: str | None, language: SampleLanguage) -> str:
+    """The sample CV in one template, for the picker to show before a CV exists."""
+    return compose_html(sample_draft(repo, language), repo, _SAMPLE_CANDIDATE, template)
+
+
 def render_html(
-    draft: DraftDocument, repo: Path, output_path: Path, candidate: CandidateContext
+    draft: DraftDocument,
+    repo: Path,
+    output_path: Path,
+    candidate: CandidateContext,
+    template: str | None = None,
 ) -> Path:
-    rendered = compose_html(draft, repo, candidate)
+    rendered = compose_html(draft, repo, candidate, template)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
         raise FileExistsError(f"refusing to overwrite rendered HTML: {output_path}")
@@ -358,6 +464,7 @@ def validate_rendered(
     geometry: dict[str, Any],
     candidate: CandidateContext,
     delivered_pdf_filename: str | None = None,
+    template: str | None = None,
 ) -> ValidationReport:
     evidence = collect_render_evidence(
         draft,
@@ -368,7 +475,7 @@ def validate_rendered(
         candidate,
         delivered_pdf_filename,
     )
-    return validate_render_evidence(draft, profile, evidence, candidate)
+    return validate_render_evidence(draft, profile, evidence, candidate, template)
 
 
 def collect_render_evidence(
@@ -440,29 +547,41 @@ class PlaywrightRenderer:
         self.knowledge_root = Path(knowledge_root)
 
     def render_html(
-        self, draft: DraftDocument, output_path: Path, candidate: CandidateContext
+        self,
+        draft: DraftDocument,
+        output_path: Path,
+        candidate: CandidateContext,
+        template: str | None = None,
     ) -> Path:
-        return render_html(draft, self.knowledge_root, output_path, candidate)
+        return render_html(draft, self.knowledge_root, output_path, candidate, template)
 
-    def preview_html(self, draft: DraftDocument, candidate: CandidateContext) -> str:
+    def preview_html(
+        self, draft: DraftDocument, candidate: CandidateContext, template: str | None = None
+    ) -> str:
         """The same document, returned rather than written.
 
         No path and no browser: a preview refresh happens on every save, and
         neither a temp file nor Chromium belongs on that path.
         """
-        return compose_html(draft, self.knowledge_root, candidate)
+        return compose_html(draft, self.knowledge_root, candidate, template)
+
+    def sample_html(self, template: str | None, language: SampleLanguage) -> str:
+        """The fictional sample CV in `template`; no browser, nothing stored."""
+        return compose_sample_html(self.knowledge_root, template, language)
 
     def render_pdf(self, html_path: Path, pdf_path: Path) -> dict[str, Any]:
         return render_pdf(html_path, pdf_path)
 
-    def preview_pdf(self, draft: DraftDocument, candidate: CandidateContext) -> bytes:
+    def preview_pdf(
+        self, draft: DraftDocument, candidate: CandidateContext, template: str | None = None
+    ) -> bytes:
         """The same document through the same browser, stamped and never stored.
 
         On demand only - it starts Chromium, which the HTML preview never does. The
         files live in a temporary directory that is gone when this returns: nothing
         here is an artifact, and no record points at it.
         """
-        document = stamp_preview(compose_html(draft, self.knowledge_root, candidate))
+        document = stamp_preview(compose_html(draft, self.knowledge_root, candidate, template))
         with tempfile.TemporaryDirectory(prefix="cv-preview-") as directory:
             html_path = Path(directory) / "preview.html"
             pdf_path = Path(directory) / "preview.pdf"
@@ -470,7 +589,9 @@ class PlaywrightRenderer:
             render_pdf(html_path, pdf_path)
             return pdf_path.read_bytes()
 
-    def measure_pages(self, draft: DraftDocument, candidate: CandidateContext) -> int:
+    def measure_pages(
+        self, draft: DraftDocument, candidate: CandidateContext, template: str | None = None
+    ) -> int:
         """How many A4 pages the composed document takes, as the approved render lays it out.
 
         The document as `render_html` writes it - no preview stamp - through the same
@@ -479,7 +600,7 @@ class PlaywrightRenderer:
         `InfrastructureFailure`, so the caller can tell "not measured" from a count.
         """
         try:
-            document = compose_html(draft, self.knowledge_root, candidate)
+            document = compose_html(draft, self.knowledge_root, candidate, template)
             with tempfile.TemporaryDirectory(prefix="cv-measure-") as directory:
                 html_path = Path(directory) / "measure.html"
                 pdf_path = Path(directory) / "measure.pdf"
@@ -500,6 +621,7 @@ class PlaywrightRenderer:
         geometry: dict[str, Any],
         candidate: CandidateContext,
         delivered_pdf_filename: str | None = None,
+        template: str | None = None,
     ) -> ValidationReport:
         return validate_rendered(
             draft,
@@ -509,6 +631,7 @@ class PlaywrightRenderer:
             geometry,
             candidate,
             delivered_pdf_filename,
+            template,
         )
 
     def filename_for(self, normalized_role: str, candidate: CandidateContext) -> str:

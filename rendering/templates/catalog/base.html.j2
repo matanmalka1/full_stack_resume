@@ -1,0 +1,102 @@
+<!doctype html>
+{#- The shared page of every chosen template (cv_engine/domain/templates.py).
+
+    One markup for both directions: the designs use logical CSS properties, so a
+    Hebrew document mirrors without a second file. Ported from Resume Matcher's
+    templates (Apache-2.0); see NOTICE.md in this directory.
+
+    ATS rules every design keeps: no letter-spacing, small caps, or opacity on text
+    (each splits or drops glyphs in the PDF text layer), and every heading is real
+    text on its own line. -#}
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'none'; font-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>{{ name }} - {{ headline_text }} - CV</title>
+  <style>
+    :root {
+      --text: #1f2937; --strong: #000; --muted: #4b5563; --faint: #9ca3af; --rule: #d1d5db;
+      --accent: #1d4ed8; --accent-light: #dbeafe;
+      --hebrew: Arial, "Arial Hebrew", "Noto Sans Hebrew", sans-serif;
+      --sans: Helvetica, Arial, var(--hebrew);
+      --serif: Georgia, "Times New Roman", "David", serif;
+      --mono: Menlo, Monaco, "Courier New", var(--hebrew);
+      --display: "Helvetica Neue", var(--sans);
+      --head-font: var(--serif); --body-font: var(--sans);
+      --base: 9.5pt; --gap: 3.6mm;
+    }
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 210mm; background: #fff; }
+    body { color: var(--text); font-family: var(--body-font); font-size: var(--base); line-height: 1.34; }
+    .page { width: 210mm; min-height: 297mm; padding: 11mm 13mm 10mm; overflow: hidden; }
+    .cv-header { margin-bottom: 1mm; }
+    h1 { margin: 0; color: var(--strong); font-family: var(--head-font); font-size: 23pt; font-weight: 700; line-height: 1.08; overflow-wrap: anywhere; }
+    .headline { margin-top: 1.2mm; font-size: 10.5pt; overflow-wrap: anywhere; }
+    .contacts { margin-top: 1.5mm; color: var(--muted); font-size: 8.3pt; overflow-wrap: anywhere; }
+    .contacts a { color: inherit; text-decoration: none; }
+    .contacts .sep { color: var(--faint); }
+    .contact { unicode-bidi: isolate; }
+    section { margin-top: var(--gap); break-inside: avoid; }
+    h2 { margin: 0 0 1.5mm; color: var(--strong); font-family: var(--head-font); font-size: 10.5pt; font-weight: 700; line-height: 1.2; break-after: avoid; }
+    p { margin: 0 0 1.3mm; }
+    h3 { margin: 1.6mm 0 0; color: var(--strong); font-size: 9.8pt; font-weight: 700; }
+    .date { margin: .2mm 0 .9mm; color: var(--muted); font-size: 8.2pt; }
+    .bullet { display: grid; grid-template-columns: 3.2mm 1fr; margin: 0 0 .75mm; }
+    .bullet-dot { font-weight: 700; }
+    .item { margin: 0 0 .75mm; }
+    .claim { break-inside: avoid; }
+    strong { font-weight: 700; }
+    bdi[dir="ltr"] { unicode-bidi: isolate; }
+    [dir="rtl"] h3, [dir="rtl"] .date { text-align: right; }
+    .columns { display: grid; column-gap: 7mm; align-items: start; }
+    .column { min-width: 0; overflow-wrap: anywhere; }
+    .column > section:first-child { margin-top: var(--gap); }
+    {% block design %}{% endblock %}
+    /* A side column is a third of the page: its headings stay small enough that the
+       longest a Profile names ("Sales & Technical Skills") keeps to one line in any
+       fallback face, since an ATS reads a wrapped heading as two lines. */
+    .column-side h2 { font-size: 9pt; }
+    /* A face without Hebrew glyphs makes Chromium fall back word by word; each word
+       becomes its own text run, and extractors then read the words in visual order.
+       So a Hebrew document draws every stack from faces that carry Hebrew. */
+    :root[dir="rtl"] {
+      --sans: var(--hebrew); --display: var(--hebrew); --mono: var(--hebrew);
+      --serif: "Times New Roman", "David", var(--hebrew);
+    }
+  </style>
+</head>
+<body>
+{%- macro render_section(section) %}
+  <section data-section="{{ section.name }}">
+    <h2>{{ section.name }}</h2>
+    {% for claim in section.claims %}
+      {% if claim.style == "heading" %}<h3 class="claim" dir="auto">{{ claim.html }}</h3>
+      {% elif claim.style == "date" %}<div class="date claim" dir="auto">{{ claim.html }}</div>
+      {% elif claim.style == "paragraph" %}<p class="claim" dir="auto">{{ claim.html }}</p>
+      {% elif claim.style == "item" %}<div class="item claim" dir="auto">{{ claim.html }}</div>
+      {% else %}<div class="bullet claim"><span class="bullet-dot">{{ marker }}</span><span dir="auto">{{ claim.html }}</span></div>{% endif %}
+    {% endfor %}
+  </section>
+{%- endmacro %}
+<main class="page t-{{ template }}" data-cv-page>
+  <header class="cv-header">
+    <h1><span class="name-first">{{ name_first }}</span>{% if name_rest %} <span class="name-rest">{{ name_rest }}</span>{% endif %}</h1>
+    <div class="headline">{{ headline }}</div>
+    <div class="contacts">{% for contact in contacts %}<span class="contact" dir="auto">{{ contact }}</span>{% if not loop.last %}<span class="sep"> | </span>{% endif %}{% endfor %}</div>
+  </header>
+  {% if columns | length > 1 %}
+  <div class="columns">
+    {% for column in columns %}
+    <div class="column column-{{ column.kind }}">
+      {% for section in column.sections %}{{ render_section(section) }}{% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  {% for section in columns[0].sections %}{{ render_section(section) }}{% endfor %}
+  {% endif %}
+</main>
+</body>
+</html>

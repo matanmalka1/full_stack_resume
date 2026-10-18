@@ -109,6 +109,11 @@ export const operation = (): Operation => ({
 
 export const settings = (overrides: Partial<Settings> = {}): Settings => ({
   edit_version: 0,
+  default_template: null,
+  available_templates: [
+    { id: "latex", label: "LaTeX", description: "גופן סריף אקדמי.", columns: 1 },
+    { id: "deedy", label: "Deedy", description: "טור צד צר לפני הטור הראשי.", columns: 2 },
+  ],
   auto_generate_when_review_not_required: false,
   default_ai_model: "gpt-5.6-terra",
   default_reasoning_effort: "medium",

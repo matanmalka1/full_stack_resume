@@ -41,8 +41,10 @@ class PageCountingRenderer(PlaywrightRenderer):
         #: The evidence-line count of every draft measured, in order.
         self.measured: list[int] = []
 
-    def measure_pages(self, draft: DraftDocument, candidate: CandidateContext) -> int:
-        del candidate
+    def measure_pages(
+        self, draft: DraftDocument, candidate: CandidateContext, template: str | None = None
+    ) -> int:
+        del candidate, template
         lines = evidence_lines(draft)
         self.measured.append(lines)
         if self.failure is not None and len(self.measured) >= self.fail_from:

@@ -365,7 +365,7 @@ class DraftAuthoringService:
             model=model,
             reasoning_effort=reasoning_effort,
         )
-        return self._fit_to_pages(updated, reason, profile, knowledge)
+        return self._fit_to_pages(updated, reason, profile, knowledge, source.document.template)
 
     def _fit_to_pages(
         self,
@@ -373,8 +373,11 @@ class DraftAuthoringService:
         withheld: ClaimReviewReason | None,
         profile: Profile,
         knowledge: Knowledge,
+        template: str | None,
     ) -> tuple[DraftDocument, ClaimReviewReason | None, PageFitReport]:
         """Measure the draft and drop lines until it fits its Profile's page limit.
+
+        Measured in the document's template, the one its render will use.
 
         Section budgets are guidance the writer weighs; the page limit is enforced here,
         before anything is written, so approval does not discover an overflow only when
@@ -394,7 +397,7 @@ class DraftAuthoringService:
 
         def measure(document: DraftDocument) -> int | None:
             try:
-                pages = self.renderer.measure_pages(document, candidate)
+                pages = self.renderer.measure_pages(document, candidate, template)
             except InfrastructureFailure:
                 return None
             return pages if pages >= 1 else None

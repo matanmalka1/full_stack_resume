@@ -1,0 +1,10 @@
+{% extends "catalog/base.html.j2" %}
+{#- Resume Matcher latex: all serif, centered name, Title-Case headings over a full-width black rule. -#}
+{% block design %}
+    :root { --body-font: var(--serif); --base: 9.5pt; }
+    .cv-header { text-align: center; }
+    h1 { font-size: 22pt; }
+    .headline { font-style: italic; }
+    h2 { font-size: 11pt; border-bottom: 1px solid #000; padding-bottom: .3mm; }
+    .date { color: var(--strong); font-weight: 700; }
+{% endblock %}

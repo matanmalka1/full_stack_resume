@@ -16,9 +16,11 @@ import type {
   Operation,
   RegenerateDocumentClaimRequest,
   RegenerateDocumentSectionRequest,
+  SetDocumentTemplateRequest,
   UpdateDocumentRequest,
 } from "./contracts";
 import { type QueuedOperation, queuedOperation } from "./operations";
+import type { PreviewTemplate, TemplateName } from "./templates";
 
 /* §3/§14-§16: the one CV document of an Application, and every command addressed to it.
 
@@ -83,6 +85,15 @@ export const outlineClaims = (outline: DocumentOutline): DraftClaim[] => [
 export const documentPreviewSrc = (applicationId: string, documentHash: string): string =>
   `${documentPath(applicationId, "/preview")}?v=${encodeURIComponent(documentHash)}`;
 
+/* The same preview in another template, without choosing it: the picker frames one per
+   template so the user compares their own CV in each before changing anything. */
+export const documentTemplatePreviewSrc = (
+  applicationId: string,
+  documentHash: string,
+  template: PreviewTemplate,
+): string =>
+  `${documentPath(applicationId, "/preview")}?template=${encodeURIComponent(template)}&v=${encodeURIComponent(documentHash)}`;
+
 /* Opened in a new tab rather than fetched, like the framed preview: the real PDF of the
    saved content, stamped as a draft and stored nowhere. The hash keeps a save from being
    answered by a cached older PDF. */
@@ -138,6 +149,22 @@ export const buildFromAnalysis = async (
 ): Promise<DocumentMutation> => {
   const body: BuildFromAnalysisRequest = { expected_document_hash: expectedDocumentHash, analysis_id: analysisId };
   const response = await apiRequest<DocumentMutation>(documentPath(applicationId, "/build-from-analysis"), {
+    method: "POST",
+    body,
+  });
+  return response.data;
+};
+
+/* Choose the template the CV renders with; `null` returns to the track's own. The
+   template is part of the document hash, so an approved or Ready document returns to
+   draft and the caller reads the document back for its new token. */
+export const setDocumentTemplate = async (
+  applicationId: string,
+  expectedDocumentHash: string,
+  template: TemplateName | null,
+): Promise<DocumentMutation> => {
+  const body: SetDocumentTemplateRequest = { expected_document_hash: expectedDocumentHash, template };
+  const response = await apiRequest<DocumentMutation>(documentPath(applicationId, "/template"), {
     method: "POST",
     body,
   });

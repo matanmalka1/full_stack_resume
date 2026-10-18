@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ...application.ai_configuration import AIModel, ReasoningEffort
 from ...application.settings import UiDensity, UiTextSize, UiTheme
+from ...domain.templates import TemplateName
 from .health import HttpSchema
 
 
@@ -17,6 +18,13 @@ class AIModelOptionResponse(HttpSchema):
     pricing_source: str
 
 
+class TemplateOptionResponse(HttpSchema):
+    id: TemplateName
+    label: str
+    description: str
+    columns: int
+
+
 class SettingsResponse(HttpSchema):
     edit_version: int
     auto_generate_when_review_not_required: bool
@@ -26,6 +34,8 @@ class SettingsResponse(HttpSchema):
     ui_density: UiDensity
     ui_text_size: UiTextSize
     ui_theme: UiTheme
+    default_template: TemplateName | None
+    available_templates: list[TemplateOptionResponse]
     provider_configured: bool
     updated_at: str | None = None
 
@@ -37,3 +47,5 @@ class UpdateSettingsRequest(HttpSchema):
     ui_density: UiDensity
     ui_text_size: UiTextSize
     ui_theme: UiTheme
+    #: The template a new CV document starts with; null is the track's own.
+    default_template: TemplateName | None

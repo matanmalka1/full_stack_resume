@@ -15,7 +15,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-from ._helpers import IsoTimestamp
+from ....domain.templates import TEMPLATE_NAMES
+from ._helpers import IsoTimestamp, sql_values
 from ._metadata import metadata
 
 job_analyses = Table(
@@ -55,6 +56,7 @@ cv_documents = Table(
     ),
     Column("analysis_id", UUID(as_uuid=False), nullable=False),
     Column("content", JSONB(none_as_null=True)),
+    Column("template", Text),
     Column("profile_version", Text, nullable=False),
     Column("document_hash", Text, nullable=False),
     Column("content_report", JSONB(none_as_null=True)),
@@ -69,6 +71,9 @@ cv_documents = Table(
     Column("created_at", IsoTimestamp(), nullable=False),
     Column("updated_at", IsoTimestamp(), nullable=False),
     CheckConstraint("length(document_hash) = 64", name="document_hash_length"),
+    CheckConstraint(
+        f"template IS NULL OR template IN ({sql_values(TEMPLATE_NAMES)})", name="template"
+    ),
     CheckConstraint(
         "(checked_basis IS NULL OR length(checked_basis) = 64) "
         "AND (approved_basis IS NULL OR length(approved_basis) = 64) "

@@ -70,6 +70,7 @@ export type DocumentCheck = ApiSchemas["DocumentCheckResponse"];
 export type DocumentActionRequest = ApiSchemas["DocumentActionRequest"];
 export type UpdateDocumentRequest = ApiSchemas["UpdateDocumentRequest"];
 export type BuildFromAnalysisRequest = ApiSchemas["BuildFromAnalysisRequest"];
+export type SetDocumentTemplateRequest = ApiSchemas["SetDocumentTemplateRequest"];
 export type CreateDraftRequest = ApiSchemas["CreateDraftRequest"];
 export type RegenerateDocumentSectionRequest = ApiSchemas["RegenerateDocumentSectionRequest"];
 export type RegenerateDocumentClaimRequest = ApiSchemas["RegenerateDocumentClaimRequest"];

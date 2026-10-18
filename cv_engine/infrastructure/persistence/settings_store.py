@@ -58,6 +58,7 @@ class SqlAlchemySettingsStore:
             "ui_density": settings.ui_density,
             "ui_text_size": settings.ui_text_size,
             "ui_theme": settings.ui_theme,
+            "default_template": settings.default_template,
             "updated_at": now,
         }
         if current is None:

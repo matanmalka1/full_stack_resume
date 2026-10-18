@@ -15,6 +15,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from ...domain.document import ContentCheck, PreparationState
+from ...domain.templates import PreviewTemplate, TemplateName
 from .drafts import (
     ContentPatchRequest,
     DraftFactResponse,
@@ -24,6 +25,8 @@ from .drafts import (
 from .health import HttpSchema
 
 Sha256 = Field(pattern=r"^[0-9a-f]{64}$")
+#: What a template preview may name: a catalog template, or `track` for the track's own.
+PreviewTemplateParameter = PreviewTemplate
 
 
 class DocumentActionRequest(HttpSchema):
@@ -43,6 +46,12 @@ class BuildFromAnalysisRequest(DocumentActionRequest):
     """Re-pin the document to an explicitly named analysis (§14 `build_from_analysis`)."""
 
     analysis_id: str = Field(min_length=1)
+
+
+class SetDocumentTemplateRequest(DocumentActionRequest):
+    """Choose the render template; null returns to the track's own."""
+
+    template: TemplateName | None
 
 
 class CreateDraftRequest(DocumentActionRequest):
@@ -77,6 +86,8 @@ class DocumentResponse(HttpSchema):
     application_id: str
     analysis_id: str
     document_hash: str
+    #: The chosen render template; null is the track's own.
+    template: TemplateName | None = None
     built_with: BuiltWithResponse
     language: str
     #: The DraftDocument as the versioned domain document; null until generated.

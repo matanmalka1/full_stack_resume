@@ -36,6 +36,7 @@ SCOPED_BY_CALLER = frozenset(
         ("documents", "DocumentStore", "lock_document"),
         ("documents", "DocumentStore", "create_document"),
         ("documents", "DocumentStore", "update_body"),
+        ("documents", "DocumentStore", "set_template"),
         ("documents", "DocumentStore", "repin"),
         ("documents", "DocumentStore", "stamp_check"),
         ("documents", "DocumentStore", "stamp_approval"),

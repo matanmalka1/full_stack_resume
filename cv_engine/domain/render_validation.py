@@ -10,6 +10,7 @@ from .contracts.drafts import DraftDocument
 from .contracts.knowledge import CandidateContext, Profile, filing_role
 from .contracts.validation import ValidationIssue, ValidationReport
 from .date_display import displayed_claim_text
+from .templates import section_columns
 
 RENDER_VALIDATION_GROUPS = (
     "render",
@@ -76,6 +77,7 @@ def validate_render_evidence(
     profile: Profile,
     evidence: RenderEvidence,
     candidate: CandidateContext,
+    template: str | None = None,
 ) -> ValidationReport:
     groups: dict[str, bool] = dict.fromkeys(RENDER_VALIDATION_GROUPS, True)
     issues: list[ValidationIssue] = []
@@ -158,21 +160,30 @@ def validate_render_evidence(
     # in document order: each heading, then its lines. pdfminer's default layout
     # clusters a short right-aligned Hebrew heading after the full-width lines below
     # it, and no CSS changes that, so a Hebrew document is ordered by pypdf alone.
-    # A heading already reported as broken has no place to be ordered from.
-    body = [
-        line
-        for section in draft.sections
-        for line in (
-            *([] if section.name in broken_headings else [section.name]),
-            *(
-                displayed_claim_text(claim.style, claim.text, draft.language)
-                for claim in section.claims
-            ),
-        )
+    # A heading already reported as broken has no place to be ordered from. In a
+    # two-column template each column reads in its own order; the two may interleave.
+    columns = [
+        [
+            line
+            for section in column
+            for line in (
+                *([] if section.name in broken_headings else [section.name]),
+                *(
+                    displayed_claim_text(claim.style, claim.text, draft.language)
+                    for claim in section.claims
+                ),
+            )
+        ]
+        for column in section_columns(draft, template)
     ]
     readings = extractions[:1] if draft.language == "he" else extractions
     out_of_order = list(
-        dict.fromkeys(line for text in readings for line in _lines_out_of_order(body, text))
+        dict.fromkeys(
+            line
+            for text in readings
+            for column in columns
+            for line in _lines_out_of_order(column, text)
+        )
     )
     if out_of_order:
         groups["ats"] = False

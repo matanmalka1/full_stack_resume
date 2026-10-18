@@ -1,0 +1,14 @@
+{% extends "catalog/base.html.j2" %}
+{#- Resume Matcher deedy, after Debarghya Das's Deedy Resume: a large light centered name, a thin rule, a narrow side column before the main one, light gray uppercase headings. -#}
+{% block design %}
+    :root { --head-font: var(--display); --body-font: var(--display); --text: #2b2b2b; }
+    .cv-header { text-align: center; border-bottom: 1px solid #6a6a6a; padding-bottom: 2.5mm; }
+    h1 { font-size: 30pt; font-weight: 300; color: #2b2b2b; }
+    h1 .name-first { font-weight: 200; }
+    h1 .name-rest { font-weight: 400; }
+    .headline, .contacts { color: #6a6a6a; }
+    h2 { color: #6a6a6a; font-weight: 300; text-transform: uppercase; font-size: 12.5pt; }
+    h3 { color: #333; text-transform: uppercase; font-size: 9.5pt; }
+    .columns { grid-template-columns: minmax(0, 33fr) minmax(0, 67fr); column-gap: 7.5mm; }
+    .column-side { font-size: 9pt; }
+{% endblock %}

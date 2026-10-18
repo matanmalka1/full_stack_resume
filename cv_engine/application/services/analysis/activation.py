@@ -13,6 +13,7 @@ from ...commands import AnalysisResult, AnalyzeCommand
 from ...errors import PreconditionFailed, StateConflict
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisStore
 from ...ports.documents import DocumentBody, DocumentStore
+from ...ports.settings import SettingsStore
 from ...ports.transactions import WriteTransaction
 from ..documents import refuse_deleted, require_hash
 from .preparation import PreparedAnalysis
@@ -24,10 +25,12 @@ class AnalysisActivation:
         analyses: AnalysisStore,
         sources: AnalysisContextSourceReader,
         documents: DocumentStore,
+        settings: SettingsStore,
     ):
         self.analyses = analyses
         self.sources = sources
         self.documents = documents
+        self.settings = settings
 
     def activate(
         self,
@@ -75,12 +78,15 @@ class AnalysisActivation:
         )
         created = False
         if document is None:
+            # The document starts with the user's default template, copied, so a
+            # later change to the default never re-renders an existing CV.
             document = self.documents.create_document(
                 tx,
                 command.application_id,
                 DocumentBody(analysis_id=analysis_id, content=None),
                 prepared.built_with,
                 created_at=utc_now(),
+                template=self.settings.settings(tx, actor.user_id).default_template,
             )
             created = True
         return AnalysisResult(

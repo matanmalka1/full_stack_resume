@@ -11,6 +11,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field, StringConstraints, model_validator
 
+from ..templates import TemplateName
 from .base import StrictModel
 from .drafts import DraftDocument
 from .validation import ValidationReport
@@ -33,6 +34,9 @@ class CVDocument(StrictModel):
     application_id: str
     analysis_id: str
     content: DraftDocument | None = None
+    #: The chosen render template (cv_engine/domain/templates.py); `None` is the
+    #: track's own. Hashed into `document_hash` when set.
+    template: TemplateName | None = None
     built_with: BuiltWith
     document_hash: Sha256
     content_report: ValidationReport | None = None

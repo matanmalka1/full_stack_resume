@@ -33,6 +33,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from ....application.ai_configuration import AI_MODEL_IDS, REASONING_EFFORTS
 from ....application.operations import STORED_OPERATION_PHASES
+from ....domain.templates import TEMPLATE_NAMES
 from ._helpers import IsoDate, IsoTimestamp, sequence_column, sql_values
 from ._metadata import metadata
 
@@ -431,6 +432,7 @@ user_settings = Table(
     Column("ui_density", Text, nullable=False),
     Column("ui_text_size", Text, nullable=False),
     Column("ui_theme", Text, nullable=False, server_default=text("'system'")),
+    Column("default_template", Text),
     Column("updated_at", IsoTimestamp(), nullable=False),
     CheckConstraint("edit_version > 0", name="edit_version_positive"),
     CheckConstraint(
@@ -444,4 +446,8 @@ user_settings = Table(
     CheckConstraint("ui_density IN ('comfortable', 'compact')", name="ui_density"),
     CheckConstraint("ui_text_size IN ('normal', 'large')", name="ui_text_size"),
     CheckConstraint("ui_theme IN ('system', 'light', 'dark')", name="ui_theme"),
+    CheckConstraint(
+        f"default_template IS NULL OR default_template IN ({sql_values(TEMPLATE_NAMES)})",
+        name="default_template",
+    ),
 )

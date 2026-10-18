@@ -27,6 +27,7 @@ from ...application.commands import (
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
+    SetDocumentTemplateCommand,
     UpdateDocumentCommand,
 )
 from ...util import new_id
@@ -42,8 +43,10 @@ from ..schemas.documents import (
     DocumentCheckResponse,
     DocumentMutationResponse,
     DocumentResponse,
+    PreviewTemplateParameter,
     RegenerateDocumentClaimRequest,
     RegenerateDocumentSectionRequest,
+    SetDocumentTemplateRequest,
     UpdateDocumentRequest,
 )
 from ..schemas.operations import OperationResponse
@@ -132,9 +135,18 @@ def update_document(
         }
     },
 )
-def preview_document(application_id: str, services: Services, actor: CurrentActor) -> HTMLResponse:
-    """`200` and the document itself; `412` before content exists. Nothing is stored."""
-    result = services.rendering.preview_document(actor, application_id)
+def preview_document(
+    application_id: str,
+    services: Services,
+    actor: CurrentActor,
+    template: PreviewTemplateParameter | None = None,
+) -> HTMLResponse:
+    """`200` and the document itself; `412` before content exists. Nothing is stored.
+
+    `template` shows the content in another template (`track` for the track's own)
+    without choosing it, for the picker; absent, the document's own.
+    """
+    result = services.rendering.preview_document(actor, application_id, template)
     return HTMLResponse(
         content=result.html,
         headers={**_PREVIEW_HEADERS, "ETag": document_etag(result.document_hash)},
@@ -168,6 +180,31 @@ def preview_document_pdf(application_id: str, services: Services, actor: Current
             "ETag": document_etag(result.document_hash),
         },
     )
+
+
+@router.post(
+    "/template",
+    response_model=DocumentMutationResponse,
+    summary="Choose the template the CV renders with",
+)
+def set_document_template(
+    application_id: str,
+    request: SetDocumentTemplateRequest,
+    services: Services,
+    actor: CurrentActor,
+    response: Response,
+) -> DocumentMutationResponse:
+    """`200` with the new hash; an approved or ready document returns to draft."""
+    result = services.draft_editing.set_document_template(
+        actor,
+        SetDocumentTemplateCommand(
+            application_id=application_id,
+            **request.model_dump(mode="python"),
+            actor_type="user",
+            client="web",
+        ),
+    )
+    return _mutation(response, result)
 
 
 @router.post(

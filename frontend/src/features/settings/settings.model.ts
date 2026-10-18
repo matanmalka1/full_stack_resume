@@ -11,6 +11,7 @@ export const editableSettings = (settings: Settings): UpdateSettingsRequest => (
   ui_density: settings.ui_density,
   ui_text_size: settings.ui_text_size,
   ui_theme: settings.ui_theme,
+  default_template: settings.default_template ?? null,
 });
 
 /* The three reasoning efforts by name: the setting that picks the default, and every run
@@ -28,6 +29,7 @@ export const settingsFieldLabels: Record<keyof UpdateSettingsRequest, string> = 
   ui_density: "צפיפות תצוגה",
   ui_text_size: "גודל טקסט",
   ui_theme: "ערכת נושא",
+  default_template: "תבנית ברירת מחדל",
 };
 
 export const settingValueLabel = (value: UpdateSettingsRequest[keyof UpdateSettingsRequest]): string => {

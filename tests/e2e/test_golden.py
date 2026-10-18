@@ -11,7 +11,14 @@ from cv_engine.application.commands import RenderCommand
 from cv_engine.domain.date_display import numeric_date
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.drafts import draft_claims
-from cv_engine.infrastructure.rendering import render_html
+from cv_engine.domain.render_validation import normalized_role_filename
+from cv_engine.domain.templates import TEMPLATES
+from cv_engine.infrastructure.rendering import (
+    compose_html,
+    render_html,
+    render_pdf,
+    validate_rendered,
+)
 from cv_engine.util import normalized_text, sha256_text
 
 GOLDEN_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "golden"
@@ -192,3 +199,51 @@ def _assert_dates_extract_whole(pdf_path: Path, draft) -> None:
         assert numeric is not None, text
         assert "–" in numeric, numeric
         assert numeric in extracted, (numeric, extracted)
+
+
+TEMPLATE_SNAPSHOTS = Path(__file__).resolve().parents[1] / "fixtures" / "template_snapshots.json"
+
+
+def test_every_template_matches_its_golden_html(project_root: Path, services) -> None:
+    """Each chosen template over each golden document, pinned by its HTML hash.
+
+    The same rule as the track templates: a hash moves only when the template's
+    output was meant to change.
+    """
+    expected = json.loads(TEMPLATE_SNAPSHOTS.read_text(encoding="utf-8"))
+    actual = {
+        fixture.stem: {
+            template: sha256_text(
+                compose_html(setup.draft, project_root, setup.candidate, template)
+            )
+            for template in sorted(TEMPLATES)
+        }
+        for fixture, case in _golden_cases()
+        for setup in [_build_case(services, case)]
+    }
+    assert actual == expected
+
+
+def test_every_template_passes_render_validation(
+    project_root: Path, tmp_path: Path, services, render_validator
+) -> None:
+    """Every template, in both directions, survives the PDF layout/ATS report.
+
+    Browser-marked: each document goes through Chromium and both extractors, so a
+    template whose headings, reading order, or page count an ATS would misread
+    fails here rather than when a user renders it.
+    """
+    for fixture, case in _golden_cases():
+        setup = _build_case(services, case)
+        filename = normalized_role_filename(setup.profile.normalized_role, setup.candidate)
+        for template in sorted(TEMPLATES):
+            target = tmp_path / fixture.stem / template
+            html = render_html(
+                setup.draft, project_root, target / "resume.html", setup.candidate, template
+            )
+            pdf = target / "resume.pdf"
+            geometry = render_pdf(html, pdf)
+            report = validate_rendered(
+                setup.draft, setup.profile, html, pdf, geometry, setup.candidate, filename, template
+            )
+            assert report.passed, (fixture.stem, template, report.issues)

@@ -14,7 +14,12 @@ from ....domain.document import content_check, preparation_state
 from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....util import utc_now
 from ...actor import Actor
-from ...commands import BuildFromAnalysisCommand, DocumentMutationResult, UpdateDocumentCommand
+from ...commands import (
+    BuildFromAnalysisCommand,
+    DocumentMutationResult,
+    SetDocumentTemplateCommand,
+    UpdateDocumentCommand,
+)
 from ...errors import LineageBroken, PreconditionFailed, UnknownRecord
 from ...ports import TransactionManager
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
@@ -126,6 +131,41 @@ class DraftEditingService:
                 for claim in draft_claims(patched)
                 if claim.claim_type == "pending" and claim.claim_id in edited
             ),
+        )
+
+    def set_document_template(
+        self, actor: Actor, command: SetDocumentTemplateCommand
+    ) -> DocumentMutationResult:
+        """Choose the template the document renders with.
+
+        Allowed in any state, as an edit is: the hash moves with it, so an approved or
+        ready document returns to draft and is approved and rendered again in the new
+        template. Choosing the template it already has changes nothing.
+        """
+        with self.transactions.read() as tx:
+            source = read_document_source(
+                tx, self.documents, self.sources, command.application_id, actor
+            )
+        refuse_deleted(command.application_id, source.deleted_at)
+        require_hash(source.document, command.expected_document_hash)
+        knowledge = load_knowledge(self._knowledge, actor)
+        updated = source.document
+        if command.template != updated.template:
+            with self.transactions.write() as tx:
+                updated = self.documents.set_template(
+                    tx,
+                    command.application_id,
+                    command.expected_document_hash,
+                    command.template,
+                    updated_at=utc_now(),
+                )
+        new_basis = current_basis(updated, knowledge)
+        return DocumentMutationResult(
+            application_id=command.application_id,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
+            preparation_state=preparation_state(updated, new_basis),
+            content_check=content_check(updated, new_basis),
         )
 
     def build_from_analysis(

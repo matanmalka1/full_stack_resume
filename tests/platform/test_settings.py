@@ -4,6 +4,7 @@ import pytest
 from api_harness import MUTATION_HEADERS
 
 from cv_engine.api.app import API_PREFIX
+from cv_engine.domain.templates import TEMPLATES
 
 SETTINGS_FIELDS = {
     "edit_version",
@@ -14,6 +15,8 @@ SETTINGS_FIELDS = {
     "ui_density",
     "ui_text_size",
     "ui_theme",
+    "default_template",
+    "available_templates",
     "provider_configured",
     "updated_at",
 }
@@ -27,6 +30,7 @@ def _update_body(**overrides) -> dict:
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         "ui_theme": "system",
+        "default_template": None,
         **overrides,
     }
 
@@ -91,6 +95,16 @@ def test_settings_api_returns_pure_defaults_etag_and_no_secret_surface(api_worke
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         "ui_theme": "system",
+        "default_template": None,
+        "available_templates": [
+            {
+                "id": spec.id,
+                "label": spec.label,
+                "description": spec.description,
+                "columns": spec.columns,
+            }
+            for spec in TEMPLATES.values()
+        ],
         "provider_configured": False,
         "updated_at": None,
     }
@@ -127,6 +141,7 @@ def test_settings_patch_updates_live_and_rejects_a_stale_etag_without_writing(
         default_ai_model="gpt-5.6-luna",
         default_reasoning_effort="low",
         ui_theme="dark",
+        default_template="latex",
     )
 
     updated = _patch(api_worker, initial.headers["ETag"], requested)
@@ -151,6 +166,7 @@ def test_settings_round_trip_every_theme_and_reject_values_outside_their_catalog
     for body in (
         _update_body(default_ai_model="provider-model-not-in-catalog"),
         _update_body(default_reasoning_effort="maximum"),
+        _update_body(default_template="not-a-template"),
     ):
         refused = _patch(api_worker, initial.headers["ETag"], body)
         assert refused.status_code == 422, refused.text

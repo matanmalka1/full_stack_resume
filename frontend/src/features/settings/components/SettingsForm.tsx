@@ -1,10 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Monitor, Moon, Palette, Sparkles, Sun } from "lucide-react";
+import { LayoutTemplate, Monitor, Moon, Palette, Sparkles, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ApiProblem } from "@/api/client";
 import type { Settings, UpdateSettingsRequest } from "@/api/contracts";
 import { type SettingsRead, readSettings, settingsQueryKey, updateSettings } from "@/api/settings";
+import { type SampleLanguage, templateSampleSrc } from "@/api/templates";
+import { TemplateGallery } from "@/features/templates";
 import { useDisplaySettingsPreview } from "./DisplaySettingsPreview";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
@@ -20,6 +22,7 @@ import { SectionHeader } from "@/ui/SectionHeader";
 import { SegmentedControl } from "@/ui/SegmentedControl";
 import { Select } from "@/ui/Select";
 import { SuccessNotice } from "@/ui/SuccessNotice";
+import { ViewSwitch } from "@/ui/ViewSwitch";
 import { Switch } from "@/ui/Switch";
 import { SettingsConflict } from "./SettingsConflict";
 import { editableSettings, reasoningEffortLabels } from "../settings.model";
@@ -45,6 +48,7 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
   const [baseline, setBaseline] = useState<SettingsRead>({ etag, settings });
   const [conflict, setConflict] = useState<{ base: UpdateSettingsRequest; local: UpdateSettingsRequest } | null>(null);
   const [latest, setLatest] = useState<SettingsRead | null>(null);
+  const [sampleLanguage, setSampleLanguage] = useState<SampleLanguage>("en");
   const values = editableSettings(baseline.settings);
   const {
     formState: { isDirty },
@@ -210,6 +214,38 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
                     יצירת טיוטה אוטומטית כשלא נדרשת סקירה
                   </Switch>
                 </FormSection>
+              </div>
+            </Card>
+          )}
+          {!themeOnly && (
+            <Card className={settingsCardClasses}>
+              <SectionHeader
+                className="mb-5"
+                description="העיצוב שבו נפתחים קורות חיים חדשים. כל משרה יכולה להחליף תבנית בעורך; שינוי כאן לא משנה קורות חיים קיימים."
+                icon={LayoutTemplate}
+                title="תבנית קורות חיים"
+              />
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-support text-cv-text-muted">התצוגה המקדימה מציגה קורות חיים לדוגמה.</p>
+                  <ViewSwitch
+                    label="שפת הדוגמה"
+                    onChange={setSampleLanguage}
+                    options={[
+                      { label: "אנגלית", value: "en" },
+                      { label: "עברית", value: "he" },
+                    ]}
+                    showLabels
+                    value={sampleLanguage}
+                  />
+                </div>
+                <TemplateGallery
+                  name="default-template"
+                  onChange={(template) => setValue("default_template", template, { shouldDirty: true })}
+                  options={settings.available_templates}
+                  previewSrc={(template) => templateSampleSrc(template, sampleLanguage)}
+                  value={form.default_template ?? null}
+                />
               </div>
             </Card>
           )}

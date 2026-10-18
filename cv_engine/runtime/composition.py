@@ -234,7 +234,9 @@ def build_services(
     document_files = DocumentFiles(paths, resolved_payloads)
     # One activation per use-case, shared by the service's synchronous path and the
     # Operation handler that activates the same result inside the runner's scope.
-    analysis_activation = AnalysisActivation(analysis_plans, analysis_sources, documents)
+    analysis_activation = AnalysisActivation(
+        analysis_plans, analysis_sources, documents, SqlAlchemySettingsStore(transactions)
+    )
     draft_activation = DraftActivation(documents)
     analysis_service = AnalysisService(
         transactions=transactions,
