@@ -7,7 +7,7 @@ import type { ChangePasswordRequest, LoginRequest, Me } from "./contracts";
    signed-out state, and the shell routes on it rather than showing an error. */
 export const meQueryKey = ["auth", "me"] as const;
 
-export const readMe = async (signal?: AbortSignal): Promise<Me | null> => {
+const readMe = async (signal?: AbortSignal): Promise<Me | null> => {
   try {
     return (await apiRequest<Me>("/api/v1/auth/me", { signal })).data;
   } catch (error) {

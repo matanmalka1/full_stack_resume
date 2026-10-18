@@ -71,6 +71,13 @@ select = ["E4", "E7", "E9", "F", "I", "B", "UP", "ARG"]
 # to ARG but are load-bearing.
 "tests/*" = ["ARG001", "ARG002"]
 
+[tool.vulture]
+# Dead code in the engine. Below 80 vulture also reports names it can only guess are
+# unused, and most of those are reached by a framework: FastAPI route functions, Pydantic
+# fields and validators, enum members.
+paths = ["cv_engine"]
+min_confidence = 80
+
 [tool.pyright]
 # The ports are Protocols, so they are only a boundary if something checks them
 # structurally. `basic` is what proves an adapter still satisfies the port it is
