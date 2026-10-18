@@ -5,7 +5,7 @@
 Operation's idempotency key is scoped to its Application. An existing installation's
 rows are assigned to its one user: the revision refuses when rows exist and the user
 count is not exactly one, so the owner is derived from the installation having had one
-candidate and nothing is guessed (docs/decisions/multi-user-accounts.md §4, step 3).
+candidate and nothing is guessed.
 
 Revision ID: 0006
 Revises: 0005

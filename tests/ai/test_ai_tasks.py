@@ -397,7 +397,7 @@ def test_draft_resume_commits_wording_its_facts_support(
 def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
     ai_services, fake_openai: FakeOpenAI, bare_role: bool
 ) -> None:
-    """docs/decisions/ai-owned-selection.md: `draft_resume` chooses by keeping claims.
+    """`draft_resume` chooses by keeping claims.
 
     The frame offers every section's pool and carries the Profile's guidance. The
     writer returns one bullet under each heading and nothing else; the document keeps

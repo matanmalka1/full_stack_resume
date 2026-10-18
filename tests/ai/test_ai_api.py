@@ -1,7 +1,7 @@
 """The AI routes of the document surface, over HTTP.
 
 Three things are asserted here that nothing below the transport can assert: that
-no route chooses facts apart from drafting (docs/decisions/ai-owned-selection.md),
+no route chooses facts apart from drafting (product-spec §10),
 that the regeneration routes are spelled the way §21 spells them, and that a stale
 `expected_document_hash` is a `409` that calls no provider.
 

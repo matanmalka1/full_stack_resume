@@ -237,7 +237,7 @@ def test_an_import_that_does_not_rebuild_the_files_commits_nothing(
 def test_a_fact_is_edited_in_place_but_never_changes_identity_or_is_deleted(
     services, user, project_root, database_engine
 ) -> None:
-    """docs/decisions/editable-facts.md: content and status change, identity never does."""
+    """Content and status change, identity never does."""
     services.knowledge_import.import_knowledge(EMAIL, FileKnowledge(project_root))
     with database_engine.connect() as connection:
         fact_id = connection.execute(select(facts.c.fact_id).limit(1)).scalar_one()

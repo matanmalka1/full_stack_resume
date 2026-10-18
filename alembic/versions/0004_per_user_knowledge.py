@@ -1,10 +1,9 @@
 """per-user Knowledge: facts, candidate_contexts, profile_bindings
 
 Written by `python -m cv_engine.admin import-knowledge`; the application keeps reading
-Knowledge from files until the revision that switches it over
-(docs/decisions/multi-user-accounts.md §5, step 4).
+Knowledge from files until the revision that switches it over.
 
-A fact is edited in place (docs/decisions/editable-facts.md): `cv_guard_fact_identity`
+A fact is edited in place: `cv_guard_fact_identity`
 refuses a change to its identity - `id`, `user_id`, `fact_id`, `source`, `ordinal`,
 `created_at` - and `cv_reject_protected_delete` refuses every delete, since deletion is a
 status. `replaces` is history only and has no foreign key: imported facts may name v1

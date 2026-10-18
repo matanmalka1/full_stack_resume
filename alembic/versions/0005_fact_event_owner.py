@@ -1,7 +1,7 @@
 """fact_events.user_id: a fact event gets its owner once
 
 `fact_events` stays immutable except for one permitted transition: `user_id` from NULL
-to a user, with no other column changing (docs/decisions/multi-user-accounts.md §4).
+to a user, with no other column changing.
 `import-knowledge` makes it for the rows written before Knowledge had an owner. The
 shared `no_update`/`no_delete` pair is replaced by a guard that allows exactly that
 transition and a delete-only refusal, the pattern terminal Operation rows already use.

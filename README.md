@@ -42,8 +42,7 @@ docker compose up -d postgres
 Every screen but sign-in requires a session, so the first run creates the one user;
 `create-user` prompts for the password twice (12 to 256 characters). A forgotten
 password is reset with `python -m cv_engine.admin set-password --email …`, which also
-ends every session. The database admits one user until per-user isolation ships
-(`docs/decisions/multi-user-accounts.md`).
+ends every session.
 
 Multiple worktrees may share the same PostgreSQL server, but worktrees that run in
 parallel should use separate databases through `CV_DATABASE_URL`; they do not need

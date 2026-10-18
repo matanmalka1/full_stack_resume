@@ -1,6 +1,6 @@
 """The draft frame: what a Profile section may carry, and the structure it always keeps.
 
-`draft_resume` chooses which facts a CV uses (docs/decisions/ai-owned-selection.md).
+`draft_resume` chooses which facts a CV uses (product-spec §10).
 What stays here is what stops an invented fact and keeps a role readable:
 
 - a fact is chosen only from its section's pool of canonical facts;

@@ -489,7 +489,7 @@ def test_historical_title_placement_blocks_a_demoted_title_and_spares_a_project_
 
 
 def test_guidance_never_blocks_but_a_bullet_under_another_role_does(draft_factory) -> None:
-    """docs/decisions/ai-owned-selection.md: budgets, tags and pins are guidance.
+    """Budgets, tags and pins are guidance (product-spec §10).
 
     A document carrying every fact its Profile offers overruns section budgets and
     per-role ceilings and still passes. Moving one bullet under another role's title
