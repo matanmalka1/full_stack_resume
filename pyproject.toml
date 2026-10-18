@@ -12,6 +12,7 @@ dependencies = [
   "argon2-cffi>=23.1,<26",
   "fastapi>=0.115,<1",
   "Jinja2>=3.1,<4",
+  "pdfminer.six>=20240706,<20270101",
   "playwright>=1.48,<2",
   "psycopg[binary]>=3.2,<4",
   "pydantic>=2.12,<3",

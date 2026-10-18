@@ -26,7 +26,7 @@ Backend:
 - Python 3.11+, Pydantic 2
 - FastAPI + Uvicorn
 - PostgreSQL 17 through SQLAlchemy 2.0 Core (no ORM) and psycopg 3; Alembic
-- Jinja2 for resume HTML; Playwright Chromium for rendering; `pypdf` for PDF checks
+- Jinja2 for resume HTML; Playwright Chromium for rendering; `pypdf` and `pdfminer.six` for PDF checks
 - `argon2-cffi` for passwords
 - `boto3` only in the optional `s3` extra, imported inside the S3 adapter
 - Tooling: pytest, ruff, pyright (`basic`)
