@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from enum import StrEnum
 from typing import Literal
@@ -10,6 +11,18 @@ from pydantic import Field, model_validator
 
 from .base import StrictModel
 from .taxonomy import Emphasis, ProfileName, Track
+
+
+def filing_role(role: str) -> str:
+    """The part of a Profile's `normalized_role` that names its PDF and role folder.
+
+    Seniority words and anything outside a plain ASCII filename alphabet are
+    dropped. The one place this cleaning is written: the Profile validates that its
+    role survives it, and the PDF filename is built from it.
+    """
+    cleaned = re.sub(r"\b(?:senior|junior|lead|principal)\b", "", role, flags=re.IGNORECASE)
+    cleaned = re.sub(r"[^A-Za-z0-9+ /&.-]+", "", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip(" .-")
 
 
 class FactStatus(StrEnum):
@@ -185,6 +198,12 @@ class Profile(StrictModel):
             raise ValueError("headline must be one of the safe headlines")
         if self.normalized_role not in self.safe_headlines:
             raise ValueError("normalized role must be a safe headline")
+        if not filing_role(self.normalized_role):
+            # The role names the PDF and its folder; a role that cleans to nothing
+            # (a Hebrew one, say) would leave the file unnamed.
+            raise ValueError(
+                "normalized role must keep a plain ASCII role name once cleaned for the filename"
+            )
         return self
 
     @model_validator(mode="after")

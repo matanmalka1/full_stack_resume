@@ -4,10 +4,12 @@ from pathlib import Path
 
 import pytest
 from helpers import actor_of, edit_document_claim, stored_document
+from pydantic import ValidationError
 from pypdf import PdfWriter
 
 from cv_engine.application.commands import RenderCommand
 from cv_engine.application.errors import DOCUMENT_NOT_APPROVED, PreconditionFailed
+from cv_engine.domain.contracts.knowledge import Profile, filing_role
 from cv_engine.infrastructure.rendering import (
     _claim_recoverable,
     _launch_failure_message,
@@ -40,6 +42,27 @@ def test_filename_normalization_does_not_add_seniority(candidate_context) -> Non
     assert normalized_role_filename("Full Stack Developer", candidate_context) == (
         "Matan Malka - Full Stack Developer - CV.pdf"
     )
+
+
+def test_a_role_that_cleans_to_nothing_has_no_filename(candidate_context) -> None:
+    # No fallback role: a Hebrew role is refused here, and by the Profile before it.
+    with pytest.raises(ValueError):
+        normalized_role_filename("מפתח פולסטאק", candidate_context)
+    with pytest.raises(ValueError):
+        normalized_role_filename("Senior", candidate_context)
+
+
+def test_a_profile_refuses_a_role_that_cannot_name_its_pdf(profile_store) -> None:
+    profile = next(iter(profile_store.profiles.values()))
+    values = profile.model_dump()
+    hebrew = "מפתח פולסטאק"
+    with pytest.raises(ValidationError, match="plain ASCII role name"):
+        Profile.model_validate(
+            values
+            | {"normalized_role": hebrew, "safe_headlines": [*profile.safe_headlines, hebrew]}
+        )
+    assert filing_role("Senior Account Executive") == "Account Executive"
+    assert filing_role(profile.normalized_role)
 
 
 def test_rtl_ats_comparison_accepts_bidi_token_reordering() -> None:
