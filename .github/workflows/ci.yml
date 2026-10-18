@@ -99,6 +99,26 @@ jobs:
           CV_REQUIRE_BROWSER: "1"
         run: ./.venv/bin/python -m pytest -q -m ""
 
+  lint:
+    name: Backend lint (ruff, pyright, vulture)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install the engine with test extras
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e '.[test]'
+      - name: ruff check
+        run: ./.venv/bin/ruff check .
+      - name: ruff format
+        run: ./.venv/bin/ruff format --check .
+      - name: pyright
+        run: ./.venv/bin/pyright
+      # Paths and confidence come from [tool.vulture] in pyproject.toml.
+      - name: vulture
+        run: ./.venv/bin/vulture
+
   api-contract:
     name: API contract (generated OpenAPI and types)
     runs-on: ubuntu-latest
@@ -137,6 +157,10 @@ jobs:
       - run: npm ci
       - name: Typecheck, design-token lint, strict oxlint, Vitest
         run: npm run check
+      - name: Prettier
+        run: npm run format:check
+      - name: knip (unused files, exports, dependencies)
+        run: npm run knip
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Playwright against the production build
