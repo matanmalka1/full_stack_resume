@@ -154,6 +154,36 @@ def validate_render_evidence(
             )
         )
 
+    # An ATS assigns a line to the heading read before it, so the body must come out
+    # in document order: each heading, then its lines. pdfminer's default layout
+    # clusters a short right-aligned Hebrew heading after the full-width lines below
+    # it, and no CSS changes that, so a Hebrew document is ordered by pypdf alone.
+    # A heading already reported as broken has no place to be ordered from.
+    body = [
+        line
+        for section in draft.sections
+        for line in (
+            *([] if section.name in broken_headings else [section.name]),
+            *(
+                displayed_claim_text(claim.style, claim.text, draft.language)
+                for claim in section.claims
+            ),
+        )
+    ]
+    readings = extractions[:1] if draft.language == "he" else extractions
+    out_of_order = list(
+        dict.fromkeys(line for text in readings for line in _lines_out_of_order(body, text))
+    )
+    if out_of_order:
+        groups["ats"] = False
+        issues.append(
+            ValidationIssue(
+                group="ats",
+                code="reading-order",
+                message="Read before the line above it: " + "; ".join(out_of_order),
+            )
+        )
+
     # Coverage tolerates bidi reordering, which is right for prose and fatal for a
     # date range: an ATS reads experience from the range as one run. Each date line
     # must be extracted whole, differing at most in whitespace.
@@ -270,6 +300,42 @@ def _heading_line_found(heading: str, extracted: str) -> bool:
     expected = normalized_text(heading)
     lines = {normalized_text(line) for line in extracted.splitlines()}
     return expected in lines or expected[::-1] in lines
+
+
+_ORDER_TOKEN = re.compile(r"[֐-׿]+|[^\W_֐-׿]+")
+
+
+def _order_tokens(value: str) -> list[str]:
+    return [
+        token
+        for token in _ORDER_TOKEN.findall(value.casefold())
+        if len(token) > 1 or token.isdigit()
+    ]
+
+
+def _lines_out_of_order(lines: list[str], extracted: str) -> list[str]:
+    """The lines found in `extracted` only before the line expected above them.
+
+    A line is located by its rarest token, at its first occurrence after the line
+    before it; bidi reordering within a line moves no token past a neighbour line.
+    A line with no token in the text is skipped: coverage reports a missing line.
+    """
+    positions: dict[str, list[int]] = {}
+    for index, token in enumerate(_order_tokens(extracted)):
+        positions.setdefault(token, []).append(index)
+    late: list[str] = []
+    last = -1
+    for line in lines:
+        present = [token for token in _order_tokens(line) if token in positions]
+        if not present:
+            continue
+        anchor = min(present, key=lambda token: len(positions[token]))
+        following = next((index for index in positions[anchor] if index > last), None)
+        if following is None:
+            late.append(line)
+        else:
+            last = following
+    return late
 
 
 def _without_whitespace(value: str) -> str:

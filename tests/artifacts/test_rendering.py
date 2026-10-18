@@ -275,6 +275,47 @@ def test_a_glyph_extracted_without_a_character_fails_the_ats_check(draft_factory
     assert report.issues[0].message.startswith("2 ")
 
 
+def _with_sections_swapped(draft) -> list[str]:
+    """The displayed lines with the first two sections read in the other order."""
+    lines = _displayed_lines(draft)
+    first, second = draft.sections[0], draft.sections[1]
+    size = lambda section: 1 + len(section.claims)  # noqa: E731
+    start = lines.index(first.name)
+    middle = start + size(first)
+    end = middle + size(second)
+    return [*lines[:start], *lines[middle:end], *lines[start:middle], *lines[end:]]
+
+
+def test_a_section_read_before_the_one_above_it_fails_the_ats_check(draft_factory) -> None:
+    setup = draft_factory("Account Manager retention portfolio")
+    lines = _displayed_lines(setup.draft)
+    swapped = "\n".join(_with_sections_swapped(setup.draft))
+    for evidence in (
+        _evidence(setup, swapped, layout_text="\n".join(lines)),
+        _evidence(setup, "\n".join(lines), layout_text=swapped),
+    ):
+        report = validate_render_evidence(setup.draft, setup.profile, evidence, setup.candidate)
+        assert report.groups["ats"] is False
+        assert [issue.code for issue in report.issues] == ["reading-order"]
+        assert setup.draft.sections[1].name in report.issues[0].message
+
+
+def test_a_hebrew_document_is_ordered_by_pypdf_alone(draft_factory) -> None:
+    setup = draft_factory("Account Manager retention portfolio", language_override="he")
+    lines = "\n".join(_displayed_lines(setup.draft))
+    swapped = "\n".join(_with_sections_swapped(setup.draft))
+    # pdfminer's layout puts short right-aligned Hebrew headings after their lines.
+    report = validate_render_evidence(
+        setup.draft, setup.profile, _evidence(setup, lines, layout_text=swapped), setup.candidate
+    )
+    assert report.passed, report.issues
+
+    report = validate_render_evidence(
+        setup.draft, setup.profile, _evidence(setup, swapped, layout_text=lines), setup.candidate
+    )
+    assert [issue.code for issue in report.issues] == ["reading-order"]
+
+
 def test_render_findings_keep_their_existing_failed_groups(
     tmp_path: Path,
     draft_factory,
