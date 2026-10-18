@@ -54,6 +54,10 @@
     .column { min-width: 0; overflow-wrap: anywhere; }
     .column > section:first-child { margin-top: var(--gap); }
     {% block design %}{% endblock %}
+    /* A side column is a third of the page: its headings stay small enough that the
+       longest a Profile names ("Sales & Technical Skills") keeps to one line in any
+       fallback face, since an ATS reads a wrapped heading as two lines. */
+    .column-side h2 { font-size: 9pt; }
     /* A face without Hebrew glyphs makes Chromium fall back word by word; each word
        becomes its own text run, and extractors then read the words in visual order.
        So a Hebrew document draws every stack from faces that carry Hebrew. */
