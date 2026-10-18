@@ -6,7 +6,8 @@ database transaction.
 
 from __future__ import annotations
 
-from .service import FactLifecycleService, KnowledgeQueryService
+from .lifecycle import FactLifecycleService
+from .queries import KnowledgeQueryService
 
 __all__ = [
     "FactLifecycleService",
