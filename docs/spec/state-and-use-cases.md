@@ -508,7 +508,8 @@ A failed check is `200` with `passed = false`.
 Operation. At queue time requires the hash, `preparation_state = approved` (else
 `DOCUMENT_NOT_APPROVED`, 412), and no review reason. Execution revalidates, writes HTML,
 renders the PDF with Playwright Chromium to a per-attempt path, and checks geometry,
-page count, PDF/ATS text, links, direction, and filename metadata.
+page count, PDF/ATS text (coverage, and each date range extracted as one run), links,
+direction, and filename metadata.
 
 Activation locks the document and requires an unchanged hash and
 `approved_basis == basis`; then it swaps the file paths, stamps `rendered_basis`, and

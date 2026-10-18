@@ -243,6 +243,7 @@ class MissingFactRenderingReason(OperationModel):
 
 RenderCheckCode = Literal[
     "pdf_text_coverage",
+    "pdf_date_range",
     "pdf_link_targets",
     "content_overflow",
     "document_direction",

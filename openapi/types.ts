@@ -2547,7 +2547,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            code: "content_overflow" | "direction_isolation" | "document_direction" | "html_missing" | "pdf_corrupt" | "pdf_filename" | "pdf_link_targets" | "pdf_missing" | "pdf_text_coverage" | "render_validation";
+            code: "content_overflow" | "direction_isolation" | "document_direction" | "html_missing" | "pdf_corrupt" | "pdf_date_range" | "pdf_filename" | "pdf_link_targets" | "pdf_missing" | "pdf_text_coverage" | "render_validation";
         };
         /** SettingsResponse */
         SettingsResponse: {

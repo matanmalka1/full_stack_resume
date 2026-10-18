@@ -87,6 +87,7 @@ def _safe_render_failure_detail(report: ValidationReport) -> str:
         return f"Rendered PDF has {issue.message}."
     safe_messages = {
         "text-coverage": "Rendered PDF text is not sufficiently recoverable by ATS readers.",
+        "date-range": "Rendered PDF breaks a date range apart, so ATS readers cannot read it.",
         "link-targets": "Rendered PDF is missing one or more expected contact links.",
         "overflow": "Rendered content exceeds the page boundaries.",
         "document-direction": "Rendered document direction does not match its language.",
@@ -105,6 +106,7 @@ def _safe_render_failure_detail(report: ValidationReport) -> str:
 #: code this table does not know is reported as the generic `render_validation`.
 _RENDER_REASON_CODES: dict[str, RenderCheckCode] = {
     "text-coverage": "pdf_text_coverage",
+    "date-range": "pdf_date_range",
     "link-targets": "pdf_link_targets",
     "overflow": "content_overflow",
     "document-direction": "document_direction",

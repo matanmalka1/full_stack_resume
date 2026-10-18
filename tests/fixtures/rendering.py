@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from cv_engine.domain.candidate import contact_href
+from cv_engine.domain.date_display import displayed_claim_text
 from cv_engine.domain.render_validation import RenderEvidence, RenderGeometry
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 
@@ -39,7 +40,11 @@ def deterministic_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
             [
                 draft.headline.text,
                 *(claim.text for claim in draft.contacts),
-                *(claim.text for section in draft.sections for claim in section.claims),
+                *(
+                    displayed_claim_text(claim.style, claim.text, draft.language)
+                    for section in draft.sections
+                    for claim in section.claims
+                ),
             ]
         )
         links = [

@@ -19,6 +19,7 @@ from ..domain.contracts.knowledge import (
     Profile,
 )
 from ..domain.contracts.validation import ValidationReport
+from ..domain.date_display import numeric_date
 from ..domain.render_validation import (
     RenderEvidence,
     RenderGeometry,
@@ -142,6 +143,23 @@ def _claim_html(claim: Any, rtl: bool, section_name: str, config: dict[str, Any]
     return Markup("").join(parts)
 
 
+def _section_claim_html(
+    claim: Any, language: str, section_name: str, config: dict[str, Any]
+) -> Markup:
+    """A section line as it is rendered.
+
+    A Hebrew date line that reads whole as dates is shown in its numeric form as one
+    isolated left-to-right run, never split per token by `_bidi`: split, a PDF
+    extractor scatters the range and an ATS cannot read it (see `date_display`).
+    """
+    rtl = language == "he"
+    if rtl and claim.style == "date":
+        numeric = numeric_date(claim.text, language)
+        if numeric is not None:
+            return Markup(f'<bdi dir="ltr">{html.escape(numeric)}</bdi>')
+    return _claim_html(claim, rtl, section_name, config)
+
+
 def _contact_html(claim: Any, rtl: bool, candidate: CandidateContext) -> Markup:
     text = claim.text
     href = contact_href(candidate, claim.fact_ids[0], text)
@@ -176,7 +194,10 @@ def compose_html(draft: DraftDocument, repo: Path, candidate: CandidateContext) 
         {
             "name": section.name,
             "claims": [
-                {"style": claim.style, "html": _claim_html(claim, rtl, section.name, emphasis)}
+                {
+                    "style": claim.style,
+                    "html": _section_claim_html(claim, draft.language, section.name, emphasis),
+                }
                 for claim in section.claims
             ],
         }
