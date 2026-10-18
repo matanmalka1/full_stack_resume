@@ -162,6 +162,13 @@ Warning codes:
   `edit_fact` ships, §17.)
 - `NEXT_ACTION_OVERDUE`: `next_action_date` is past and the status is not `accepted`,
   `rejected`, `withdrawn`, or `closed`.
+- `REQUIREMENT_NOT_IN_DOCUMENT`: the document has content and is on the current
+  analysis, and a requirement of that analysis that is `mandatory`, `matched` or
+  `partial`, and lists supporting facts has none of them among the facts the content
+  links (`requirements_missing_from_document`). One warning for all such requirements:
+  `entity_references` carries `document_id`, `job_analysis_id`, the first
+  `requirement_id` with one of its supporting `fact_id`s, and `requirement_count`; the
+  message lists every requirement's text.
 
 ## 9. Action policy projection
 

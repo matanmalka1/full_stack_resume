@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from ..domain.analysis.document_coverage import requirements_missing_from_document
+from ..domain.contracts.analysis import JobAnalysis
 from ..domain.contracts.document import CVDocument
 from ..domain.contracts.knowledge import FactStatus
 from ..domain.document import (
@@ -171,6 +173,44 @@ def _analysis_job_text(context: ProjectionContext, analysis_id: str) -> str | No
     )
 
 
+def _pinned_analysis(context: ProjectionContext, analysis_id: str) -> JobAnalysis | None:
+    return next((row.get("analysis") for row in context.analyses if row["id"] == analysis_id), None)
+
+
+def _requirement_not_in_document(
+    context: ProjectionContext, document: CVDocument
+) -> WarningView | None:
+    """One warning for every covered mandatory requirement the written CV dropped.
+
+    Aggregated rather than one per requirement: clients list warnings by code - the
+    preparation alerts key a callout by it and the board counts titles - so N copies
+    of one code would print the same title N times. The references name the first
+    requirement and one of its supporting facts; the message lists them all.
+    """
+    analysis = _pinned_analysis(context, document.analysis_id)
+    if analysis is None or document.content is None:
+        return None
+    missing = requirements_missing_from_document(analysis, document.content)
+    if not missing:
+        return None
+    first = missing[0]
+    listed = "; ".join(requirement.text for requirement in missing)
+    return WarningView(
+        code="REQUIREMENT_NOT_IN_DOCUMENT",
+        message=(
+            f"{len(missing)} mandatory requirement(s) the analysis covered are not "
+            f"evidenced by any fact the document cites: {listed}"
+        ),
+        entity_references={
+            "document_id": document.id,
+            "job_analysis_id": document.analysis_id,
+            "requirement_id": first.requirement_id,
+            "fact_id": first.supporting_fact_ids[0],
+            "requirement_count": str(len(missing)),
+        },
+    )
+
+
 def derive_warnings(context: ProjectionContext) -> list[WarningView]:
     warnings: list[WarningView] = []
     document = context.document
@@ -191,6 +231,12 @@ def derive_warnings(context: ProjectionContext) -> list[WarningView]:
                     },
                 )
             )
+        else:
+            # On an older analysis the warning above already says the reading moved;
+            # comparing against it would judge the CV by requirements it no longer serves.
+            missing = _requirement_not_in_document(context, document)
+            if missing is not None:
+                warnings.append(missing)
         if document.built_with.profile_version != knowledge.profiles.version:
             warnings.append(
                 WarningView(

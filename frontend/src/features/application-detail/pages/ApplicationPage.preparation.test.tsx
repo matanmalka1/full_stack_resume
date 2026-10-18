@@ -669,6 +669,64 @@ describe("ApplicationPage at the preparation route", () => {
     expect(explanation).toBeVisible();
   });
 
+  it("names the mandatory requirement the written CV dropped, in Hebrew, without blocking", async () => {
+    const base = analyzed_detail();
+    const record = base.latest_analysis!;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        json(
+          analyzed_detail({
+            preparation_state: "draft_in_progress",
+            content_check: "passed",
+            available_actions: ["edit", "approve"],
+            recommended_action: "approve",
+            latest_analysis: {
+              ...record,
+              analysis: {
+                ...record.analysis,
+                requirements: [
+                  {
+                    requirement_id: "req-erp",
+                    text: "Hands-on Priority ERP",
+                    importance: "mandatory",
+                    coverage: "matched",
+                    supporting_fact_ids: ["fact-erp"],
+                    boundary_fact_ids: [],
+                    source: null,
+                  },
+                ],
+              },
+            },
+            warnings: [
+              {
+                code: "REQUIREMENT_NOT_IN_DOCUMENT",
+                message: "1 mandatory requirement(s) ... : Hands-on Priority ERP",
+                entity_references: {
+                  document_id: "doc-1",
+                  job_analysis_id: "analysis-1",
+                  requirement_id: "req-erp",
+                  fact_id: "fact-erp",
+                  requirement_count: "3",
+                },
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    const alerts = await screen.findByLabelText("התראות");
+    expect(within(alerts).getByText("דרישת חובה מהמשרה לא מופיעה בקורות החיים")).toBeInTheDocument();
+    expect(within(alerts).getByText("Hands-on Priority ERP").tagName).toBe("BDI");
+    expect(within(alerts).getByText(/ועוד 2 דרישות חובה במצב דומה/)).toBeInTheDocument();
+    /* The server's English sentence is not what the screen says. */
+    expect(within(alerts).queryByText(/mandatory requirement\(s\)/)).not.toBeInTheDocument();
+    expect(within(alerts).queryByText("פרטי האזהרה")).not.toBeInTheDocument();
+  });
+
   it("shows translated exceptional blockers without exposing routine or unknown reason codes", async () => {
     vi.stubGlobal(
       "fetch",

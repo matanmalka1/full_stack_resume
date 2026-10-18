@@ -210,7 +210,10 @@ The matching form (`apply_analysis_decisions`) changes Track, Profile, language,
 Emphasis by creating a new JobAnalysis without calling the provider.
 
 Fit, gaps, and analysis issues are shown but never block anything. An uncertain
-requirement stays `unknown`.
+requirement stays `unknown`. Once the document has content, a covered mandatory
+requirement whose supporting facts the content no longer links - dropped while drafting,
+by the page-fit trim (§10), or by editing - is reported as `REQUIREMENT_NOT_IN_DOCUMENT`, a warning that
+blocks nothing.
 
 Review reasons — a fact the document uses that is pending or deleted
 (state-and-use-cases.md §7) — block approve, render, and submit.
