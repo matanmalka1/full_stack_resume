@@ -6,7 +6,6 @@
 | A state value, a command's preconditions, an error code, an HTTP route | [`spec/state-and-use-cases.md`](spec/state-and-use-cases.md) |
 | Layers, storage, runtime config, process model | [`spec/architecture.md`](spec/architecture.md) |
 | Which tests cover what, the golden matrix, the live AI smoke checklist | [`spec/test-and-acceptance-plan.md`](spec/test-and-acceptance-plan.md) |
-| Results of live AI runs | [`acceptance/`](acceptance/) |
 | Open frontend UX work | [`frontend-ux.md`](frontend-ux.md) |
 | How to run, build, and test the system | [`../README.md`](../README.md) |
 | How agents work in this repository | [`../CLAUDE.md`](../CLAUDE.md) |

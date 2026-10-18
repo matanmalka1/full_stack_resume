@@ -246,8 +246,6 @@ Before a release:
 - structured outputs valid; provider, model, usage, effort, and cost recorded
 - refusal/failure path checked
 
-Results of live runs: `../acceptance/`.
-
 ## 7. Browsers
 
 Chromium only, for UI tests and PDF rendering. Release run on macOS.

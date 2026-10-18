@@ -349,7 +349,7 @@ def test_reviewed_wording_cannot_carry_a_number_its_facts_lack(
     ("order", "passes"),
     [
         ("as-linked", True),
-        # docs/acceptance/2026-09-29.md: a reviewer listed the right quotes in the other
+        # A live run: a reviewer listed the right quotes in the other
         # order. The pairing attests support; the order attests nothing.
         ("swapped", True),
         # Both quotes fit the first fact only: the second fact has no quote of its own.
