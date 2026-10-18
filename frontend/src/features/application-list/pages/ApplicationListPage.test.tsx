@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryOptions, applicationListQueryOptions } from "@/api/applications";
 import type { ApplicationDetail, ApplicationListItem, ApplicationListResponse, Reason } from "@/api/contracts";
+import { json } from "@/test/fixtures";
 import { PAGE_SIZE } from "../model/applicationListParams";
 import { ApplicationListPage } from "./ApplicationListPage";
 
@@ -41,12 +42,6 @@ const reason = (code: string): Reason => ({
   entity_references: {},
   allowed_resolution_actions: [],
 });
-
-const jsonResponse = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...extraHeaders },
-  });
 
 /* The list endpoint answers one page plus the two counts that place it. The stub defaults
    `matched` to the items it was handed for the common one-page case; pagination tests
@@ -136,7 +131,7 @@ const stubList = (items: ApplicationListItem[], counts: Counts = {}) => {
   const body = listBody(items, counts);
   const fetchMock = vi.fn(async (_url: unknown, options?: RequestInit) =>
     options?.method === "POST"
-      ? jsonResponse({
+      ? json({
           application_id: "app-1",
           current_status: "closed",
           event_id: "event-1",
@@ -144,7 +139,7 @@ const stubList = (items: ApplicationListItem[], counts: Counts = {}) => {
           next_action_date: null,
           terminal_outcome: null,
         })
-      : jsonResponse(body),
+      : json(body),
   );
   vi.stubGlobal("fetch", fetchMock);
   return {
@@ -219,7 +214,7 @@ describe("ApplicationListPage", () => {
     let failing = true;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => (failing ? jsonResponse({ detail: "boom" }, 500) : jsonResponse(listBody([item()])))),
+      vi.fn(async () => (failing ? json({ detail: "boom" }, 500) : json(listBody([item()])))),
     );
 
     renderPage();
@@ -395,7 +390,7 @@ describe("ApplicationListPage", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: unknown) =>
-        String(url) === "/api/v1/applications/app-1" ? jsonResponse(detailBody()) : jsonResponse(listBody([item()])),
+        String(url) === "/api/v1/applications/app-1" ? json(detailBody()) : json(listBody([item()])),
       ),
     );
 
@@ -453,7 +448,7 @@ describe("ApplicationListPage", () => {
     });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => jsonResponse(listBody([ready]))),
+      vi.fn(async () => json(listBody([ready]))),
     );
 
     renderPage();
@@ -589,7 +584,7 @@ describe("ApplicationListPage", () => {
     });
     const fetchMock = vi.fn(async (_url: unknown, options?: RequestInit) => {
       if (options?.method === "PATCH") return new Promise<Response>(() => undefined);
-      return jsonResponse(listBody([first, second]));
+      return json(listBody([first, second]));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -629,7 +624,7 @@ describe("ApplicationListPage", () => {
       const preset = requestUrl.searchParams.get("preset");
       const matched = preset == null ? 9 : (countsByPreset[preset] ?? 0);
 
-      return jsonResponse(
+      return json(
         listBody([item()], {
           matched,
           presetCounts: countsByPreset,
@@ -699,18 +694,18 @@ describe("ApplicationListPage", () => {
       });
 
       if (path === "/api/v1/applications/app-1") {
-        return jsonResponse(detailBody());
+        return json(detailBody());
       }
       if (path === "/api/v1/applications/app-1/status") {
-        return jsonResponse({ application_id: "app-1", current_status: "closed", event_id: "event-status" });
+        return json({ application_id: "app-1", current_status: "closed", event_id: "event-status" });
       }
       if (path === "/api/v1/applications/app-1/next-action") {
-        return jsonResponse({ application_id: "app-1", current_status: "closed", event_id: "event-action" });
+        return json({ application_id: "app-1", current_status: "closed", event_id: "event-action" });
       }
       if (path === "/api/v1/applications/app-1/notes") {
-        return jsonResponse({ application_id: "app-1", notes: "Interview notes" });
+        return json({ application_id: "app-1", notes: "Interview notes" });
       }
-      return jsonResponse(listBody([item()]));
+      return json(listBody([item()]));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -791,7 +786,7 @@ describe("ApplicationListPage", () => {
       recruitmentStatusCounts: { saved: matched },
     });
     const fetchMock = vi.fn(async (url: unknown) =>
-      jsonResponse(String(url).includes(`offset=${PAGE_SIZE}`) ? lastPageBody : firstPageBody),
+      json(String(url).includes(`offset=${PAGE_SIZE}`) ? lastPageBody : firstPageBody),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -853,12 +848,10 @@ describe("ApplicationListPage", () => {
       "fetch",
       vi.fn((url: unknown) => {
         if (new URL(String(url), "http://localhost").searchParams.get("limit") !== String(PAGE_SIZE)) {
-          return Promise.resolve(jsonResponse(listBody([item()])));
+          return Promise.resolve(json(listBody([item()])));
         }
         boardReads += 1;
-        return boardReads === 1
-          ? Promise.resolve(jsonResponse(listBody([item()])))
-          : new Promise<Response>(() => undefined);
+        return boardReads === 1 ? Promise.resolve(json(listBody([item()]))) : new Promise<Response>(() => undefined);
       }),
     );
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

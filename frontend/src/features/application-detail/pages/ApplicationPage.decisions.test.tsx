@@ -1,9 +1,8 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail } from "@/api/contracts";
+import { json, renderRoute } from "@/test/fixtures";
 import { ApplicationPage } from "./ApplicationPage";
 
 const APPLY_PATH = "/api/v1/analyses/analysis-1/apply-decisions";
@@ -65,9 +64,6 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
     ...overrides,
   }) as ApplicationDetail;
 
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-
 const problemResponse = (code: string, detailText: string, status = 412): Response =>
   new Response(
     JSON.stringify({
@@ -80,20 +76,7 @@ const problemResponse = (code: string, detailText: string, status = 412): Respon
     { status, headers: { "Content-Type": "application/problem+json" } },
   );
 
-const renderPage = () => {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchInterval: false, gcTime: 0 }, mutations: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/applications/app-1"]}>
-        <Routes>
-          <Route element={<ApplicationPage />} path="/applications/:applicationId" />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
-};
+const renderPage = () => renderRoute("/applications/app-1", "/applications/:applicationId", <ApplicationPage />);
 
 /* The form lives in a dialog opened from the summary under the analysis heading. */
 const openMatchingDialog = async () => {
@@ -121,7 +104,7 @@ describe("voluntary matching configuration", () => {
       if (String(input) === APPLY_PATH) {
         applied = true;
         return Promise.resolve(
-          jsonResponse(
+          json(
             {
               application_id: "app-1",
               job_analysis_id: "analysis-2",
@@ -134,7 +117,7 @@ describe("voluntary matching configuration", () => {
           ),
         );
       }
-      return Promise.resolve(jsonResponse(applied ? after : before));
+      return Promise.resolve(json(applied ? after : before));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -176,7 +159,7 @@ describe("voluntary matching configuration", () => {
     const message = /המסמך יישאר בנוי על הניתוח הנוכחי/;
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => Promise.resolve(jsonResponse(detail({ preparation_state, ...extra })))),
+      vi.fn(() => Promise.resolve(json(detail({ preparation_state, ...extra })))),
     );
     renderPage();
     await openMatchingDialog();
@@ -194,7 +177,7 @@ describe("voluntary matching configuration", () => {
       vi.fn((input: RequestInfo | URL) =>
         String(input) === APPLY_PATH
           ? Promise.resolve(problemResponse("STATE_CONFLICT", "the active JobAnalysis moved", 409))
-          : Promise.resolve(jsonResponse(before)),
+          : Promise.resolve(json(before)),
       ),
     );
 
@@ -210,7 +193,7 @@ describe("voluntary matching configuration", () => {
   });
 
   it("discards unsaved choices when the dialog is cancelled", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(detail())));
+    const fetchMock = vi.fn(() => Promise.resolve(json(detail())));
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();

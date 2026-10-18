@@ -1,10 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { JOB_TEXT_MAX_BYTES } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
+import { json, renderRoute } from "@/test/fixtures";
 import { ApplicationPage } from "./ApplicationPage";
 
 const detail = (): ApplicationDetail =>
@@ -40,33 +39,9 @@ const detail = (): ApplicationDetail =>
     },
   }) as ApplicationDetail;
 
-const jsonResponse = (body: unknown): Response =>
-  new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-
 const renderPage = (fetchImplementation?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, refetchInterval: false, gcTime: 0 },
-      mutations: { retry: false },
-    },
-  });
-
-  vi.stubGlobal("fetch", vi.fn(fetchImplementation ?? (() => Promise.resolve(jsonResponse(detail())))));
-
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/applications/app-1"]}>
-        <Routes>
-          {/* One address for this screen, exactly as `router.tsx` maps it. The second entry
-              here mirrored the second route the table used to carry. */}
-          <Route element={<ApplicationPage />} path="/applications/:applicationId" />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
+  vi.stubGlobal("fetch", vi.fn(fetchImplementation ?? (() => Promise.resolve(json(detail())))));
+  return renderRoute("/applications/app-1", "/applications/:applicationId", <ApplicationPage />);
 };
 
 afterEach(() => {
@@ -111,7 +86,7 @@ describe("ApplicationPage", () => {
   it("links a Ready application to its ready step and to the draft from the workflow spine", async () => {
     renderPage(() =>
       Promise.resolve(
-        jsonResponse({
+        json({
           ...detail(),
           preparation_state: "ready",
           document_id: "doc-1",
@@ -161,7 +136,7 @@ describe("ApplicationPage", () => {
     });
     renderPage(() =>
       Promise.resolve(
-        jsonResponse({
+        json({
           ...detail(),
           job_posting: { ...detail().job_posting, job_text: storedText },
         }),
@@ -181,14 +156,14 @@ describe("ApplicationPage", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith("/job-text") && init?.method === "PATCH") {
         return Promise.resolve(
-          jsonResponse({
+          json({
             application_id: "app-1",
             job_text_hash: "d".repeat(64),
             job_text_updated_at: "2026-08-25T07:00:00Z",
           }),
         );
       }
-      return Promise.resolve(jsonResponse(detail()));
+      return Promise.resolve(json(detail()));
     });
     renderPage(fetchMock);
 
@@ -220,7 +195,7 @@ describe("ApplicationPage", () => {
   });
 
   it("blocks a job posting update that changes nothing, without a request", async () => {
-    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse(detail())));
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(json(detail())));
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
@@ -235,7 +210,7 @@ describe("ApplicationPage", () => {
   /* The same budget intake enforces (applicationInput.isJobTextWithinBudget): an oversized
      posting is refused under its field instead of being sent for the server to refuse. */
   it("blocks a job posting update whose text exceeds the byte budget, without a request", async () => {
-    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse(detail())));
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(json(detail())));
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
@@ -250,9 +225,7 @@ describe("ApplicationPage", () => {
   });
 
   it("offers no edit once a submission locked the posting", async () => {
-    renderPage(() =>
-      Promise.resolve(jsonResponse({ ...detail(), job_posting: { ...detail().job_posting, locked: true } })),
-    );
+    renderPage(() => Promise.resolve(json({ ...detail(), job_posting: { ...detail().job_posting, locked: true } })));
 
     expect(
       await screen.findByText("נוסח המשרה נעול: המועמדות כבר הוגשה, והנוסח נשמר כפי שהיה בעת ההגשה."),
@@ -261,7 +234,7 @@ describe("ApplicationPage", () => {
   });
 
   it("blocks a job posting update with a malformed URL, without a request", async () => {
-    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse(detail())));
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(json(detail())));
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));

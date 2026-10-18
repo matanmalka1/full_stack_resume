@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { applicationDetailQueryKey } from "@/api/applications";
 import type { ApplicationDetail, RecruitmentTimelineItem } from "@/api/contracts";
 import { formatDate } from "@/utils/formatDateTime";
+import { json } from "@/test/fixtures";
 import type { RecruitmentManagerTarget } from "../model/recruitment.types";
 import { RecruitmentUpdateDialog } from "./RecruitmentUpdateDialog";
 
@@ -68,17 +69,10 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
   ...overrides,
 });
 
-const jsonResponse = (body: unknown, status = 200, contentType = "application/json"): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": contentType },
-  });
-
 /* A fresh Response is required for every request because a response body can only be
    consumed once. Keeping the fetch parameters in the signature also preserves Vitest's
    call-tuple types for the request assertions below. */
-const emptyJsonFetch = (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-  Promise.resolve(jsonResponse({}));
+const emptyJsonFetch = (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => Promise.resolve(json({}));
 
 const renderPanel = (value: ApplicationDetail = detail()) => {
   const client = new QueryClient({
@@ -129,7 +123,7 @@ describe("RecruitmentUpdateDialog", () => {
     const value = detail({ recruitment_timeline: [statusEvent({ reason: "application created" })] });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
       init?.method === undefined && String(input).endsWith("/applications/app-1")
-        ? Promise.resolve(jsonResponse(value))
+        ? Promise.resolve(json(value))
         : emptyJsonFetch(input, init),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -180,7 +174,7 @@ describe("RecruitmentUpdateDialog", () => {
     const value = detail();
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
       init?.method === undefined && String(input).endsWith("/applications/app-1")
-        ? Promise.resolve(jsonResponse(value))
+        ? Promise.resolve(json(value))
         : emptyJsonFetch(input, init),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -204,7 +198,7 @@ describe("RecruitmentUpdateDialog", () => {
     const value = detail();
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
       (init?.method ?? "GET") === "GET" && String(input).endsWith("/applications/app-1")
-        ? Promise.resolve(jsonResponse(value))
+        ? Promise.resolve(json(value))
         : emptyJsonFetch(input, init),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -304,9 +298,9 @@ describe("RecruitmentUpdateDialog", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
         (init?.method ?? "GET") === "GET" && String(input).endsWith("/applications/app-1")
-          ? Promise.resolve(jsonResponse(value))
+          ? Promise.resolve(json(value))
           : Promise.resolve(
-              jsonResponse(
+              json(
                 {
                   type: "about:blank#invalid-next-action",
                   title: "Invalid next action",
@@ -315,7 +309,7 @@ describe("RecruitmentUpdateDialog", () => {
                   detail: "הפעולה השתנתה בשרת. יש לרענן ולנסות שוב.",
                 },
                 409,
-                "application/problem+json",
+                { "Content-Type": "application/problem+json" },
               ),
             ),
       ),
@@ -418,8 +412,8 @@ describe("RecruitmentUpdateDialog", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(
         String(input).endsWith("/notes")
-          ? jsonResponse({ application_id: "app-1", notes: "Follow up after the holiday", updated_at: "now" })
-          : jsonResponse({}),
+          ? json({ application_id: "app-1", notes: "Follow up after the holiday", updated_at: "now" })
+          : json({}),
       ),
     );
     vi.stubGlobal("fetch", fetchMock);

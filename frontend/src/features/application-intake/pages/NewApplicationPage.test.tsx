@@ -6,13 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { JOB_TEXT_MAX_BYTES } from "@/api/applications";
 import type { DuplicateMatch } from "@/api/contracts";
 import { settingsQueryKey } from "@/api/settings";
+import { json } from "@/test/fixtures";
 import { NewApplicationPage } from "./NewApplicationPage";
-
-const jsonResponse = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...extraHeaders },
-  });
 
 const problemResponse = (status: number, code: string, detail: string, context?: Record<string, unknown>): Response =>
   new Response(
@@ -78,7 +73,7 @@ const storeIntakeDraft = (fields: { company: string; target_role: string; source
 };
 
 const queuedAnalysisResponse = (): Response =>
-  jsonResponse(
+  json(
     {
       id: "op-analyze",
       application_id: "app-new",
@@ -255,7 +250,7 @@ describe("NewApplicationPage", () => {
       throw new DOMException("Storage quota exceeded", "QuotaExceededError");
     });
     const calls = stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match()] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [match()] })],
     });
     renderPage();
     fillIntake("Keep this posting even when storage is full");
@@ -275,9 +270,9 @@ describe("NewApplicationPage", () => {
 
   it("creates the application and queues its analysis when the precheck finds nothing", async () => {
     const calls = stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [] })],
       [CREATE_PATH]: [
-        jsonResponse(
+        json(
           {
             application_id: "app-new",
             job_text_hash: "c".repeat(64),
@@ -350,13 +345,13 @@ describe("NewApplicationPage", () => {
     expect(pendingButton).toHaveAttribute("aria-busy", "true");
     expect(pendingButton.querySelector("svg.animate-spin")).toHaveAttribute("aria-hidden", "true");
 
-    resolveCheck(jsonResponse({ matches: [match()] }));
+    resolveCheck(json({ matches: [match()] }));
     expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
   });
 
   it("offers the existing application and an explicit override instead of creating", async () => {
     const calls = stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match({ matched_on: ["source_url", "company_title"] })] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [match({ matched_on: ["source_url", "company_title"] })] })],
     });
     renderPage();
 
@@ -387,12 +382,9 @@ describe("NewApplicationPage", () => {
      stops at the Application and the next screen says what is missing. */
   it("creates the application without queuing an analysis when no AI provider can run it", async () => {
     const calls = stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [] })],
       [CREATE_PATH]: [
-        jsonResponse(
-          { application_id: "app-new", job_text_hash: "c".repeat(64), warnings: [], duplicate_matches: [] },
-          201,
-        ),
+        json({ application_id: "app-new", job_text_hash: "c".repeat(64), warnings: [], duplicate_matches: [] }, 201),
       ],
     });
     renderPage();
@@ -407,9 +399,9 @@ describe("NewApplicationPage", () => {
 
   it("creates anyway with an explicit acknowledgement and no second precheck", async () => {
     const calls = stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match()] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [match()] })],
       [CREATE_PATH]: [
-        jsonResponse(
+        json(
           {
             application_id: "app-new",
             job_text_hash: "c".repeat(64),
@@ -435,9 +427,9 @@ describe("NewApplicationPage", () => {
 
   it("opens the created application when automatic analysis could not be queued", async () => {
     const calls = stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [] })],
       [CREATE_PATH]: [
-        jsonResponse(
+        json(
           {
             application_id: "app-new",
             job_text_hash: "c".repeat(64),
@@ -463,7 +455,7 @@ describe("NewApplicationPage", () => {
 
   it("presents the create command's own duplicate refusal as the same choice", async () => {
     stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [] })],
       [CREATE_PATH]: [
         problemResponse(
           412,
@@ -506,7 +498,7 @@ describe("NewApplicationPage", () => {
     fireEvent.change(jobTextArea(), {
       target: { value: "A completely different posting" },
     });
-    answer(jsonResponse({ matches: [match()] }));
+    answer(json({ matches: [match()] }));
 
     expect(await screen.findByText("הפרטים השתנו בזמן הבדיקה")).toBeInTheDocument();
     expect(screen.queryByText("נמצאה מועמדות דומה")).not.toBeInTheDocument();
@@ -530,7 +522,7 @@ describe("NewApplicationPage", () => {
        actually been sent and the deferred response's resolver exists. */
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     fireEvent.change(jobTextArea(), { target: { value: "The posting now on screen" } });
-    answer(jsonResponse({ matches: [] }));
+    answer(json({ matches: [] }));
 
     expect(await screen.findByText("הפרטים השתנו בזמן הבדיקה")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -552,7 +544,7 @@ describe("NewApplicationPage", () => {
     submitForm();
 
     fireEvent.change(jobTextArea(), { target: { value: "Second text" } });
-    answer(jsonResponse({ matches: [match()] }));
+    answer(json({ matches: [match()] }));
 
     expect(await screen.findByText("הפרטים השתנו בזמן הבדיקה")).toBeInTheDocument();
 
@@ -565,7 +557,7 @@ describe("NewApplicationPage", () => {
 
   it("withdraws the duplicate choice when the intake is edited", async () => {
     stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match()] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [match()] })],
     });
     renderPage();
 
@@ -588,7 +580,7 @@ describe("NewApplicationPage", () => {
   it("shows a refused creation as a blocker in this screen's words, not the server's", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [] })],
       /* A code this client's table does not translate, so the fallback path is what is
          under test. */
       [CREATE_PATH]: [problemResponse(412, "UNRECOGNIZED_REFUSAL", "job text is required")],
@@ -684,9 +676,9 @@ describe("NewApplicationPage", () => {
       job_text: "Job description text",
     });
     stubFetch({
-      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [DUPLICATE_CHECK_PATH]: [json({ matches: [] })],
       [CREATE_PATH]: [
-        jsonResponse(
+        json(
           {
             application_id: "app-new",
             job_text_hash: "c".repeat(64),
@@ -710,7 +702,7 @@ describe("NewApplicationPage", () => {
     let finishCreation!: (response: Response) => void;
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = String(input);
-      if (path === DUPLICATE_CHECK_PATH) return Promise.resolve(jsonResponse({ matches: [match()] }));
+      if (path === DUPLICATE_CHECK_PATH) return Promise.resolve(json({ matches: [match()] }));
       if (path === CREATE_PATH) {
         return new Promise<Response>((resolve) => {
           finishCreation = resolve;
@@ -728,7 +720,7 @@ describe("NewApplicationPage", () => {
 
     fireEvent.change(jobTextArea(), { target: { value: "Newer unsent posting" } });
     finishCreation(
-      jsonResponse(
+      json(
         {
           application_id: "app-new",
           job_text_hash: "c".repeat(64),
