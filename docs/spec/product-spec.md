@@ -341,7 +341,9 @@ response and its hash, model, outcome, error, usage, latency, contract and promp
 versions, price snapshot, and cost. The request is stored only as a hash. Unreported
 usage is unknown, not zero. Quota exhaustion (`PROVIDER_QUOTA_EXHAUSTED`) is reported
 separately from rate limits. A call is retried at most once, only when that cannot
-duplicate a processed request (architecture.md §11).
+duplicate a processed request (architecture.md §11). An answer the engine refuses - an analysis it
+cannot classify, a draft that leaves a heading empty - is sent back once with the
+reason (a repair, architecture.md §11).
 
 **Untrusted input.** Job text and user content are data; instructions inside a posting
 are not followed and do not count as requirements.

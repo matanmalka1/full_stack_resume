@@ -9,6 +9,11 @@ apply the retry policy - a policy of the application, not an invariant of storag
 Retrying one call never repeats another: the writer and the reviewer of one
 Operation are separate calls, so a reviewer that is retried leaves the writer's
 answer, already logged, as it was.
+
+A repair is not a retry. A retry resends the same request after a failure that
+says nothing about the answer; a repair is a new request, sent after the engine
+refused an answer it did receive, that tells the provider why. It is logged as
+one more attempt like any other.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from typing import Generic, TypeVar
 from ...domain.contracts.base import StrictModel
 from ...domain.contracts.providers import AICallRecord
 from ..errors import (
+    ApplicationError,
     ExecutionStopped,
     ProviderFailure,
     ProviderInvalidOutput,
@@ -36,11 +42,14 @@ from ..ports.outbound import AIAttempt
 from ..ports.transactions import TransactionManager
 
 ProposalT = TypeVar("ProposalT", bound=StrictModel)
+AcceptedT = TypeVar("AcceptedT")
 
 #: Attempts per call, the first included.
 MAX_ATTEMPTS = 2
 #: A `Retry-After` longer than this is not waited for; the call fails instead.
 MAX_RETRY_AFTER_SECONDS = 20.0
+#: Further requests after the engine refuses an answer, each told why.
+MAX_REPAIRS = 1
 #: HTTP statuses retried once, as the provider recommends. Not free of duplicate
 #: risk: a 5xx can follow processing the provider already did.
 _RETRIED_HTTP_STATUSES = frozenset({500, 503})
@@ -100,6 +109,21 @@ def failure_for(record: AICallRecord) -> ProviderFailure:
     return ProviderUnavailable(detail)
 
 
+class RefusedAnswer(Exception):
+    """The engine refused a provider answer, for a reason the provider can be told.
+
+    `issue` is what the next request says was wrong, in the engine's words: it
+    may name a value the answer chose, never repeat the answer's wording. `failure` is what the call ends with when no
+    repair is left, so the Operation records the same failure it did before
+    repairs existed.
+    """
+
+    def __init__(self, issue: str, failure: ApplicationError):
+        super().__init__(issue)
+        self.issue = issue
+        self.failure = failure
+
+
 @dataclass(frozen=True)
 class RecordedCall(Generic[ProposalT]):
     """A successful call: the logged attempt that produced the Proposal."""
@@ -155,3 +179,40 @@ class AICallRunner:
             self.sleeper(delay)
             if not still_owned():
                 raise ExecutionStopped("The Operation was cancelled before a retry.")
+
+    def run_until_accepted(
+        self,
+        operation_id: str,
+        invoke: Callable[[list[str]], AIAttempt[ProposalT]],
+        accept: Callable[[RecordedCall[ProposalT]], AcceptedT],
+        *,
+        knowledge_context_hash: str,
+        still_owned: Callable[[], bool],
+    ) -> AcceptedT:
+        """`run`, then `accept`; when the engine refuses the answer, ask once more.
+
+        `invoke` takes the issues the previous answer was refused for - none on the
+        first request - and `accept` raises `RefusedAnswer` for an answer the engine
+        cannot use. Each request goes through `run`, so each has its own retries and
+        its own row in the call log.
+        """
+        issues: list[str] = []
+        repairs = 0
+        while True:
+            recorded = self.run(
+                operation_id,
+                lambda issues=issues: invoke(issues),
+                knowledge_context_hash=knowledge_context_hash,
+                still_owned=still_owned,
+            )
+            try:
+                return accept(recorded)
+            except RefusedAnswer as refused:
+                if repairs >= MAX_REPAIRS:
+                    raise refused.failure from refused
+                if not still_owned():
+                    raise ExecutionStopped(
+                        "The Operation was cancelled before a repair."
+                    ) from refused
+                repairs += 1
+                issues = [refused.issue]

@@ -138,6 +138,9 @@ class AnalysisContext(StrictModel):
     #: the candidate.
     candidate_facts: list[dict[str, Any]] = []
     overrides: dict[str, str] = {}
+    #: Why the engine refused this task's previous answer to the same input;
+    #: empty on a first request.
+    repair_issues: list[str] = []
 
 
 class DraftResumeContext(StrictModel):
@@ -158,6 +161,9 @@ class DraftResumeContext(StrictModel):
     sections: list[dict[str, Any]]
     allowed_facts: list[dict[str, Any]]
     guidance: dict[str, Any] = {}
+    #: Why the engine refused this task's previous answer to the same input;
+    #: empty on a first request.
+    repair_issues: list[str] = []
 
 
 class AssessClaimSupportContext(StrictModel):

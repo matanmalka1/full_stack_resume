@@ -7,11 +7,14 @@ from dataclasses import dataclass
 
 from ....domain.analysis.normalize import normalize_analysis_proposal
 from ....domain.contracts.analysis import JobAnalysis, OverrideKey
+from ....domain.contracts.analysis_proposal import AnalysisProposal
 from ....domain.contracts.document import BuiltWith
+from ....domain.contracts.knowledge import Profile
 from ...actor import Actor
 from ...commands import AnalyzeCommand
-from ...errors import PreconditionFailed, ProviderInvalidOutput
+from ...errors import PreconditionFailed, ProviderInvalidOutput, StateConflict
 from ...ports import AnalysisContext
+from ..ai_calls import RecordedCall, RefusedAnswer
 from ..proposals import analysis_fact_context
 from .classification import analysis_profile
 
@@ -70,36 +73,47 @@ class AnalysisPreparation:
             candidate_facts=analysis_fact_context(knowledge.facts),
             overrides={str(key): value for key, value in overrides.items()},
         )
-        recorded = service.ai_calls.run(
+
+        def accept(
+            recorded: RecordedCall[AnalysisProposal],
+        ) -> tuple[JobAnalysis, RecordedCall[AnalysisProposal], Profile]:
+            try:
+                # Normalization does not raise over one bad requirement; what
+                # can still fail here is a reading the engine cannot act on at
+                # all - a Track/Profile/Emphasis combination the Profile does
+                # not allow, or a language outside the supported set.
+                result = normalize_analysis_proposal(
+                    recorded.proposal,
+                    source_text=job_text,
+                    facts=knowledge.facts,
+                    profiles=profiles,
+                    concepts=knowledge.requirement_concepts,
+                    normalized_hash=source.normalized_hash,
+                    overrides=overrides,
+                )
+            except ValueError as exc:
+                raise RefusedAnswer(str(exc), ProviderInvalidOutput(str(exc))) from exc
+            # Checked before anything is written. An analysis whose Track, Profile,
+            # and Emphasis disagree can never produce a draft, so persisting it would
+            # only leave the application classified by a combination the engine
+            # refuses to act on.
+            try:
+                selected_profile = analysis_profile(result, profiles)
+            except (PreconditionFailed, StateConflict) as exc:
+                raise RefusedAnswer(str(exc), exc) from exc
+            return result, recorded, selected_profile
+
+        result, recorded, selected_profile = service.ai_calls.run_until_accepted(
             operation_id,
-            lambda: service.provider.propose_analysis(
-                context, model=command.model, reasoning_effort=command.reasoning_effort
+            lambda issues: service.provider.propose_analysis(
+                context.model_copy(update={"repair_issues": issues}),
+                model=command.model,
+                reasoning_effort=command.reasoning_effort,
             ),
+            accept,
             knowledge_context_hash=knowledge.context_hash(),
             still_owned=still_owned,
         )
-        try:
-            # Normalization does not raise over one bad requirement; what
-            # can still fail here is a reading the engine cannot act on at
-            # all - a Track/Profile/Emphasis combination the Profile does
-            # not allow, or a language outside the supported set.
-            result = normalize_analysis_proposal(
-                recorded.proposal,
-                source_text=job_text,
-                facts=knowledge.facts,
-                profiles=profiles,
-                concepts=knowledge.requirement_concepts,
-                normalized_hash=source.normalized_hash,
-                overrides=overrides,
-            )
-        except ValueError as exc:
-            raise ProviderInvalidOutput(str(exc)) from exc
-
-        # Checked before anything is written. An analysis whose Track, Profile,
-        # and Emphasis disagree can never produce a draft, so persisting it would
-        # only leave the application classified by a combination the engine
-        # refuses to act on.
-        selected_profile = analysis_profile(result, profiles)
 
         return PreparedAnalysis(
             result=result,

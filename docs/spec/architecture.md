@@ -317,6 +317,15 @@ is not part of it. The reader accepts analysis contract `3.0` only.
 | `http_error` | any other status | never |
 | `refused`, `schema_violation` | 200 without structured text, or text the schema refuses | never |
 
+**Repair.** A repair is not a retry: it is a new request, sent once after the engine
+refuses an answer it did receive, whose input carries `repair_issues` - the engine's
+reason, never the answer's wording. `AICallRunner.run_until_accepted` sends it for an
+analysis the engine cannot normalize or classify, and for a `draft_resume` answer that
+leaves a heading with no bullet. It is logged as one more attempt, has its own retries
+above, and is skipped when the Operation is no longer owned. A second refusal ends the
+call with the failure the first would have. Semantic review is not repaired: a line it
+does not authorize is withheld (product-spec §10).
+
 **AI call log.** `ai_calls` holds one append-only row per attempt, keyed by
 `operation_id` and an `attempt` ordinal. It records provider, model, effort,
 task-contract, schema and prompt versions and hashes, input hash, Knowledge context

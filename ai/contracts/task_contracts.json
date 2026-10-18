@@ -1,20 +1,20 @@
 {
   "prompt": {
-    "version": "system-v15",
+    "version": "system-v16",
     "file": "ai/prompts/system.md"
   },
   "tasks": {
     "propose_analysis": {
-      "version": "5.0.0",
+      "version": "5.1.0",
       "input": "AnalysisContext",
-      "input_schema_version": "1.0.0",
+      "input_schema_version": "1.1.0",
       "output": "AnalysisProposal",
       "output_schema_version": "2.0.0"
     },
     "draft_resume": {
-      "version": "4.0.0",
+      "version": "4.1.0",
       "input": "DraftResumeContext",
-      "input_schema_version": "4.0.0",
+      "input_schema_version": "4.1.0",
       "output": "DraftProposal",
       "output_schema_version": "2.0.0"
     },

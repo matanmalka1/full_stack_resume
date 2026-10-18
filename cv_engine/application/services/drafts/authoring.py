@@ -18,7 +18,7 @@ from ....domain.contracts.analysis import JobAnalysis
 from ....domain.contracts.base import StrictModel
 from ....domain.contracts.drafts import DraftDocument
 from ....domain.contracts.knowledge import EmphasisPolicy, Profile, ResumeSectionSpec
-from ....domain.contracts.providers import ClaimSupportProposal, ProposedClaim
+from ....domain.contracts.providers import ClaimSupportProposal, DraftProposal, ProposedClaim
 from ....domain.drafts import (
     draft_claims,
     keep_frame_claims,
@@ -52,7 +52,7 @@ from ...ports import (
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.documents import DocumentStore
 from ...transactions import assert_external_io_allowed
-from ..ai_calls import AICallRunner, RecordedCall
+from ..ai_calls import AICallRunner, RecordedCall, RefusedAnswer
 from ..documents import (
     DocumentSource,
     compose_content,
@@ -315,24 +315,31 @@ class DraftAuthoringService:
             allowed_facts=fact_context(knowledge.facts, pool, frame.language),
             guidance=_document_guidance(profile, knowledge.policies.get(frame.emphasis)),
         )
-        written = self._call(
+
+        def accept(
+            written: RecordedCall[DraftProposal],
+        ) -> tuple[list[ProposedClaim], DraftDocument]:
+            proposed = written.proposal.claims
+            kept = {str(claim.claim_id) for claim in proposed if claim.claim_id is not None}
+            chosen = keep_frame_claims(frame, profile, kept)
+            for section in chosen.sections:
+                empty = dangling_heading(section.claims)
+                if empty is not None:
+                    issue = f"draft_resume kept no bullet under {empty!r} in {section.name}"
+                    raise RefusedAnswer(issue, ProposalRejected(issue, unsupported=[]))
+            return proposed, chosen
+
+        proposed, chosen = self.ai_calls.run_until_accepted(
             operation_id,
-            lambda: self.provider.draft_resume(
-                context, model=model, reasoning_effort=reasoning_effort
+            lambda issues: self.provider.draft_resume(
+                context.model_copy(update={"repair_issues": issues}),
+                model=model,
+                reasoning_effort=reasoning_effort,
             ),
-            knowledge,
-            still_owned,
+            accept,
+            knowledge_context_hash=knowledge.context_hash(),
+            still_owned=still_owned,
         )
-        proposed = written.proposal.claims
-        kept = {str(claim.claim_id) for claim in proposed if claim.claim_id is not None}
-        chosen = keep_frame_claims(frame, profile, kept)
-        for section in chosen.sections:
-            empty = dangling_heading(section.claims)
-            if empty is not None:
-                raise ProposalRejected(
-                    f"draft_resume kept no bullet under {empty!r} in {section.name}",
-                    unsupported=[],
-                )
         updated, withheld = apply_proposed_claims(
             chosen, proposed, knowledge.facts, set(pool), task="draft_resume"
         )

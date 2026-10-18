@@ -61,6 +61,7 @@ from cv_engine.domain.contracts.providers import (
     ReviewedAssertion,
     SectionProposal,
 )
+from cv_engine.domain.contracts.taxonomy import Emphasis
 from cv_engine.domain.drafts import draft_claims
 from cv_engine.infrastructure.persistence.tables import ai_calls, operations
 from cv_engine.util import canonical_json, new_id, sha256_text
@@ -393,21 +394,8 @@ def test_draft_resume_commits_wording_its_facts_support(
     assert actual.content.sections == working.content.sections
 
 
-@pytest.mark.parametrize("bare_role", [False, True])
-def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
-    ai_services, fake_openai: FakeOpenAI, bare_role: bool
-) -> None:
-    """`draft_resume` chooses by keeping claims.
-
-    The frame offers every section's pool and carries the Profile's guidance. The
-    writer returns one bullet under each heading and nothing else; the document keeps
-    exactly those, plus every heading and date, in frame order. A role left with no
-    bullet is refused and nothing is written.
-    """
-    ingested, _analysed = _analyzed(ai_services, "Choosing Draft Co")
-    application_id = ingested.application_id
-    document = stored_document(ai_services, application_id)
-    frame = composed_content(ai_services, application_id)
+def _one_bullet_per_heading(frame, *, bare_role: bool = False) -> list[tuple[str, object]]:
+    """The first bullet under every heading - or, `bare_role`, one heading left bare."""
     structural = {"heading", "date", "contact"}
     kept: list[tuple[str, object]] = []
     for section in frame.sections:
@@ -425,20 +413,42 @@ def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
         )
         last = [c.claim_id for name, c in kept if name == section.name][-1]
         kept = [(name, c) for name, c in kept if c.claim_id != last]
-    fake_openai.script_draft(
-        DraftProposal(
-            claims=[
-                ProposedClaim(
-                    section=name,
-                    claim_id=claim.claim_id,
-                    text=claim.text,
-                    fact_ids=list(claim.fact_ids),
-                )
-                for name, claim in kept
-            ],
-            rationale="one line per heading",
-        )
+    return kept
+
+
+def _keeping(kept: list[tuple[str, object]]) -> DraftProposal:
+    return DraftProposal(
+        claims=[
+            ProposedClaim(
+                section=name,
+                claim_id=claim.claim_id,
+                text=claim.text,
+                fact_ids=list(claim.fact_ids),
+            )
+            for name, claim in kept
+        ],
+        rationale="one line per heading",
     )
+
+
+@pytest.mark.parametrize("bare_role", [False, True])
+def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
+    ai_services, fake_openai: FakeOpenAI, bare_role: bool
+) -> None:
+    """`draft_resume` chooses by keeping claims.
+
+    The frame offers every section's pool and carries the Profile's guidance. The
+    writer returns one bullet under each heading and nothing else; the document keeps
+    exactly those, plus every heading and date, in frame order. A role left with no
+    bullet is refused and nothing is written.
+    """
+    ingested, _analysed = _analyzed(ai_services, "Choosing Draft Co")
+    application_id = ingested.application_id
+    document = stored_document(ai_services, application_id)
+    frame = composed_content(ai_services, application_id)
+    structural = {"heading", "date", "contact"}
+    kept = _one_bullet_per_heading(frame, bare_role=bare_role)
+    fake_openai.script_draft(_keeping(kept))
 
     completed = _run(
         ai_services,
@@ -470,6 +480,11 @@ def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
         assert completed.status.value == "failed"
         assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
         assert stored_document(ai_services, application_id) == document
+        # Refused, sent back once with the reason, refused again: no third request.
+        sent = [call.payload["repair_issues"] for call in fake_openai.calls_for("draft_resume")]
+        assert len(sent) == 2
+        assert sent[0] == []
+        assert len(sent[1]) == 1 and "kept no bullet under" in sent[1][0]
         return
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     drafted = stored_document(ai_services, application_id)
@@ -490,6 +505,46 @@ def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
         return {fact_id for claim in draft_claims(draft) for fact_id in claim.fact_ids}
 
     assert used(drafted.content) < used(frame)
+
+
+def test_a_draft_refused_for_a_bare_heading_is_repaired_once_with_the_reason(
+    ai_services, fake_openai: FakeOpenAI, transaction_manager
+) -> None:
+    """A repair is a new request that says why: the second answer is written."""
+    ingested, _analysed = _analyzed(ai_services, "Repaired Draft Co")
+    application_id = ingested.application_id
+    document = stored_document(ai_services, application_id)
+    frame = composed_content(ai_services, application_id)
+    fake_openai.script_draft(
+        _keeping(_one_bullet_per_heading(frame, bare_role=True)),
+        _keeping(_one_bullet_per_heading(frame)),
+    )
+
+    completed = _run(
+        ai_services,
+        ai_services.operation_submissions.submit_draft(
+            actor_of(ai_services),
+            DraftCommand(
+                application_id=application_id, expected_document_hash=document.document_hash
+            ),
+            idempotency_key=new_id(),
+            draft_service=ai_services.drafts,
+        ),
+    )
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    first, second = fake_openai.calls_for("draft_resume")
+    assert first.payload["repair_issues"] == []
+    assert "kept no bullet under" in second.payload["repair_issues"][0]
+    # Everything but the reason is the same input.
+    assert {**second.payload, "repair_issues": []} == first.payload
+    logged = [
+        (row["task"], row["outcome"])
+        for row in _ai_calls(transaction_manager, application_id)
+        if row["operation_id"] == completed.id
+    ]
+    assert logged[:2] == [("draft_resume", "succeeded"), ("draft_resume", "succeeded")]
+    assert stored_document(ai_services, application_id).content is not None
 
 
 @pytest.mark.parametrize("reviewer_undelivered_once", [False, True])
@@ -1248,7 +1303,8 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
     # bullets is in no position to tell a model that read the language what it
     # missed, so the engine keeps that count and reports a shortfall as an
     # issue instead of sending it as a denominator.
-    assert set(payload) == {"job_text", "candidate_facts", "overrides"}
+    assert set(payload) == {"job_text", "candidate_facts", "overrides", "repair_issues"}
+    assert payload["repair_issues"] == []
     supplied = {fact["fact_id"] for fact in payload["candidate_facts"]}
     canonical = {
         fact.fact_id
@@ -1370,6 +1426,63 @@ def test_one_call_is_retried_once_only_where_the_policy_allows(
             completed.status, completed.cancellation_requested_at, completed.failure_code
         )
         assert OperationAction.RETRY in actions
+
+
+@pytest.mark.parametrize("repaired", [True, False])
+def test_an_analysis_the_engine_cannot_classify_is_repaired_once(
+    ai_services, fake_openai: FakeOpenAI, transaction_manager, repaired: bool
+) -> None:
+    """Refused by the engine, not by the transport: asked again once, told why.
+
+    A second refusal ends the Operation as the first would have before repairs
+    existed, and no third request is made.
+    """
+    unclassifiable = analysis_proposal(emphasis=Emphasis.DEVELOPMENT_AI)
+    answers = [unclassifiable, ANALYSIS] if repaired else [unclassifiable]
+    fake_openai.script("propose_analysis", *answers)
+    ingested = _ingested(ai_services, f"Repair {repaired} Co")
+    completed = _run(
+        ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    )
+
+    sent = [call.payload["repair_issues"] for call in fake_openai.calls_for("propose_analysis")]
+    assert len(sent) == 2
+    assert sent[0] == []
+    assert len(sent[1]) == 1 and "is not allowed for Profile" in sent[1][0]
+    logged = _ai_calls(transaction_manager, ingested.application_id)
+    assert [row["outcome"] for row in logged] == ["succeeded", "succeeded"]
+    assert [row["attempt"] for row in logged] == [1, 2]
+    if repaired:
+        assert completed.status.value == "succeeded", completed.safe_failure_detail
+    else:
+        assert completed.status.value == "failed"
+        assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+
+
+def test_a_repair_is_not_started_once_the_operation_is_cancelled(
+    ai_services, fake_openai: FakeOpenAI, transaction_manager, monkeypatch
+) -> None:
+    """A repair, like a retry, starts only while the Operation is still this runner's."""
+    ingested = _ingested(ai_services, "Cancel Before Repair Co")
+    queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    fake_openai.scripts["propose_analysis"] = [
+        analysis_proposal(emphasis=Emphasis.DEVELOPMENT_AI),
+        ANALYSIS,
+    ]
+    runner = ai_services.analysis.ai_calls
+    run = runner.run
+
+    def run_then_cancel(*args, **kwargs):
+        recorded = run(*args, **kwargs)
+        ai_services.operation_lifecycle.cancel(actor_of(ai_services), queued.id)
+        return recorded
+
+    monkeypatch.setattr(runner, "run", run_then_cancel)
+    completed = _run(ai_services, queued)
+
+    assert completed.status.value == "cancelled"
+    assert len(fake_openai.calls_for("propose_analysis")) == 1
+    assert len(_ai_calls(transaction_manager, ingested.application_id)) == 1
 
 
 def test_a_due_retry_is_not_started_once_the_operation_is_cancelled(
