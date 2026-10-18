@@ -7,6 +7,7 @@ import type { ApplicationDetail, Operation, Settings } from "@/api/contracts";
 import { applicationDetailQueryKey } from "@/api/applications";
 import { operationQueryKey, operationQueryOptions } from "@/api/operations";
 import { settingsQueryKey } from "@/api/settings";
+import { json } from "@/test/fixtures";
 import { ApplicationPage } from "./ApplicationPage";
 
 const ANALYSES_PATH = "/api/v1/applications/app-1/analyses";
@@ -94,12 +95,6 @@ const analyzed_detail = (overrides: Partial<ApplicationDetail> = {}): Applicatio
       created_at: "2026-08-24T07:00:00Z",
     },
     ...overrides,
-  });
-
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
   });
 
 const acceptedResponse = (operation: Operation): Response =>
@@ -195,8 +190,8 @@ describe("ApplicationPage at the preparation route", () => {
       vi.fn((input: RequestInfo | URL) =>
         Promise.resolve(
           String(input).includes("/operations/")
-            ? jsonResponse(succeeded)
-            : jsonResponse(detail({ active_operation: queued({ status: "running", phase: "executing" }) })),
+            ? json(succeeded)
+            : json(detail({ active_operation: queued({ status: "running", phase: "executing" }) })),
         ),
       ),
     );
@@ -215,7 +210,7 @@ describe("ApplicationPage at the preparation route", () => {
   it("names the application without restoring the old record hierarchy", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => Promise.resolve(jsonResponse(detail()))),
+      vi.fn(() => Promise.resolve(json(detail()))),
     );
 
     renderPage();
@@ -241,14 +236,14 @@ describe("ApplicationPage at the preparation route", () => {
     let projectionReads = 0;
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
-      if (url.endsWith("/operations/op-draft")) return Promise.resolve(jsonResponse(drafting));
+      if (url.endsWith("/operations/op-draft")) return Promise.resolve(json(drafting));
       if (url.includes("/settings")) {
-        return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
+        return Promise.resolve(json({ ...aiSettings, auto_generate_when_review_not_required: true }));
       }
-      if (url.includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
+      if (url.includes("/operations/")) return Promise.resolve(json(analyzed));
       projectionReads += 1;
       return Promise.resolve(
-        jsonResponse(
+        json(
           projectionReads === 1
             ? detail({ active_operation: queued({ status: "running" }) })
             : analyzed_detail({ active_operation: drafting, latest_operation: analyzed }),
@@ -290,15 +285,15 @@ describe("ApplicationPage at the preparation route", () => {
         const url = String(input);
         if (url.endsWith("/operations/op-draft")) {
           draftActivated = true;
-          return Promise.resolve(jsonResponse(drafted));
+          return Promise.resolve(json(drafted));
         }
         if (url.includes("/settings")) {
-          return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
+          return Promise.resolve(json({ ...aiSettings, auto_generate_when_review_not_required: true }));
         }
-        if (url.includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
+        if (url.includes("/operations/")) return Promise.resolve(json(analyzed));
         projectionReads += 1;
         return Promise.resolve(
-          jsonResponse(
+          json(
             analyzed_detail({
               active_operation:
                 projectionReads === 1 ? queued({ status: "running" }) : draftActivated ? null : drafting,
@@ -346,13 +341,13 @@ describe("ApplicationPage at the preparation route", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return Promise.resolve(acceptedResponse(drafting));
-      if (url.includes("/settings")) return Promise.resolve(jsonResponse(aiSettings));
+      if (url.includes("/settings")) return Promise.resolve(json(aiSettings));
       if (url.endsWith("/operations/op-draft")) {
         draftActivated = true;
-        return Promise.resolve(jsonResponse(drafted));
+        return Promise.resolve(json(drafted));
       }
       return Promise.resolve(
-        jsonResponse(
+        json(
           analyzed_detail({
             available_actions: ["create_draft"],
             recommended_action: "create_draft",
@@ -384,7 +379,7 @@ describe("ApplicationPage at the preparation route", () => {
         return Promise.resolve(acceptedResponse(queued({ id: "op-draft", operation_type: "create_draft" })));
       }
       return Promise.resolve(
-        jsonResponse(
+        json(
           String(input).includes("/settings")
             ? aiSettings
             : analyzed_detail({
@@ -412,7 +407,7 @@ describe("ApplicationPage at the preparation route", () => {
   it("refuses to command a draft with no AI provider configured", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(
-        jsonResponse(
+        json(
           String(input).includes("/settings")
             ? noProviderSettings
             : analyzed_detail({
@@ -441,12 +436,12 @@ describe("ApplicationPage at the preparation route", () => {
         return Promise.resolve(acceptedResponse(queued()));
       }
       if (String(input).includes("/operations/")) {
-        return Promise.resolve(jsonResponse(queued()));
+        return Promise.resolve(json(queued()));
       }
       if (String(input).includes("/settings")) {
-        return Promise.resolve(jsonResponse(aiSettings));
+        return Promise.resolve(json(aiSettings));
       }
-      return Promise.resolve(jsonResponse(detail()));
+      return Promise.resolve(json(detail()));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -478,9 +473,7 @@ describe("ApplicationPage at the preparation route", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) =>
-        Promise.resolve(
-          String(input).includes("/settings") ? jsonResponse(noProviderSettings) : jsonResponse(detail()),
-        ),
+        Promise.resolve(String(input).includes("/settings") ? json(noProviderSettings) : json(detail())),
       ),
     );
 
@@ -512,9 +505,7 @@ describe("ApplicationPage at the preparation route", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL) =>
         Promise.resolve(
-          String(input).includes("/operations/")
-            ? jsonResponse(aiOperation)
-            : jsonResponse(detail({ active_operation: aiOperation })),
+          String(input).includes("/operations/") ? json(aiOperation) : json(detail({ active_operation: aiOperation })),
         ),
       ),
     );
@@ -532,10 +523,7 @@ describe("ApplicationPage at the preparation route", () => {
   });
 
   it("does not present a superseded analysis as the one in force", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(analyzed_detail({ latest_analysis_id: "analysis-9" }))),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(analyzed_detail({ latest_analysis_id: "analysis-9" }))));
 
     renderPage();
 
@@ -548,7 +536,7 @@ describe("ApplicationPage at the preparation route", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       if (String(input).includes("/facts")) {
         return Promise.resolve(
-          jsonResponse({
+          json({
             items: [
               { fact: { fact_id: "fact-1", meaning: "5 years building backend systems in Python" } },
               { fact: { fact_id: "fact-boundary", meaning: "Used Kubernetes in a personal lab" } },
@@ -557,7 +545,7 @@ describe("ApplicationPage at the preparation route", () => {
         );
       }
       return Promise.resolve(
-        jsonResponse(
+        json(
           analyzed_detail({
             latest_analysis: {
               id: "analysis-1",
@@ -658,7 +646,7 @@ describe("ApplicationPage at the preparation route", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        jsonResponse(
+        json(
           detail({
             warnings: [
               {
@@ -685,7 +673,7 @@ describe("ApplicationPage at the preparation route", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        jsonResponse(
+        json(
           detail({
             preparation_state: "draft_in_progress",
             content_check: "failed",
@@ -721,9 +709,9 @@ describe("ApplicationPage at the preparation route", () => {
         return new Promise<Response>((resolve) => {
           resolveRetry = resolve;
         });
-      if (url.endsWith("/operations/op-retry")) return Promise.resolve(jsonResponse(retrying));
-      if (url.includes("/operations/")) return Promise.resolve(jsonResponse(failed));
-      return Promise.resolve(jsonResponse(detail({ latest_operation: failed, active_operation: null })));
+      if (url.endsWith("/operations/op-retry")) return Promise.resolve(json(retrying));
+      if (url.includes("/operations/")) return Promise.resolve(json(failed));
+      return Promise.resolve(json(detail({ latest_operation: failed, active_operation: null })));
     });
     vi.stubGlobal("fetch", fetchMock);
     renderPage();
@@ -765,9 +753,9 @@ describe("ApplicationPage at the preparation route", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === ANALYSES_PATH && init?.method === "POST") return Promise.resolve(acceptedResponse(fresh));
-      if (url.endsWith("/operations/op-1")) return Promise.resolve(jsonResponse(failed));
-      if (url.includes("/settings")) return Promise.resolve(jsonResponse(aiSettings));
-      return Promise.resolve(jsonResponse(detail({ latest_operation: failed, active_operation: null })));
+      if (url.endsWith("/operations/op-1")) return Promise.resolve(json(failed));
+      if (url.includes("/settings")) return Promise.resolve(json(aiSettings));
+      return Promise.resolve(json(detail({ latest_operation: failed, active_operation: null })));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -801,8 +789,8 @@ describe("ApplicationPage at the preparation route", () => {
       vi.fn((input: RequestInfo | URL) =>
         Promise.resolve(
           String(input).includes("/settings")
-            ? jsonResponse(noProviderSettings)
-            : jsonResponse(detail({ latest_operation: failed, active_operation: null })),
+            ? json(noProviderSettings)
+            : json(detail({ latest_operation: failed, active_operation: null })),
         ),
       ),
     );
@@ -827,8 +815,8 @@ describe("ApplicationPage at the preparation route", () => {
       vi.fn((input: RequestInfo | URL) =>
         Promise.resolve(
           String(input).includes("/settings")
-            ? jsonResponse(aiSettings)
-            : jsonResponse(detail({ latest_operation: failed, active_operation: null })),
+            ? json(aiSettings)
+            : json(detail({ latest_operation: failed, active_operation: null })),
         ),
       ),
     );
@@ -846,7 +834,7 @@ describe("ApplicationPage at the preparation route", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) =>
-        Promise.resolve(String(input).includes("/settings") ? jsonResponse(aiSettings) : jsonResponse(detail())),
+        Promise.resolve(String(input).includes("/settings") ? json(aiSettings) : json(detail())),
       ),
     );
     const { client } = renderPage(aiSettings, { createdApplication: { operationId: null } });
@@ -866,9 +854,9 @@ describe("ApplicationPage at the preparation route", () => {
     });
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input).includes("/settings"))
-        return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
-      if (String(input).includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
-      return Promise.resolve(jsonResponse(analyzed_detail({ latest_operation: analyzed })));
+        return Promise.resolve(json({ ...aiSettings, auto_generate_when_review_not_required: true }));
+      if (String(input).includes("/operations/")) return Promise.resolve(json(analyzed));
+      return Promise.resolve(json(analyzed_detail({ latest_operation: analyzed })));
     });
     vi.stubGlobal("fetch", fetchMock);
     renderPage({ ...aiSettings, auto_generate_when_review_not_required: true });
@@ -886,9 +874,9 @@ describe("ApplicationPage at the preparation route", () => {
         return new Promise<Response>((resolve) => {
           resolveOld = resolve;
         });
-      if (url.includes("/settings")) return Promise.resolve(jsonResponse(aiSettings));
+      if (url.includes("/settings")) return Promise.resolve(json(aiSettings));
       return Promise.resolve(
-        jsonResponse(
+        json(
           url.endsWith("/app-2")
             ? detail({ application: { ...detail().application, id: "app-2", company: "Other" } })
             : detail({ active_operation: queued() }),
@@ -903,7 +891,7 @@ describe("ApplicationPage at the preparation route", () => {
     fireEvent.click(screen.getByRole("button", { name: "Another application" }));
     expect(await screen.findByText("Other — Backend Engineer")).toBeInTheDocument();
     await act(async () =>
-      resolveOld(jsonResponse(queued({ status: "failed", is_terminal: true, available_actions: ["retry"] }))),
+      resolveOld(json(queued({ status: "failed", is_terminal: true, available_actions: ["retry"] }))),
     );
     expect(screen.queryByRole("heading", { name: "הרצת ניתוח המשרה" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ניתוח המשרה" })).toBeEnabled();
@@ -931,7 +919,7 @@ describe("ApplicationPage at the preparation route", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) =>
-        Promise.resolve(jsonResponse(String(input).includes("/operations/") ? generated : projection)),
+        Promise.resolve(json(String(input).includes("/operations/") ? generated : projection)),
       ),
     );
     const { client } = renderPage(noProviderSettings, {
@@ -985,7 +973,7 @@ describe("ApplicationPage at the preparation route", () => {
       vi.stubGlobal(
         "fetch",
         vi.fn((input: RequestInfo | URL) =>
-          Promise.resolve(jsonResponse(String(input).includes("/operations/") ? generated : projection)),
+          Promise.resolve(json(String(input).includes("/operations/") ? generated : projection)),
         ),
       );
       renderPage(noProviderSettings, {
@@ -1025,7 +1013,7 @@ describe("a document built on an older analysis", () => {
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
       Promise.resolve(
         init?.method === "POST"
-          ? jsonResponse({
+          ? json({
               application_id: "app-1",
               document_id: "doc-1",
               document_hash: "b".repeat(64),
@@ -1033,7 +1021,7 @@ describe("a document built on an older analysis", () => {
               content_check: "none",
               pending_claim_ids: [],
             })
-          : jsonResponse(olderDocument()),
+          : json(olderDocument()),
       ),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -1057,7 +1045,7 @@ describe("a document built on an older analysis", () => {
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
       Promise.resolve(
         init?.method === "POST"
-          ? jsonResponse({
+          ? json({
               application_id: "app-1",
               document_id: "doc-1",
               document_hash: "b".repeat(64),
@@ -1065,7 +1053,7 @@ describe("a document built on an older analysis", () => {
               content_check: "none",
               pending_claim_ids: [],
             })
-          : jsonResponse(olderDocument({ preparation_state: "ready_to_draft" })),
+          : json(olderDocument({ preparation_state: "ready_to_draft" })),
       ),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -1078,7 +1066,7 @@ describe("a document built on an older analysis", () => {
   });
 
   it("is not offered unless the projection offers it", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(olderDocument({ available_actions: ["edit"] }))));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(olderDocument({ available_actions: ["edit"] }))));
 
     renderPage();
 

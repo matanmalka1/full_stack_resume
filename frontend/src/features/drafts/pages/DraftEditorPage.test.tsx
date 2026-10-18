@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApplicationDetail, CVDocument, DraftFact, FactDetail, Operation } from "@/api/contracts";
 import type { DocumentOutline } from "@/api/documents";
 import { settingsQueryKey } from "@/api/settings";
-import { HASH, OTHER_HASH, cvDocument, detail as projection } from "@/test/fixtures";
+import { HASH, OTHER_HASH, cvDocument, detail as projection, json } from "@/test/fixtures";
 import { DraftEditorPage } from "./DraftEditorPage";
 
 const DOC_PATH = "/api/v1/applications/app-1/document";
@@ -96,11 +96,7 @@ const draft = (outline: Partial<DocumentOutline> = {}, overrides: Partial<CVDocu
 
 const firstClaim = () => baseOutline().sections[0]!.claims[0]!;
 
-const jsonResponse = (body: unknown, status = 200, etag = `"${HASH}"`): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ETag: etag },
-  });
+const jsonResponse = (body: unknown, status = 200, etag = `"${HASH}"`): Response => json(body, status, { ETag: etag });
 
 const conflictResponse = (): Response =>
   new Response(

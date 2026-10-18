@@ -1,6 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { json } from "@/test/fixtures";
+
 import {
   applicationDetailQueryOptions,
   applicationDetailQueryPrefix,
@@ -12,12 +14,6 @@ import { cancelOperation, operationQueryOptions, retryOperation } from "./operat
 import { decisionExportQueryOptions, documentQueryOptions } from "./documents";
 import { apiRequest } from "./client";
 import { MAX_QUERY_RETRIES, queryClient } from "../app/queryClient";
-
-const jsonResponse = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...headers },
-  });
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -136,7 +132,7 @@ describe("query cache policy", () => {
     const fetchMock = vi
       .fn()
       .mockImplementation(async () =>
-        jsonResponse({ type: "about:blank#x", title: "Refused", status, code: "X", detail: "Refused" }, status),
+        json({ type: "about:blank#x", title: "Refused", status, code: "X", detail: "Refused" }, status),
       );
     vi.stubGlobal("fetch", fetchMock);
     const client = new QueryClient({
@@ -156,7 +152,7 @@ describe("query cache policy", () => {
 describe("Operation requests", () => {
   it("does not immediately retry a permanently missing Operation", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(
+      json(
         {
           type: "about:blank#operation-not-found",
           title: "Operation not found",
@@ -181,9 +177,9 @@ describe("Operation requests", () => {
     const encodedPath = "/api/v1/operations/operation%2Fwith%20space";
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ id: operationId }))
-      .mockResolvedValueOnce(jsonResponse({ id: operationId }))
-      .mockResolvedValueOnce(jsonResponse({ id: operationId }, 202, { Location: encodedPath }));
+      .mockResolvedValueOnce(json({ id: operationId }))
+      .mockResolvedValueOnce(json({ id: operationId }))
+      .mockResolvedValueOnce(json({ id: operationId }, 202, { Location: encodedPath }));
     vi.stubGlobal("fetch", fetchMock);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
