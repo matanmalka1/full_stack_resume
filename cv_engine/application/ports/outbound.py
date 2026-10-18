@@ -93,6 +93,10 @@ class Renderer(Protocol):
         self, draft: DraftDocument, candidate: CandidateContext, template: str | None = None
     ) -> bytes: ...
 
+    def sample_html(self, template: str | None, language: str) -> str:
+        """A fictional CV in `template`, for choosing one before any CV exists."""
+        ...
+
     def measure_pages(
         self, draft: DraftDocument, candidate: CandidateContext, template: str | None = None
     ) -> int:

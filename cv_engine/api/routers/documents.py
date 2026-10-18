@@ -30,6 +30,7 @@ from ...application.commands import (
     SetDocumentTemplateCommand,
     UpdateDocumentCommand,
 )
+from ...domain.templates import PreviewTemplate
 from ...util import new_id
 from ..dependencies import Services
 from ..etags import DocumentIfMatch, document_etag, parse_document_etag
@@ -134,9 +135,18 @@ def update_document(
         }
     },
 )
-def preview_document(application_id: str, services: Services, actor: CurrentActor) -> HTMLResponse:
-    """`200` and the document itself; `412` before content exists. Nothing is stored."""
-    result = services.rendering.preview_document(actor, application_id)
+def preview_document(
+    application_id: str,
+    services: Services,
+    actor: CurrentActor,
+    template: PreviewTemplate | None = None,
+) -> HTMLResponse:
+    """`200` and the document itself; `412` before content exists. Nothing is stored.
+
+    `template` shows the content in another template (`track` for the track's own)
+    without choosing it, for the picker; absent, the document's own.
+    """
+    result = services.rendering.preview_document(actor, application_id, template)
     return HTMLResponse(
         content=result.html,
         headers={**_PREVIEW_HEADERS, "ETag": document_etag(result.document_hash)},

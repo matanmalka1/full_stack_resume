@@ -113,7 +113,8 @@ const noProviderSettings: Settings = {
   default_ai_model: "gpt-5.6-terra",
   default_reasoning_effort: "medium",
   available_ai_models: [],
-
+  default_template: null,
+  available_templates: [],
   provider_configured: false,
   ui_density: "comfortable",
   ui_text_size: "normal",

@@ -47,6 +47,7 @@ from .routers import (
     health,
     operations,
     settings,
+    templates,
     tracking,
 )
 from .services import ApiServices
@@ -141,6 +142,7 @@ def create_app(
         operations.router,
         facts.router,
         settings.router,
+        templates.router,
         tracking.router,
     ):
         app.include_router(

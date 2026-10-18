@@ -3,7 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
-import { documentQueryKey, documentQueryOptions, outlineClaims } from "@/api/documents";
+import {
+  documentQueryKey,
+  documentQueryOptions,
+  invalidateDocumentViews,
+  outlineClaims,
+  setDocumentTemplate,
+} from "@/api/documents";
+import type { TemplateName } from "@/api/templates";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
@@ -25,6 +32,7 @@ import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
 import { DraftProgress } from "../components/DraftProgress";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
+import { DraftTemplateControl } from "../components/DraftTemplateControl";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
 import { type DraftWorkspaceMode, DraftWorkspace, DraftWorkspaceSwitch } from "../components/DraftWorkspace";
 import { useDraftDocument } from "../api/queries";
@@ -236,6 +244,19 @@ export const DraftEditorPage = () => {
       setResolutionError(error);
       throw error;
     }
+  };
+
+  /* The template is part of the document hash, so it is chosen like any command over
+     the document: unsaved edits first, then against the hash just read, then the
+     document read back so the next autosave carries the new token. */
+  const chooseTemplate = async (template: TemplateName | null) => {
+    if (!(await editing.settle())) {
+      throw new Error("העריכות לא נשמרו. יש לפתור את שגיאת השמירה או הקונפליקט ולנסות שוב.");
+    }
+    const latest = await queryClient.fetchQuery({ ...documentQueryOptions(applicationId), staleTime: 0 });
+    await setDocumentTemplate(applicationId, latest.document.document_hash, template);
+    await invalidateDocumentViews(queryClient, applicationId);
+    await queryClient.fetchQuery({ ...documentQueryOptions(applicationId), staleTime: 0 });
   };
 
   const navigateSaved = async (href: string) => {
@@ -460,6 +481,12 @@ export const DraftEditorPage = () => {
               mode={mode}
               preview={
                 <>
+                  <DraftTemplateControl
+                    disabled={operationLive || resolving}
+                    draft={draft}
+                    onApply={chooseTemplate}
+                    stamped={renderStage}
+                  />
                   <DraftPreview draft={draft} />
                   <DraftValidationPanel check={check} />
                 </>

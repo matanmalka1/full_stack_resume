@@ -34,6 +34,13 @@ TemplateName = Literal[
     "modern-deedy",
 ]
 TEMPLATE_NAMES: tuple[str, ...] = get_args(TemplateName)
+#: A template to preview: a chosen one, or `track` for the track's own.
+PreviewTemplate = Literal[TemplateName, "track"]
+
+
+def preview_template(name: str) -> str | None:
+    """The template a preview names, `None` for the track's own."""
+    return None if name == "track" else name
 
 
 @dataclass(frozen=True, slots=True)

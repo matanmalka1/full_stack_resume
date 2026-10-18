@@ -14,11 +14,12 @@ from pypdf import PdfReader
 
 from ..application.errors import InfrastructureFailure
 from ..domain.candidate import contact_href
-from ..domain.contracts.drafts import DraftDocument
+from ..domain.contracts.drafts import ClaimLine, DraftDocument, ResumeSection
 from ..domain.contracts.knowledge import (
     CandidateContext,
     Profile,
 )
+from ..domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from ..domain.contracts.validation import ValidationReport
 from ..domain.date_display import numeric_date
 from ..domain.render_validation import (
@@ -31,7 +32,7 @@ from ..domain.render_validation import (
     _claim_recoverable as _claim_recoverable,
 )
 from ..domain.templates import is_side_section, section_columns, template_spec
-from ..util import sha256_file
+from ..util import sha256_file, sha256_text
 
 MIXED_LTR = re.compile(
     r"(?:https?://\S+|[\w.+-]+@[\w.-]+|\+\d(?:[\d() .-]*\d)?|\b(?:B2B|CRM|ERP|KPIs?|SaaS|"
@@ -239,6 +240,75 @@ def compose_html(
             for column in section_columns(draft, spec.id)
         ],
     )
+
+
+#: Who the sample CV is about: a context with no links, so its contacts are plain text.
+_SAMPLE_CANDIDATE = CandidateContext(
+    context_version="template-sample",
+    name_fact_id="sample.name",
+    locale="en-IL",
+    timezone="Asia/Jerusalem",
+    contact_fact_ids=[],
+)
+#: The sample's track per language: the English one in the Development wording the
+#: emphasis rules know, the Hebrew one in Sales, as the CVs a user writes are.
+_SAMPLE_CLASSIFICATION = {
+    "en": (Track.DEVELOPMENT, ProfileName.DEVELOPMENT, Emphasis.DEVELOPMENT_BALANCED),
+    "he": (Track.SALES, ProfileName.ACCOUNT_MANAGER, Emphasis.ACCOUNT_GROWTH),
+}
+
+
+def sample_draft(repo: Path, language: str) -> DraftDocument:
+    """A fictional CV (rendering/samples/template-sample.json) as a document.
+
+    Presentation input for the template picker, not a record: it belongs to no
+    Application, cites no fact, and is never stored or validated.
+    """
+    data = json.loads(
+        (repo / "rendering" / "samples" / "template-sample.json").read_text(encoding="utf-8")
+    )[language]
+    track, profile, emphasis = _SAMPLE_CLASSIFICATION[language]
+
+    def line(index: str, style: str, text: str) -> ClaimLine:
+        return ClaimLine(
+            claim_id=f"sample-{index}",
+            style=style,
+            text=text,
+            fact_ids=[f"sample.{index}"],
+            claim_type="canonical",
+            text_hash=sha256_text(text),
+        )
+
+    return DraftDocument(
+        application_id="template-sample",
+        job_text_hash="0" * 64,
+        job_analysis_id="template-sample",
+        language=language,
+        track=track,
+        profile=profile,
+        emphasis=emphasis,
+        name=data["name"],
+        headline=line("headline", "headline", data["headline"]),
+        contacts=[
+            line(f"contact-{index}", "contact", text) for index, text in enumerate(data["contacts"])
+        ],
+        sections=[
+            ResumeSection(
+                name=section["name"],
+                claims=[
+                    line(f"{number}-{index}", claim["style"], claim["text"])
+                    for index, claim in enumerate(section["claims"])
+                ],
+            )
+            for number, section in enumerate(data["sections"])
+        ],
+        fact_store_version="template-sample",
+    )
+
+
+def compose_sample_html(repo: Path, template: str | None, language: str) -> str:
+    """The sample CV in one template, for the picker to show before a CV exists."""
+    return compose_html(sample_draft(repo, language), repo, _SAMPLE_CANDIDATE, template)
 
 
 def render_html(
@@ -489,6 +559,10 @@ class PlaywrightRenderer:
         neither a temp file nor Chromium belongs on that path.
         """
         return compose_html(draft, self.knowledge_root, candidate, template)
+
+    def sample_html(self, template: str | None, language: str) -> str:
+        """The fictional sample CV in `template`; no browser, nothing stored."""
+        return compose_sample_html(self.knowledge_root, template, language)
 
     def render_pdf(self, html_path: Path, pdf_path: Path) -> dict[str, Any]:
         return render_pdf(html_path, pdf_path)

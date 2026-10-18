@@ -1,0 +1,71 @@
+{
+  "_comment": "A fictional CV for the template picker's previews, so a user sees each template before any document of their own exists. Nobody's real data: it is shown to every user.",
+  "en": {
+    "name": "Dana Cohen",
+    "headline": "Full-Stack Developer | React, TypeScript & Python",
+    "contacts": ["Tel Aviv", "+972-50-000-0000", "dana@example.com", "linkedin.com/in/example"],
+    "sections": [
+      {"name": "Professional Summary", "claims": [
+        {"style": "paragraph", "text": "Full-Stack Developer building production APIs and web applications with Python/FastAPI and React, from data modeling through frontend, testing, and CI/CD."}
+      ]},
+      {"name": "Work Experience", "claims": [
+        {"style": "heading", "text": "Full-Stack Developer | Example Software, Tel Aviv"},
+        {"style": "date", "text": "March 2023 - Present"},
+        {"style": "bullet", "text": "Built a customer portal on PostgreSQL and FastAPI serving 2,000 daily users."},
+        {"style": "bullet", "text": "Led the move from manual releases to GitHub Actions CI/CD with automated tests."},
+        {"style": "bullet", "text": "Designed role-based access control shared by four internal services."},
+        {"style": "heading", "text": "Junior Developer | Sample Labs, Haifa"},
+        {"style": "date", "text": "June 2021 - February 2023"},
+        {"style": "bullet", "text": "Developed React components and REST endpoints for a scheduling product."},
+        {"style": "bullet", "text": "Cut page load time by 40% by caching the slowest queries."}
+      ]},
+      {"name": "Projects", "claims": [
+        {"style": "heading", "text": "task-runner — Python CLI"},
+        {"style": "bullet", "text": "Published an open-source CLI that schedules and retries background jobs."}
+      ]},
+      {"name": "Education", "claims": [
+        {"style": "item", "text": "B.Sc. Computer Science, Example University, 2017-2021"}
+      ]},
+      {"name": "Core Skills", "claims": [
+        {"style": "item", "text": "Frontend: React, TypeScript, Next.js, Tailwind CSS"},
+        {"style": "item", "text": "Backend: Python, FastAPI, Node.js, PostgreSQL"},
+        {"style": "item", "text": "Tools: Docker, GitHub Actions, pytest"}
+      ]},
+      {"name": "Languages", "claims": [
+        {"style": "item", "text": "Hebrew: Native"},
+        {"style": "item", "text": "English: Fluent"}
+      ]}
+    ]
+  },
+  "he": {
+    "name": "דנה כהן",
+    "headline": "מנהלת תיקי לקוחות",
+    "contacts": ["תל אביב", "+972-50-000-0000", "dana@example.com", "linkedin.com/in/example"],
+    "sections": [
+      {"name": "תקציר מקצועי", "claims": [
+        {"style": "paragraph", "text": "מנהלת תיקי לקוחות B2B עם ניסיון בשימור לקוחות, הרחבת פעילות וגיוס לקוחות חדשים."}
+      ]},
+      {"name": "ניסיון מקצועי", "claims": [
+        {"style": "heading", "text": "מנהלת תיקי לקוחות | חברה לדוגמה, תל אביב"},
+        {"style": "date", "text": "מרץ 2022 - היום"},
+        {"style": "bullet", "text": "ניהול שוטף של 40 לקוחות עסקיים חוזרים."},
+        {"style": "bullet", "text": "הרחבת תיק הלקוחות בכ-25% בשנתיים."},
+        {"style": "bullet", "text": "ליווי משא ומתן וסגירת עסקאות עם לקוחות אסטרטגיים."},
+        {"style": "heading", "text": "נציגת מכירות | מעבדות לדוגמה, חיפה"},
+        {"style": "date", "text": "יוני 2019 - פברואר 2022"},
+        {"style": "bullet", "text": "גיוס ממוצע של 5 לקוחות חדשים ברבעון."}
+      ]},
+      {"name": "השכלה", "claims": [
+        {"style": "item", "text": "תואר ראשון במנהל עסקים, אוניברסיטה לדוגמה, 2015-2018"}
+      ]},
+      {"name": "כלים", "claims": [
+        {"style": "item", "text": "Salesforce: ניהול לקוחות, הזדמנויות ותחזיות"},
+        {"style": "item", "text": "Excel: דוחות מכירה וניתוח נתונים"}
+      ]},
+      {"name": "שפות", "claims": [
+        {"style": "item", "text": "עברית: שפת אם"},
+        {"style": "item", "text": "אנגלית: שוטפת"}
+      ]}
+    ]
+  }
+}

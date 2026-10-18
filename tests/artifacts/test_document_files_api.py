@@ -243,3 +243,34 @@ def test_the_template_is_chosen_over_http_and_moves_the_token(
         {"expected_document_hash": setup.document_hash, "template": None},
     )
     assert stale.status_code == 409, stale.text
+
+
+def test_the_picker_previews_the_content_in_a_template_without_choosing_it(
+    api_worker, drafted_application
+) -> None:
+    setup = drafted_application("Template Preview Co")
+    path = f"/applications/{setup.application_id}/document/preview"
+    in_vivid = _get(api_worker, f"{path}?template=vivid")
+    assert in_vivid.status_code == 200, in_vivid.text
+    assert 'class="page t-vivid"' in in_vivid.text
+    assert "default-src 'none'" in in_vivid.headers["Content-Security-Policy"]
+    track = _get(api_worker, f"{path}?template=track")
+    assert track.status_code == 200 and "t-" not in track.text.split("<main", 1)[1][:40]
+    assert _get(api_worker, f"{path}?template=nope").status_code == 422
+    # Previewing chose nothing.
+    assert stored_document(setup.services, setup.application_id).template is None
+
+
+def test_every_template_previews_over_the_sample_cv(api_worker) -> None:
+    from cv_engine.domain.templates import TEMPLATES
+
+    for language in ("en", "he"):
+        for template in TEMPLATES:
+            response = _get(api_worker, f"/templates/{template}/sample?language={language}")
+            assert response.status_code == 200, (template, language, response.text)
+            assert f'class="page t-{template}"' in response.text
+            assert f'lang="{language}"' in response.text
+            assert "default-src 'none'" in response.headers["Content-Security-Policy"]
+        assert _get(api_worker, f"/templates/track/sample?language={language}").status_code == 200
+    assert _get(api_worker, "/templates/nope/sample").status_code == 422
+    assert _get(api_worker, "/templates/latex/sample?language=fr").status_code == 422

@@ -62,6 +62,20 @@ describe("SettingsPage", () => {
     fireEvent.change(screen.getByLabelText("מאמץ חשיבה"), {
       target: { value: "high" },
     });
+    // Each template is a radio with its own preview of the sample CV.
+    const deedy = screen.getByRole("radio", { name: /Deedy/ });
+    expect(screen.getByRole("radio", { name: /תבנית המסלול/ })).toBeChecked();
+    expect(screen.getByTitle("תצוגה מקדימה: Deedy")).toHaveAttribute(
+      "src",
+      "/api/v1/templates/deedy/sample?language=en",
+    );
+    fireEvent.click(deedy);
+    expect(deedy).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "עברית" }));
+    expect(screen.getByTitle("תצוגה מקדימה: Deedy")).toHaveAttribute(
+      "src",
+      "/api/v1/templates/deedy/sample?language=he",
+    );
     fireEvent.click(saveButton);
     await screen.findByRole("status");
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");
@@ -73,6 +87,7 @@ describe("SettingsPage", () => {
       ui_density: "compact",
       ui_text_size: "large",
       ui_theme: "system",
+      default_template: "deedy",
     });
     await waitFor(() => expect(autoGenerate).not.toBeChecked());
     expect(saveButton).toBeDisabled();
