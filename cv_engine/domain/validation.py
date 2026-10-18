@@ -36,7 +36,7 @@ class _ValidationContext:
     profile: Profile
     analysis: JobAnalysis
     presentations: PresentationStore | None
-    issues: list[ValidationIssue] = field(default_factory=list)
+    issues: list[ValidationIssue] = field(default_factory=list[ValidationIssue])
     groups: dict[str, bool] = field(
         default_factory=lambda: {
             "content": True,

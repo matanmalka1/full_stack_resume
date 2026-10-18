@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from typing import cast
 
 from ..contracts.analysis import JobAnalysis, Language, OverrideKey, Requirement
 from ..contracts.analysis_proposal import (
@@ -29,6 +28,7 @@ from ..contracts.analysis_proposal import (
     RequirementSource,
     ShortfallSeverity,
 )
+from ..contracts.taxonomy import Emphasis, ProfileName, Track
 from ..facts import FactStore, FactStoreError
 from ..profiles import ProfileStore, classification_mismatch
 from .requirements.concepts import RequirementConceptStore
@@ -47,7 +47,9 @@ _COVERAGE_ORDER: tuple[str, ...] = ("unknown", "unsupported", "partial", "matche
 _IMPORTANCE_ORDER: tuple[Importance, ...] = ("unknown", "preferred", "mandatory")
 
 
-def _classified_values(proposal, profiles: ProfileStore, overrides: Mapping[OverrideKey, str]):
+def _classified_values(
+    proposal: AnalysisProposal, profiles: ProfileStore, overrides: Mapping[OverrideKey, str]
+) -> tuple[Track, ProfileName, Emphasis, Language]:
     """Reconcile a proposed classification with the user's overrides.
 
     Moved here from the old assembly module, which is gone: it was the one part
@@ -62,10 +64,10 @@ def _classified_values(proposal, profiles: ProfileStore, overrides: Mapping[Over
     it and let the consistency guard refuse a mismatched partial correction
     rather than silently changing what the user chose.
     """
-    profile = type(proposal.profile)(overrides.get("profile", proposal.profile.value))
-    emphasis = type(proposal.emphasis)(overrides.get("emphasis", proposal.emphasis.value))
+    profile = ProfileName(overrides.get("profile", proposal.profile.value))
+    emphasis = Emphasis(overrides.get("emphasis", proposal.emphasis.value))
     selected = profiles.get(profile)
-    track = type(proposal.track)(overrides.get("track", selected.track.value))
+    track = Track(overrides.get("track", selected.track.value))
     mismatch = classification_mismatch(selected, track, emphasis)
     if mismatch == "track":
         raise ValueError(
@@ -76,7 +78,7 @@ def _classified_values(proposal, profiles: ProfileStore, overrides: Mapping[Over
     language = overrides.get("language", proposal.language)
     if language not in ("en", "he"):
         raise ValueError(f"unsupported analysis language: {language}")
-    return track, profile, emphasis, cast(Language, language)
+    return track, profile, emphasis, language
 
 
 _WHITESPACE = re.compile(r"\s+")

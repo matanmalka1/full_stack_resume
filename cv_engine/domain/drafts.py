@@ -5,6 +5,7 @@ import re
 import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from ..util import canonical_json, sha256_text
 from .contracts.analysis import JobAnalysis
@@ -71,7 +72,7 @@ def _claim(
     pending_reason: str | None = None,
     review_evidence: ClaimReviewEvidence | None = None,
 ) -> ClaimLine:
-    identity = {
+    identity: dict[str, Any] = {
         "style": style,
         "text": text,
         "fact_ids": fact_ids,
@@ -183,7 +184,7 @@ def build_draft(
 
     sections: list[ResumeSection] = []
     for spec in profile.sections:
-        claims = []
+        claims: list[ClaimLine] = []
         selected_ids = selected_by_section[spec.name_en]
         presented = (
             presentations.render_section(
@@ -333,7 +334,7 @@ def keep_frame_claims(
         if spec.optional
     }
     narrowed = frame.model_copy(deep=True)
-    sections = []
+    sections: list[ResumeSection] = []
     for section in narrowed.sections:
         section.claims = [
             claim

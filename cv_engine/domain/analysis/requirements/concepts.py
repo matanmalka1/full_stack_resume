@@ -25,9 +25,9 @@ class RequirementConceptStore:
 
     def __init__(self, payload: dict[str, Any], *, origin: str = "requirement concepts"):
         self.origin = origin
+        declared: dict[str, dict[str, Any]] = payload.get("concepts") or {}
         self.concepts: dict[str, RequirementConcept] = {
-            name: self._concept(name, body)
-            for name, body in (payload.get("concepts") or {}).items()
+            name: self._concept(name, body) for name, body in declared.items()
         }
         if not self.concepts:
             raise RequirementConceptError(f"{origin}: no concepts declared")

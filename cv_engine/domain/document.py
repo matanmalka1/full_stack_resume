@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
+from typing import Any
 
 from ..util import canonical_json, sha256_text
 from .contracts.document import CVDocument
@@ -74,7 +75,7 @@ def facts_hash(fact_ids: Iterable[str], facts: Mapping[str, Fact]) -> str:
     says is. A fact that no longer resolves is entered as missing rather than skipped,
     so losing a fact changes the hash.
     """
-    entries = []
+    entries: list[dict[str, Any]] = []
     for fact_id in sorted(set(fact_ids)):
         fact = facts.get(fact_id)
         if fact is None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from ..util import canonical_json, sha256_text
 from .contracts.knowledge import FactStatus, Profile
@@ -161,7 +161,7 @@ class ProfileStore:
         )
 
     @classmethod
-    def from_documents(cls, documents: dict[str, dict], facts: FactStore) -> ProfileStore:
+    def from_documents(cls, documents: dict[str, dict[str, Any]], facts: FactStore) -> ProfileStore:
         """Build the store from already-read profile documents, keyed by origin.
 
         Finding and reading those documents is the storage adapter's job. What
@@ -213,8 +213,8 @@ class ProfileStore:
 
 
 def attach_fact_to_section(
-    payload: dict, fact_id: str, section: str, *, origin: str, pin: bool = False
-) -> tuple[Profile, dict]:
+    payload: dict[str, Any], fact_id: str, section: str, *, origin: str, pin: bool = False
+) -> tuple[Profile, dict[str, Any]]:
     """Add a canonical fact to one Profile section's candidate pool.
 
     A canonical fact is only reachable in a CV once some Profile section offers
@@ -224,11 +224,10 @@ def attach_fact_to_section(
     Returns the validated profile and the document to store, so what counts as
     a valid attachment is decided here and the writing happens outside.
     """
-    matches = [
-        spec for spec in payload["sections"] if section in {spec["name_en"], spec["name_he"]}
-    ]
+    sections: list[dict[str, Any]] = payload["sections"]
+    matches = [spec for spec in sections if section in {spec["name_en"], spec["name_he"]}]
     if len(matches) != 1:
-        available = ", ".join(spec["name_en"] for spec in payload["sections"])
+        available = ", ".join(spec["name_en"] for spec in sections)
         raise ProfileStoreError(
             f"section {section!r} does not identify exactly one section in {origin} "
             f"(sections: {available})"

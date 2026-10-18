@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..util import canonical_json, sha256_text
 from .contracts.knowledge import EmphasisPolicy
 from .contracts.taxonomy import Emphasis
@@ -27,7 +29,9 @@ class EmphasisPolicyStore:
         )
 
     @classmethod
-    def from_payload(cls, payload: dict, *, origin: str = "emphasis policy") -> EmphasisPolicyStore:
+    def from_payload(
+        cls, payload: dict[str, Any], *, origin: str = "emphasis policy"
+    ) -> EmphasisPolicyStore:
         """Build the store from an already-read policy document.
 
         Locating and reading it belongs to the storage adapter; what a complete
