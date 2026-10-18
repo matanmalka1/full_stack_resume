@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from helpers import (
     actor_of,
+    composed_content,
     persisted_counts,
     seed_document,
     seed_draft,
@@ -36,6 +37,7 @@ from cv_engine.application.errors import (
     DOCUMENT_CHANGED,
     StateConflict,
 )
+from cv_engine.domain.contracts.analysis import Requirement
 from cv_engine.domain.document import ContentCheck, PreparationState
 from cv_engine.infrastructure.persistence.tables import facts
 from cv_engine.runtime.composition import Services
@@ -389,6 +391,92 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     assert sent.content == ready.content
     assert sent.pdf_path is not None and sent.pdf_sha256 is not None
     assert services.payloads.verify_payload(sent.pdf_path, sent.pdf_sha256) == "ok"
+
+
+def test_a_dropped_mandatory_requirement_warns_and_blocks_nothing(
+    services: Services, deterministic_renderer
+) -> None:
+    """A covered mandatory requirement the written CV no longer cites is reported.
+
+    The warning names the requirement and a supporting fact, and it is only a warning:
+    approve and render go through, and nothing it says becomes a review reason or a
+    blocked action. A document with no content and a document on an older analysis do
+    not carry it.
+    """
+    dropped, kept = "sales.tool.priority", "sales.tool.excel"
+    requirements = [
+        Requirement(
+            requirement_id="req-priority",
+            text="Hands-on Priority ERP",
+            importance="mandatory",
+            coverage="matched",
+            supporting_fact_ids=[dropped],
+        ),
+        Requirement(
+            requirement_id="req-excel",
+            text="Advanced Excel",
+            importance="mandatory",
+            coverage="partial",
+            supporting_fact_ids=[kept],
+        ),
+        Requirement(
+            requirement_id="req-nice",
+            text="Priority admin",
+            importance="preferred",
+            coverage="matched",
+            supporting_fact_ids=[dropped],
+        ),
+    ]
+    ingested, analysis = seed_document(
+        services, "Dropped Requirement Co", requirements=requirements
+    )
+    application_id = ingested.application_id
+    codes = {warning.code for warning in _detail(services, application_id).warnings}
+    assert "REQUIREMENT_NOT_IN_DOCUMENT" not in codes
+
+    frame = composed_content(services, application_id)
+    chosen = {
+        section.name: [
+            fact_id for claim in section.claims for fact_id in claim.fact_ids if fact_id != dropped
+        ]
+        for section in frame.sections
+    }
+    document_hash = seed_draft(services, application_id, chosen).document_hash
+
+    detail = _detail(services, application_id)
+    (warning,) = [w for w in detail.warnings if w.code == "REQUIREMENT_NOT_IN_DOCUMENT"]
+    assert warning.entity_references == {
+        "document_id": detail.document_id,
+        "job_analysis_id": analysis.analysis_id,
+        "requirement_id": "req-priority",
+        "fact_id": dropped,
+        "requirement_count": "1",
+    }
+    assert "Hands-on Priority ERP" in warning.message
+    assert "Advanced Excel" not in warning.message
+    assert detail.review_reasons == []
+    assert all(
+        "REQUIREMENT_NOT_IN_DOCUMENT" not in blocked.reasons for blocked in detail.blocked_actions
+    )
+
+    assert _approve(services, application_id, document_hash).passed
+    assert "render" in _detail(services, application_id).available_actions
+    rendered = _render(services, application_id, document_hash)
+    assert rendered.validation.passed
+    detail = _detail(services, application_id)
+    assert detail.preparation_state is PreparationState.READY
+    assert "submit" in detail.available_actions
+    assert "REQUIREMENT_NOT_IN_DOCUMENT" in {w.code for w in detail.warnings}
+
+    # A newer analysis moves the document onto DOCUMENT_ON_OLDER_ANALYSIS instead.
+    seed_existing_analysis(
+        services,
+        IngestedApplication(application_id=application_id, job_text_hash=ingested.job_text_hash),
+        requirements=requirements,
+    )
+    codes = {warning.code for warning in _detail(services, application_id).warnings}
+    assert "DOCUMENT_ON_OLDER_ANALYSIS" in codes
+    assert "REQUIREMENT_NOT_IN_DOCUMENT" not in codes
 
 
 def test_profile_changes_warn_and_policy_changes_do_not(approved_application, project_root):
