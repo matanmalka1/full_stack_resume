@@ -40,7 +40,7 @@ def fact_rows(facts: FactStore) -> list[dict[str, Any]]:
     a later read can lay the facts out exactly as the file did.
     """
     ordinals: dict[str, int] = {}
-    rows = []
+    rows: list[dict[str, Any]] = []
     for fact in facts.facts.values():
         source = source_id_of_name(source_name_of(fact))
         ordinals[source] = ordinals.get(source, 0) + 1

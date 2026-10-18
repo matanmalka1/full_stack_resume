@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from ..util import canonical_json, sha256_text
 from .contracts.knowledge import CandidateContext
 from .facts import FactStore, FactStoreError
@@ -16,7 +18,7 @@ class CandidateContextError(ValueError):
 
 
 def build_candidate_context(
-    payload: dict, facts: FactStore, *, origin: str = CANDIDATE_FILE
+    payload: dict[str, Any], facts: FactStore, *, origin: str = CANDIDATE_FILE
 ) -> CandidateContext:
     """Bind an already-read candidate context to canonical facts.
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 from ..util import canonical_json, sha256_text, utc_now
 from .contracts.knowledge import Fact, FactSource, FactStatus
@@ -15,7 +16,7 @@ def source_id_of_name(name: str) -> str:
     return name.rsplit(".", 1)[0]
 
 
-def _hashable_fact(fact: Fact) -> dict:
+def _hashable_fact(fact: Fact) -> dict[str, Any]:
     """A fact's hashed form, with `source_file` normalized to its stable id.
 
     `source_file` carries the storage filename (extension included), so
@@ -179,7 +180,9 @@ def source_name_of(fact: Fact) -> str:
     return name
 
 
-def build_new_fact(store: FactStore, source_name: str, payload: dict, *, canonical: bool) -> Fact:
+def build_new_fact(
+    store: FactStore, source_name: str, payload: dict[str, Any], *, canonical: bool
+) -> Fact:
     """The record a new fact would become, before anything is stored.
 
     A new fact starts `pending` so its identity and canonical location never

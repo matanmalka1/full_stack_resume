@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
@@ -77,7 +77,7 @@ class PresentationStore:
 
     @classmethod
     def from_payload(
-        cls, payload: dict, facts: FactStore, *, origin: str = "presentation rules"
+        cls, payload: dict[str, Any], facts: FactStore, *, origin: str = "presentation rules"
     ) -> PresentationStore:
         """Build the store from an already-read rules document.
 
