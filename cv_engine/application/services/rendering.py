@@ -18,7 +18,7 @@ from ...domain.contracts.knowledge import Profile
 from ...domain.contracts.validation import ValidationReport
 from ...domain.document import DocumentState, document_state
 from ...domain.knowledge import Knowledge
-from ...domain.templates import preview_template, template_spec
+from ...domain.templates import SampleLanguage, preview_template, template_spec
 from ...util import new_id, utc_now
 from ..actor import Actor
 from ..artifacts import DocumentPdfDelivery
@@ -324,13 +324,11 @@ class RenderingService:
             pdf=self.renderer.preview_pdf(content, knowledge.candidate, document.template),
         )
 
-    def sample_template(self, template: str, language: str) -> str:
+    def sample_template(self, template: str, language: SampleLanguage) -> str:
         """A fictional CV in one template, for choosing a template with no CV yet.
 
         It reads nothing of any user's: the content is the shipped sample.
         """
-        if language not in {"en", "he"}:
-            raise PreconditionFailed(f"no sample CV in language {language!r}")
         template_spec(preview_template(template))
         return self.renderer.sample_html(preview_template(template), language)
 

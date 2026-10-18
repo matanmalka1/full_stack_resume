@@ -34,6 +34,8 @@ TemplateName = Literal[
     "modern-deedy",
 ]
 TEMPLATE_NAMES: tuple[str, ...] = get_args(TemplateName)
+#: The languages the template sample CV is written in.
+SampleLanguage = Literal["en", "he"]
 #: A template to preview: a chosen one, or `track` for the track's own.
 PreviewTemplate = Literal[TemplateName, "track"]
 
@@ -45,7 +47,7 @@ def preview_template(name: str) -> str | None:
 
 @dataclass(frozen=True, slots=True)
 class TemplateSpec:
-    id: str
+    id: TemplateName
     label: str
     description: str
     columns: int = 1

@@ -14,7 +14,7 @@ from pypdf import PdfReader
 
 from ..application.errors import InfrastructureFailure
 from ..domain.candidate import contact_href
-from ..domain.contracts.drafts import ClaimLine, DraftDocument, ResumeSection
+from ..domain.contracts.drafts import ClaimLine, ClaimStyle, DraftDocument, ResumeSection
 from ..domain.contracts.knowledge import (
     CandidateContext,
     Profile,
@@ -31,7 +31,12 @@ from ..domain.render_validation import (
 from ..domain.render_validation import (
     _claim_recoverable as _claim_recoverable,
 )
-from ..domain.templates import is_side_section, section_columns, template_spec
+from ..domain.templates import (
+    SampleLanguage,
+    is_side_section,
+    section_columns,
+    template_spec,
+)
 from ..util import sha256_file, sha256_text
 
 MIXED_LTR = re.compile(
@@ -258,7 +263,7 @@ _SAMPLE_CLASSIFICATION = {
 }
 
 
-def sample_draft(repo: Path, language: str) -> DraftDocument:
+def sample_draft(repo: Path, language: SampleLanguage) -> DraftDocument:
     """A fictional CV (rendering/samples/template-sample.json) as a document.
 
     Presentation input for the template picker, not a record: it belongs to no
@@ -269,7 +274,7 @@ def sample_draft(repo: Path, language: str) -> DraftDocument:
     )[language]
     track, profile, emphasis = _SAMPLE_CLASSIFICATION[language]
 
-    def line(index: str, style: str, text: str) -> ClaimLine:
+    def line(index: str, style: ClaimStyle, text: str) -> ClaimLine:
         return ClaimLine(
             claim_id=f"sample-{index}",
             style=style,
@@ -306,7 +311,7 @@ def sample_draft(repo: Path, language: str) -> DraftDocument:
     )
 
 
-def compose_sample_html(repo: Path, template: str | None, language: str) -> str:
+def compose_sample_html(repo: Path, template: str | None, language: SampleLanguage) -> str:
     """The sample CV in one template, for the picker to show before a CV exists."""
     return compose_html(sample_draft(repo, language), repo, _SAMPLE_CANDIDATE, template)
 
@@ -560,7 +565,7 @@ class PlaywrightRenderer:
         """
         return compose_html(draft, self.knowledge_root, candidate, template)
 
-    def sample_html(self, template: str | None, language: str) -> str:
+    def sample_html(self, template: str | None, language: SampleLanguage) -> str:
         """The fictional sample CV in `template`; no browser, nothing stored."""
         return compose_sample_html(self.knowledge_root, template, language)
 
