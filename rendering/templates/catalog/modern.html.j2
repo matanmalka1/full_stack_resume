@@ -1,0 +1,9 @@
+{% extends "catalog/base.html.j2" %}
+{#- Resume Matcher modern: centered header, an accent bar under the name, accent ruled headings. -#}
+{% block design %}
+    .cv-header { text-align: center; }
+    .cv-header::after { content: ""; display: block; width: 16mm; height: 1mm; margin: 2.2mm auto 0; background: var(--accent); }
+    h2 { color: var(--accent); text-transform: uppercase; border-bottom: 2px solid var(--accent); padding-bottom: .5mm; font-size: 10pt; }
+    .headline { color: var(--muted); }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+{% endblock %}

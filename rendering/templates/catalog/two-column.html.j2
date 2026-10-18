@@ -1,0 +1,11 @@
+{% extends "catalog/base.html.j2" %}
+{#- Resume Matcher swiss-two-column: the single-column type in a 65:35 grid with a hairline divider. -#}
+{% block design %}
+    .cv-header { border-bottom: 1px solid var(--faint); padding-bottom: 3mm; }
+    h2 { text-transform: uppercase; border-bottom: 1px solid var(--rule); padding-bottom: .6mm; font-size: 10pt; }
+    .headline { color: var(--muted); }
+    .contacts, .date { font-family: var(--mono); }
+    .columns { grid-template-columns: minmax(0, 65fr) minmax(0, 35fr); }
+    .column-main { padding-inline-end: 3.5mm; border-inline-end: 1px solid #e5e7eb; }
+    .column-side { font-size: 9pt; }
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "catalog/base.html.j2" %}
+{#- Resume Matcher vivid: a two-tone accent name, mono title, accent headings, arrow bullets, a 63:37 grid. -#}
+{% block design %}
+    :root { --head-font: var(--sans); }
+    h1 .name-first { color: var(--accent); font-weight: 800; }
+    h1 .name-rest { color: #7a9be8; font-weight: 400; }
+    .headline { font-family: var(--mono); color: var(--muted); font-size: 10pt; }
+    .contacts { font-family: var(--mono); }
+    h2 { color: var(--accent); text-transform: uppercase; font-size: 10.5pt; }
+    .column-side h2 { font-size: 9pt; }
+    .bullet-dot { color: var(--accent); }
+    .date { font-family: var(--mono); font-weight: 700; font-size: 7.6pt; }
+    .columns { grid-template-columns: minmax(0, 63fr) minmax(0, 37fr); column-gap: 8mm; }
+    .column-side { font-size: 9pt; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+{% endblock %}
