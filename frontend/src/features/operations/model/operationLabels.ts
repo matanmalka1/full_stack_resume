@@ -5,6 +5,7 @@ import type {
   OperationPhase,
   OperationStatus,
   OperationType,
+  PageFitReport,
 } from "@/api/contracts";
 import { type Tone } from "@/ui/tone";
 
@@ -78,6 +79,31 @@ export const joinHebrewList = (labels: string[]): string =>
 /* How many proposed lines a succeeded run withheld, as its status and callout say it. */
 export const withheldLabel = (count: number): string =>
   count === 1 ? "שורה אחת לא עודכנה" : `${count} שורות לא עודכנו`;
+
+/* "עמוד אחד" or "N עמודים": a page limit in the reader's words. */
+export const pagesLabel = (count: number): string => (count === 1 ? "עמוד אחד" : `${count} עמודים`);
+
+/* How a succeeded draft was fitted to its page limit, when that is something the reader
+   has to know: lines were dropped, it is still too long, or its length was not checked.
+   A draft that fit as written says nothing. */
+export const pageFitNotice = (operation: Operation): PageFitReport | null => {
+  if (operation.status !== "succeeded" || operation.page_fit == null) return null;
+  return operation.page_fit.status === "fits" ? null : operation.page_fit;
+};
+
+/* The same outcome in the few words a status row has room for. */
+export const pageFitLabel = (report: PageFitReport): string => {
+  switch (report.status) {
+    case "trimmed":
+      return `קוצרה ל־${pagesLabel(report.maximum)}`;
+    case "over":
+      return `חורגת מ־${pagesLabel(report.maximum)}`;
+    case "unavailable":
+      return "אורך העמודים לא נבדק";
+    case "fits":
+      return "";
+  }
+};
 
 export const failureTones: Partial<Record<OperationStatus, Tone>> = {
   failed: "blocker",

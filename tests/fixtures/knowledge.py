@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from api_harness import TEST_EMAIL, TEST_PASSWORD
 from fake_provider import FakeOpenAI
+from fake_renderer import PageCountingRenderer
 from helpers import store_draft
 from knowledge_seed import SEED_DIR, V2_IDENTITY_FACT, seed_fact, write_canonical_sources
 
@@ -125,12 +126,14 @@ def provision(services: Services) -> Services:
 @pytest.fixture
 def bare_services(app_paths: AppPaths) -> Services:
     """No user and no Knowledge: for what happens before `create-user` and the import."""
-    return build_services(app_paths)
+    return build_services(app_paths, renderer=PageCountingRenderer(app_paths.knowledge_root))
 
 
 @pytest.fixture
 def services(app_paths: AppPaths) -> Services:
-    return provision(build_services(app_paths))
+    return provision(
+        build_services(app_paths, renderer=PageCountingRenderer(app_paths.knowledge_root))
+    )
 
 
 @pytest.fixture
@@ -145,7 +148,13 @@ def fake_openai(monkeypatch) -> FakeOpenAI:
 
 @pytest.fixture
 def ai_services(app_paths: AppPaths, fake_openai: FakeOpenAI, task_contracts) -> Services:
-    return provision(build_services(app_paths, provider=fake_openai.provider(task_contracts)))
+    return provision(
+        build_services(
+            app_paths,
+            provider=fake_openai.provider(task_contracts),
+            renderer=PageCountingRenderer(app_paths.knowledge_root),
+        )
+    )
 
 
 @pytest.fixture

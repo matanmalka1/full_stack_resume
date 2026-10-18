@@ -295,6 +295,35 @@ class ClaimReviewReason(OperationModel):
     claims: list[RejectedClaimReview]
 
 
+class TrimmedClaim(OperationModel):
+    """One line the page-fit step dropped, as it read in the document it left."""
+
+    claim_id: str
+    section: str
+    heading: str | None = None
+    text: str
+
+
+PageFitStatus = Literal["fits", "trimmed", "over", "unavailable"]
+
+
+class PageFitReport(OperationModel):
+    """What fitting a new draft to its page limit did (product-spec §10).
+
+    `fits`: it was within the limit as written. `trimmed`: lines were dropped until it
+    was. `over`: it is still past the limit with nothing left that may go - the draft
+    written is the shortest the rule allows, and approval will fail until it is
+    shortened by hand. `unavailable`: the page count could not be measured, so the
+    draft was written untrimmed. `pages` is the last count measured, if any.
+    """
+
+    code: Literal["page_fit"] = "page_fit"
+    status: PageFitStatus
+    pages: int | None = Field(default=None, ge=1)
+    maximum: int = Field(ge=1)
+    trimmed: list[TrimmedClaim] = Field(default_factory=list)
+
+
 #: Why a failed Operation failed, in a closed vocabulary with typed parameters.
 #: `safe_failure_detail` is the safe English diagnostic for logs and generic
 #: failures; this structured value lets a client explain supported failures in
@@ -322,6 +351,8 @@ class OperationView(OperationModel):
     #: A succeeded writer Operation's proposed lines that were withheld: each kept the
     #: wording it had before the Operation, and the refused wording is listed here.
     withheld_claims: ClaimReviewReason | None = None
+    #: How a succeeded `create_draft` was fitted to its Profile's page limit.
+    page_fit: PageFitReport | None = None
     retry_of_operation_id: str | None = None
     provider: str | None = None
     model: str | None = None

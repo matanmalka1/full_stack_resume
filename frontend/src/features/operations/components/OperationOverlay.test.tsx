@@ -203,6 +203,46 @@ describe("OperationReport", () => {
     expect(screen.queryByText("בביצוע")).not.toBeInTheDocument();
   });
 
+  it("warns that a draft still over its page limit will fail approval until shortened", () => {
+    renderPanel(
+      succeeded({
+        operation_type: "create_draft",
+        page_fit: {
+          code: "page_fit",
+          status: "over",
+          pages: 3,
+          maximum: 2,
+          trimmed: [{ claim_id: "claim-3", section: "Skills", text: "Removed skill" }],
+        },
+      }),
+    );
+    expect(screen.getByText("קורות החיים עדיין ארוכים מ־2 עמודים")).toBeVisible();
+    expect(screen.getByText(/ההפקה תיכשל עד שהיא תקוצר/)).toBeVisible();
+    expect(within(screen.getByRole("list", { name: "שורות שהוסרו" })).getByText("Removed skill")).toBeVisible();
+  });
+
+  it("says when a draft's length could not be checked", () => {
+    renderPanel(
+      succeeded({
+        id: "unmeasured",
+        operation_type: "create_draft",
+        page_fit: { code: "page_fit", status: "unavailable", pages: null, maximum: 1, trimmed: [] },
+      }),
+    );
+    expect(screen.getByText("לא ניתן היה לבדוק את אורך קורות החיים")).toBeVisible();
+  });
+
+  it("shows nothing about pages for a draft that fit as written", () => {
+    renderPanel(
+      succeeded({
+        operation_type: "create_draft",
+        page_fit: { code: "page_fit", status: "fits", pages: 1, maximum: 1, trimmed: [] },
+      }),
+    );
+    expect(screen.queryByText(/קוצרו כדי להיכנס|עדיין ארוכים|לא ניתן היה לבדוק/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "שורות שהוסרו" })).not.toBeInTheDocument();
+  });
+
   it("offers a re-run of finished work as a secondary action", () => {
     renderPanel(succeeded({ available_actions: ["retry"] }));
 
@@ -631,6 +671,49 @@ describe("OperationOverlay", () => {
 
     fireEvent.click(within(overlay()).getByRole("button", { name: "סגירה" }));
     expect(chip()).toHaveTextContent("שורה אחת לא עודכנה");
+  });
+
+  it("opens the report on a draft trimmed to its page limit, and lists what went", () => {
+    const { update } = renderOverlay({ operation: operation({ operation_type: "create_draft" }) });
+
+    update({
+      operation: succeeded({
+        operation_type: "create_draft",
+        page_fit: {
+          code: "page_fit",
+          status: "trimmed",
+          pages: 1,
+          maximum: 1,
+          trimmed: [{ claim_id: "claim-7", section: "Experience", heading: "Account Manager", text: "Dropped line" }],
+        },
+      }),
+      settled: true,
+    });
+
+    /* Lines left the draft: that is for the reader, not a success that goes by itself. */
+    expect(overlay().open).toBe(true);
+    expect(within(overlay()).getByText("קורות החיים קוצרו כדי להיכנס ל־עמוד אחד")).toBeVisible();
+    const removed = within(overlay()).getByRole("list", { name: "שורות שהוסרו" });
+    expect(within(removed).getByText("Dropped line")).toBeVisible();
+    expect(within(removed).getByText("Experience · Account Manager")).toBeVisible();
+
+    fireEvent.click(within(overlay()).getByRole("button", { name: "סגירה" }));
+    expect(chip()).toHaveTextContent("קוצרה ל־עמוד אחד");
+  });
+
+  it("lets a draft that fit its pages go like any other success", () => {
+    const { update } = renderOverlay({ operation: operation({ operation_type: "create_draft" }) });
+
+    update({
+      operation: succeeded({
+        operation_type: "create_draft",
+        page_fit: { code: "page_fit", status: "fits", pages: 1, maximum: 1, trimmed: [] },
+      }),
+      settled: true,
+    });
+
+    expect(overlay().open).toBe(false);
+    expect(panel()).toHaveTextContent("הושלמה");
   });
 
   it("keeps one session from pending work to the record that replaces it", () => {

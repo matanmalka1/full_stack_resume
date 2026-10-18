@@ -445,6 +445,27 @@ class PlaywrightRenderer:
             render_pdf(html_path, pdf_path)
             return pdf_path.read_bytes()
 
+    def measure_pages(self, draft: DraftDocument, candidate: CandidateContext) -> int:
+        """How many A4 pages the composed document takes, as the approved render lays it out.
+
+        The document as `render_html` writes it - no preview stamp - through the same
+        `render_pdf`, in a temporary directory gone when this returns: a measurement,
+        not an artifact. Any failure to produce or read the PDF is an
+        `InfrastructureFailure`, so the caller can tell "not measured" from a count.
+        """
+        try:
+            document = compose_html(draft, self.knowledge_root, candidate)
+            with tempfile.TemporaryDirectory(prefix="cv-measure-") as directory:
+                html_path = Path(directory) / "measure.html"
+                pdf_path = Path(directory) / "measure.pdf"
+                html_path.write_text(document, encoding="utf-8")
+                render_pdf(html_path, pdf_path)
+                return len(PdfReader(str(pdf_path)).pages)
+        except InfrastructureFailure:
+            raise
+        except Exception as exc:
+            raise InfrastructureFailure(f"the page count could not be measured: {exc}") from exc
+
     def validate_rendered(
         self,
         draft: DraftDocument,

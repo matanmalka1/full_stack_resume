@@ -12,6 +12,7 @@ from ...application.operations import (
     OperationPhase,
     OperationStatus,
     OperationType,
+    PageFitReport,
     available_operation_actions,
     is_terminal_operation,
 )
@@ -67,6 +68,8 @@ class OperationResponse(HttpSchema):
     failure_reason: FailureReason | None = None
     #: Proposed lines a succeeded writer Operation withheld; each kept its prior wording.
     withheld_claims: ClaimReviewReason | None = None
+    #: How a succeeded `create_draft` was fitted to the page limit, and what it dropped.
+    page_fit: PageFitReport | None = None
     retry_of_operation_id: str | None = None
     provider: str | None = None
     model: str | None = None

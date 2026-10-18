@@ -3752,6 +3752,16 @@
             "title": "Outputs",
             "type": "array"
           },
+          "page_fit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageFitReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "phase": {
             "$ref": "#/components/schemas/OperationPhase"
           },
@@ -3877,6 +3887,58 @@
         ],
         "title": "OperationType",
         "type": "string"
+      },
+      "PageFitReport": {
+        "additionalProperties": false,
+        "description": "What fitting a new draft to its page limit did (product-spec §10).\n\n`fits`: it was within the limit as written. `trimmed`: lines were dropped until it\nwas. `over`: it is still past the limit with nothing left that may go - the draft\nwritten is the shortest the rule allows, and approval will fail until it is\nshortened by hand. `unavailable`: the page count could not be measured, so the\ndraft was written untrimmed. `pages` is the last count measured, if any.",
+        "properties": {
+          "code": {
+            "const": "page_fit",
+            "default": "page_fit",
+            "title": "Code",
+            "type": "string"
+          },
+          "maximum": {
+            "minimum": 1.0,
+            "title": "Maximum",
+            "type": "integer"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
+          },
+          "status": {
+            "enum": [
+              "fits",
+              "trimmed",
+              "over",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trimmed": {
+            "items": {
+              "$ref": "#/components/schemas/TrimmedClaim"
+            },
+            "title": "Trimmed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "maximum"
+        ],
+        "title": "PageFitReport",
+        "type": "object"
       },
       "PdfPageLimitReason": {
         "additionalProperties": false,
@@ -4606,6 +4668,42 @@
           "target_status"
         ],
         "title": "TransitionStatusRequest",
+        "type": "object"
+      },
+      "TrimmedClaim": {
+        "additionalProperties": false,
+        "description": "One line the page-fit step dropped, as it read in the document it left.",
+        "properties": {
+          "claim_id": {
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "heading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim_id",
+          "section",
+          "text"
+        ],
+        "title": "TrimmedClaim",
         "type": "object"
       },
       "UpdateApplicationNotesRequest": {

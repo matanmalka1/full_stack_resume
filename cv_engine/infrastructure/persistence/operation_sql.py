@@ -136,6 +136,7 @@ def _operation_record(row: Any, connection: Connection) -> PersistedOperation:
         safe_failure_detail=record["safe_failure_detail"],
         failure_reason=record["failure_reason"],
         withheld_claims=record["withheld_claims"],
+        page_fit=record["page_fit"],
         technical_log_reference=record["technical_log_reference"],
         retry_of_operation_id=record["retry_of_operation_id"],
         outputs=[

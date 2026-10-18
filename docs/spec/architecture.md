@@ -375,7 +375,12 @@ payloads never contain keys or secrets. No endpoint accepts paths or arbitrary u
 The API defaults to `127.0.0.1:8765`. Set `CV_API_HOST`/`CV_API_PORT` to match what
 uvicorn binds, or the origin check refuses the UI's own requests.
 
-PDFs render with Playwright Chromium.
+PDFs render with Playwright Chromium. `create_draft` also uses it to count a new draft's
+pages (`Renderer.measure_pages`, product-spec §10): the composed HTML without the preview
+stamp, rendered in a temporary directory and discarded. It runs in the Operation's
+prepare, outside any database scope, and is not a render Operation, so it does not take
+the render slot. A measurement that fails is reported on the Operation as
+`page_fit.status = unavailable`; it never fails the draft.
 
 Rotating JSON logs under `logs_root`: `server.jsonl` (API) and `operations.jsonl`
 (worker). Tracebacks go only to files. The API console logs one line per request

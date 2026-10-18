@@ -275,6 +275,7 @@ def build_services(
         knowledge=resolved_knowledge,
         provider=resolved_provider,
         ai_calls=ai_calls,
+        renderer=resolved_renderer,
     )
     draft_review = DraftReviewService(
         transactions=transactions,

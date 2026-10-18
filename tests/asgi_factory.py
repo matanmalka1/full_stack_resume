@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 from fake_provider import FakeOpenAI
+from fake_renderer import PageCountingRenderer
 from fastapi import FastAPI
 
 from cv_engine.api.app import create_app
@@ -46,7 +47,9 @@ def _build_test_app(*, with_test_provider: bool) -> FastAPI:
     if with_test_provider:
         contracts = FileKnowledge(paths.knowledge_root, project_root=paths.root).task_contracts()
         provider = FakeOpenAI().provider(contracts)
-    services = build_services(paths, provider=provider)
+    services = build_services(
+        paths, provider=provider, renderer=PageCountingRenderer(paths.knowledge_root)
+    )
     frontend_dist = os.environ.get("CV_TEST_FRONTEND_DIST")
     return create_app(
         build_api_services(services),

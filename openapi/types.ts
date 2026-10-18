@@ -2336,6 +2336,7 @@ export interface components {
             output_tokens?: number | null;
             /** Outputs */
             outputs: components["schemas"]["OperationOutputResponse"][];
+            page_fit?: components["schemas"]["PageFitReport"] | null;
             phase: components["schemas"]["OperationPhase"];
             /** Provider */
             provider?: string | null;
@@ -2362,6 +2363,35 @@ export interface components {
          * @enum {string}
          */
         OperationType: "analyze_job" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_document";
+        /**
+         * PageFitReport
+         * @description What fitting a new draft to its page limit did (product-spec §10).
+         *
+         *     `fits`: it was within the limit as written. `trimmed`: lines were dropped until it
+         *     was. `over`: it is still past the limit with nothing left that may go - the draft
+         *     written is the shortest the rule allows, and approval will fail until it is
+         *     shortened by hand. `unavailable`: the page count could not be measured, so the
+         *     draft was written untrimmed. `pages` is the last count measured, if any.
+         */
+        PageFitReport: {
+            /**
+             * Code
+             * @default page_fit
+             * @constant
+             */
+            code: "page_fit";
+            /** Maximum */
+            maximum: number;
+            /** Pages */
+            pages?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "fits" | "trimmed" | "over" | "unavailable";
+            /** Trimmed */
+            trimmed?: components["schemas"]["TrimmedClaim"][];
+        };
         /**
          * PdfPageLimitReason
          * @description The rendered PDF ran past the profile's page limit.
@@ -2630,6 +2660,20 @@ export interface components {
              * @enum {string}
              */
             target_status: "saved" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed";
+        };
+        /**
+         * TrimmedClaim
+         * @description One line the page-fit step dropped, as it read in the document it left.
+         */
+        TrimmedClaim: {
+            /** Claim Id */
+            claim_id: string;
+            /** Heading */
+            heading?: string | null;
+            /** Section */
+            section: string;
+            /** Text */
+            text: string;
         };
         /** UpdateApplicationNotesRequest */
         UpdateApplicationNotesRequest: {

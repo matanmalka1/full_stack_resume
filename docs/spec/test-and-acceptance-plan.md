@@ -99,10 +99,21 @@ titles.
 `tests/drafts/test_draft_validation.py`, `test_draft_files.py`,
 `tests/ai/test_ai_tasks.py`, `tests/e2e/test_golden.py`.
 
+Page fit: the trimming rule never drops structure or a pinned line, keeps each role's
+floor and every heading supported, drops an emptied optional section, breaks ties
+toward the later block, and is pure (`tests/drafts/test_page_fit.py`). `create_draft`
+reports `fits`, `trimmed`, `over` (no line left, or the six-measurement cap), and
+`unavailable` (first or a later measurement failing) with the right draft written; a
+dropped line leaves the withheld lines; the report is persisted and refused on a
+non-succeeded Operation (`tests/ai/test_draft_page_fit.py`). Service fixtures measure pages
+with `tests/fake_renderer.py` (`PageCountingRenderer`), which counts lines instead of
+starting Chromium; everything else it renders is the real renderer.
+
 ### 3.8 Rendering, artifacts, Ready, and Submission
 
 Render refuses an edited document; PDF 1–2 pages, geometry, text extraction,
-direction, filename (browser-marked); failed render keeps approval; immutable payload
+direction, filename (browser-marked); a role that cleans to no filename is refused by
+the Profile; failed render keeps approval; immutable payload
 keys; local and S3 stores agree; no deletion; orphan inspection read-only; Submission
 rechecks Ready under lock and copies with checksums.
 

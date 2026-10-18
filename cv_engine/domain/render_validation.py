@@ -7,7 +7,7 @@ from typing import Any
 from ..util import normalized_text
 from .candidate import contact_href
 from .contracts.drafts import DraftDocument
-from .contracts.knowledge import CandidateContext, Profile
+from .contracts.knowledge import CandidateContext, Profile, filing_role
 from .contracts.validation import ValidationIssue, ValidationReport
 
 RENDER_VALIDATION_GROUPS = (
@@ -51,12 +51,16 @@ class RenderEvidence:
     geometry: RenderGeometry
 
 
+def page_limit(profile: Profile) -> int:
+    """How many pages a CV built for `profile` may run to."""
+    return 2 if profile.allow_two_pages else 1
+
+
 def normalized_role_filename(role: str, candidate: CandidateContext) -> str:
-    cleaned = re.sub(r"\b(?:senior|junior|lead|principal)\b", "", role, flags=re.IGNORECASE)
-    cleaned = re.sub(r"[^A-Za-z0-9+ /&.-]+", "", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .-")
+    """The delivered PDF's filename. A Profile refuses a role that cleans to nothing."""
+    cleaned = filing_role(role)
     if not cleaned:
-        cleaned = "B2B Sales"
+        raise ValueError(f"role {role!r} leaves no filename once cleaned")
     return f"{candidate.resolved_filename_name} - {cleaned} - CV.pdf"
 
 
@@ -82,7 +86,7 @@ def validate_render_evidence(
         groups["pdf"] = False
         issues.append(ValidationIssue(group="pdf", code="pdf-corrupt", message=evidence.pdf_error))
 
-    maximum = 2 if profile.allow_two_pages else 1
+    maximum = page_limit(profile)
     if evidence.page_count < 1 or evidence.page_count > maximum:
         groups["page_count"] = False
         issues.append(

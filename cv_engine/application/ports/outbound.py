@@ -83,6 +83,13 @@ class Renderer(Protocol):
 
     def preview_pdf(self, draft: DraftDocument, candidate: CandidateContext) -> bytes: ...
 
+    def measure_pages(self, draft: DraftDocument, candidate: CandidateContext) -> int:
+        """How many pages `draft` renders to, through the same browser; nothing is stored.
+
+        Raises `InfrastructureFailure` when the page count cannot be measured.
+        """
+        ...
+
     def render_pdf(self, html_path: Path, pdf_path: Path) -> dict[str, Any]: ...
 
     def validate_rendered(
