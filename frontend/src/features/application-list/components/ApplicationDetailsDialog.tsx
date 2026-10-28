@@ -183,6 +183,10 @@ export const ApplicationDetailsDialog = ({
               onClearNextAction={onClearNextAction}
             />
           </section>
+        ) : readyHash === null ? (
+          /* Said rather than left blank, as the card used to say it: with nothing
+             scheduled the reader knows the record is waiting on them, not missing a block. */
+          <p className="text-support text-cv-text-muted">אין פעולה מתוזמנת כעת</p>
         ) : null}
 
         {readyHash === null ? null : (
