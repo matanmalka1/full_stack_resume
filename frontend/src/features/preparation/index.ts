@@ -20,7 +20,6 @@ export { PreparationView } from "./components/PreparationView";
    kept a step's heading and its chip two independently written answers to one question.
    The spine itself is reached only through here. */
 export { WizardStepShell } from "./components/WizardStepShell";
-export type { PhoneHeader } from "./components/PreparationWorkflowSteps";
 /* The Application screen's five-row account of its CV, with the way into the editor on
    the open row. The screen places it; preparation decides what it says. */
 export { PreparationChecklist } from "./components/PreparationChecklist";
