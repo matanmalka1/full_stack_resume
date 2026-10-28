@@ -1,4 +1,14 @@
-import { Clock3, ShieldCheck, Trash2, type LucideIcon } from "lucide-react";
+import {
+  Briefcase,
+  Clock3,
+  Code2,
+  FileText,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 
 import type { CreateFactRequest, Fact, FactStatus } from "@/api/contracts";
 import type { Tone } from "@/ui/tone";
@@ -39,6 +49,17 @@ export const factStatusIcons: Record<FactStatus, LucideIcon> = {
   canonical: ShieldCheck,
   deleted: Trash2,
 };
+
+/* The mark a phone's pool row leads with, so the knowledge file a fact sits in reads at a
+   glance where the wide screen's group heading is far up the scroll. */
+const factSourceIcons: Record<FactSource, LucideIcon> = {
+  "common.json": UserRound,
+  "sales.json": Briefcase,
+  "development.json": Code2,
+  "situational_skills.json": Sparkles,
+};
+
+export const factSourceIcon = (source: string): LucideIcon => factSourceIcons[source as FactSource] ?? FileText;
 
 /* The status/source unions are open strings on the wire, so a value the backend adds
    before the frontend knows it renders as itself rather than as `undefined`. The keyed
