@@ -251,8 +251,8 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("button", { name: "עריכה ותצוגה" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "תצוגה מלאה" })).toHaveAttribute("aria-pressed", "false");
+    expect(await screen.findByRole("button", { name: "עריכה" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "תצוגה מקדימה" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "עריכת השורה" }).length).toBeGreaterThan(0);
   });
@@ -266,7 +266,7 @@ describe("DraftEditorPage", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "בדיקה והכנת PDF" }));
 
-    const result = await screen.findByText("הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים לצד הטיוטה.");
+    const result = await screen.findByText("הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים בתצוגה המקדימה.");
     expect(result.closest(".sticky")).not.toBeNull();
     expect(result.closest('[role="status"]')).not.toBeNull();
   });
@@ -998,7 +998,7 @@ describe("DraftEditorPage regeneration", () => {
 
     /* The overlay, not the route: the editor's own heading is still on screen under it. */
     expect(await screen.findByRole("heading", { name: "הרצת ניסוח או בדיקה של שורה" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "טיוטה ואימות" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /טיוטה ואימות/ })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/regenerate-claim"));
     /* The document's hash is its whole identity: a save landing mid flight changes it, so
        activation discards the result instead of overwriting the user's edit. */

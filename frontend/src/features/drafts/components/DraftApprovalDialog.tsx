@@ -97,12 +97,16 @@ export const DraftApprovalDialog = ({
       {/* What is being approved, set apart from the sentence that approves it: it ran
           straight on from the paragraph with no space between the two. */}
       {detail === undefined || draft === undefined ? null : (
-        /* On a phone, where the sheet is narrower than a term beside its value, the list
-           reads as rows - term at the start, value at the end - in a muted panel, rather
-           than as stacked pairs that pushed the command below the fold. */
-        <div className="mt-section-gap rounded-control border border-cv-border bg-cv-surface p-card-padding max-sm:bg-cv-surface-muted max-sm:px-card-padding max-sm:py-3">
+        /* Rows - term at the start, value at the end - in a muted panel, at every width.
+           It began as the phone's answer to a sheet narrower than a term beside its value,
+           where stacked pairs pushed the command below the fold; the desktop design draws
+           the same rows, each over a hairline, so the record being approved reads as one
+           block of three facts rather than as a form. */
+        <div className="mt-section-gap rounded-control border border-cv-border bg-cv-surface-muted px-card-padding py-3 sm:py-0">
           <SummaryList
-            className="max-sm:grid-cols-[max-content_minmax(0,1fr)] max-sm:items-baseline max-sm:[&_dd]:text-end max-sm:[&_dd]:font-semibold"
+            /* From `sm` the list's own third, spacer column is dropped (the value closes
+               the row instead) and each term and value draws the row's hairline. */
+            className="grid-cols-[max-content_minmax(0,1fr)] items-baseline [&_dd]:text-end [&_dd]:font-semibold sm:grid-cols-[max-content_minmax(0,1fr)]! sm:gap-0 sm:[&_dd]:border-b sm:[&_dd]:border-cv-border sm:[&_dd]:py-3 sm:[&_dt]:border-b sm:[&_dt]:border-cv-border sm:[&_dt]:py-3 sm:[&>div:last-child>*]:border-b-0 sm:[&>div>div]:hidden"
             items={[
               { term: "חברה", value: detail.application.company },
               { term: "תפקיד", value: detail.application.target_role },

@@ -59,20 +59,25 @@ export const DraftConflictDialog = ({
         גרסה חדשה יותר של הטיוטה נשמרה לפני השמירה שלך, ולכן השמירה נעצרה. שום דבר לא אוחד אוטומטית ושום טקסט לא נמחק.
       </p>
 
-      <ul className="flex flex-col gap-4 max-lg:mt-3">
+      <ul className="mt-3 flex flex-col gap-4">
         {pending.map((edit) => (
-          /* On a phone each text is its own panel - the reader's framed in the strong
-             border, the saved one muted - so the two read as the two sides of the choice
-             below them rather than as one paragraph. */
-          <li className="flex flex-col gap-2" key={edit.claim_id}>
-            <div className="max-lg:rounded-control max-lg:border max-lg:border-cv-border-strong max-lg:p-card-padding">
-              <p className="text-support font-medium text-cv-text">הטקסט שלי</p>
+          /* Each text is its own panel - the reader's framed in the strong border, the
+             saved one muted - so the two read as the two sides of the choice below them
+             rather than as one paragraph. A phone stacks them; a desktop sets them side by
+             side, the reader's own at the start, as its design does. */
+          <li className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-3" key={edit.claim_id}>
+            <div className="rounded-control border border-cv-border-strong p-card-padding">
+              <p className="text-support font-medium text-cv-text lg:text-caption lg:font-bold lg:text-cv-text-muted">
+                הטקסט שלי
+              </p>
               <p className="text-body text-cv-text" dir="auto">
                 {edit.text ?? ""}
               </p>
             </div>
-            <div className="max-lg:rounded-control max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface-muted max-lg:p-card-padding">
-              <p className="text-support font-medium text-cv-text">הגרסה הנוכחית</p>
+            <div className="rounded-control border border-cv-border bg-cv-surface-muted p-card-padding">
+              <p className="text-support font-medium text-cv-text lg:text-caption lg:font-bold lg:text-cv-text-muted">
+                הגרסה הנוכחית
+              </p>
               <p className="text-body text-cv-text-muted" dir="auto">
                 {texts.get(edit.claim_id) ?? "השורה אינה קיימת עוד בגרסה הנוכחית."}
               </p>

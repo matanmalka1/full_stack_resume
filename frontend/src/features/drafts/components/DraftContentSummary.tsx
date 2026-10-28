@@ -35,7 +35,7 @@ export const DraftContentSummary = ({ content, draft, selection }: DraftContentS
   return (
     <section
       aria-labelledby="draft-content-heading"
-      className="flex flex-col gap-4 border border-cv-border bg-cv-surface p-card-padding"
+      className="flex flex-col gap-4 border border-cv-border bg-cv-surface p-card-padding lg:order-last lg:rounded-surface lg:border-cv-hairline lg:shadow-card"
     >
       <div className="flex flex-col gap-1">
         <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-content-heading">
