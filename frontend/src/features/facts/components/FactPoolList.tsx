@@ -161,8 +161,10 @@ const FactPoolRow = ({
    scrolls (a box inside a scrolling page traps the thumb), and each group is a rounded
    card under a plain label that states the file once per group instead of once per row.
 
-   A wide screen draws the pool as one table on the page, with the file in its own column,
-   so the group labels are not drawn there; the groups still set the rows' order.
+   A wide screen draws the pool as one table on the page. Each group opens with a header
+   row across the table naming the file and how many facts it holds, and it sticks to the
+   top of the page while its rows scroll by, so the count per file reads there as on a
+   phone. The file also has its own column, for a row read on its own.
 
    Groups keep the order the pool arrived in rather than being sorted here: the store's
    own order is what the store itself and the integrity report show. */
@@ -193,7 +195,7 @@ export const FactPoolList = ({
 }) => (
   <div
     aria-label="רשימת העובדות"
-    className="max-h-[70dvh] min-h-64 overflow-y-auto rounded-control border border-cv-border max-lg:max-h-none max-lg:min-h-0 max-lg:overflow-visible max-lg:border-0 lg:max-h-none lg:min-h-0 lg:overflow-hidden lg:rounded-surface lg:bg-cv-surface lg:shadow-surface"
+    className="max-h-[70dvh] min-h-64 overflow-y-auto rounded-control border border-cv-border max-lg:max-h-none max-lg:min-h-0 max-lg:overflow-visible max-lg:border-0 lg:max-h-none lg:min-h-0 lg:overflow-clip lg:rounded-surface lg:bg-cv-surface lg:shadow-surface"
     dir="ltr"
     // A named region rather than one long list: the groups below carry the lists.
     // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
@@ -213,7 +215,7 @@ export const FactPoolList = ({
       </div>
       {groupBySource(entries).map(({ entries: grouped, source }) => (
         <section key={source}>
-          <h3 className="lg:hidden sticky top-0 z-(--cv-z-content-raised) flex items-baseline justify-between gap-control-gap border-b border-cv-border bg-cv-surface-sunken px-3 py-1.5 text-support font-semibold text-cv-text-muted max-lg:static max-lg:border-0 max-lg:bg-transparent max-lg:px-1 max-lg:pt-0 max-lg:font-bold">
+          <h3 className="lg:bg-cv-surface-muted lg:px-4.5 lg:py-2 sticky top-0 z-(--cv-z-content-raised) flex items-baseline justify-between gap-control-gap border-b border-cv-border bg-cv-surface-sunken px-3 py-1.5 text-support font-semibold text-cv-text-muted max-lg:static max-lg:border-0 max-lg:bg-transparent max-lg:px-1 max-lg:pt-0 max-lg:font-bold">
             <span dir="auto">{factSourceLabel(source)}</span>
             <span className="font-normal">{grouped.length}</span>
           </h3>
