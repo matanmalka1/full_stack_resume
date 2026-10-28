@@ -230,128 +230,140 @@ export const ApplicationListPage = () => {
           title={`המועמדות של ${deletedLabel} נמחקה והוסרה מהלוח`}
         />
       )}
-      <ApplicationAttentionSummary
-        boardHasApplications={page !== undefined && page.total > 0}
-        clearingApplicationId={clearingApplicationId}
-        filterActive={query.preset === "needs_attention"}
-        onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
-        onOpenStatusDialog={(application) => setUpdatingApplicationId(application.id)}
-        onShowAll={() => updateQuery({ ...query, preset: "needs_attention" })}
-      />
-      {clearNextActionMutation.error === null ? null : (
-        <ErrorCallout error={clearNextActionMutation.error} fallbackDetail="אפשר לנסות שוב." title="התזכורת לא הוסרה" />
-      )}
-      {closeMutation.error === null ? null : (
-        <ErrorCallout error={closeMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נסגרה" />
-      )}
-      {undoCloseMutation.error === null ? null : (
-        <ErrorCallout
-          error={undoCloseMutation.error}
-          fallbackDetail="המועמדות נשארה סגורה. אפשר לנסות שוב או לתקן את האירוע מתוך המועמדות."
-          title="הסגירה לא בוטלה"
-        />
-      )}
-      {deleteMutation.error === null ? null : (
-        <ErrorCallout error={deleteMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נמחקה" />
-      )}
+      {/* On a wide screen the action hub is a column beside the board rather than a block
+          above it, so the cards start at the top of the page; on a phone it stays first.
+          The column takes its width only when the hub draws something - a hub with
+          nothing to say renders nothing, and the cards then take the row. */}
+      <div className="flex flex-col gap-section-gap lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-6">
+        <div className="lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1 lg:not-empty:w-76">
+          <ApplicationAttentionSummary
+            boardHasApplications={page !== undefined && page.total > 0}
+            clearingApplicationId={clearingApplicationId}
+            filterActive={query.preset === "needs_attention"}
+            onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
+            onOpenStatusDialog={(application) => setUpdatingApplicationId(application.id)}
+            onShowAll={() => updateQuery({ ...query, preset: "needs_attention" })}
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-section-gap lg:col-start-1 lg:row-start-1">
+          {clearNextActionMutation.error === null ? null : (
+            <ErrorCallout
+              error={clearNextActionMutation.error}
+              fallbackDetail="אפשר לנסות שוב."
+              title="התזכורת לא הוסרה"
+            />
+          )}
+          {closeMutation.error === null ? null : (
+            <ErrorCallout error={closeMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נסגרה" />
+          )}
+          {undoCloseMutation.error === null ? null : (
+            <ErrorCallout
+              error={undoCloseMutation.error}
+              fallbackDetail="המועמדות נשארה סגורה. אפשר לנסות שוב או לתקן את האירוע מתוך המועמדות."
+              title="הסגירה לא בוטלה"
+            />
+          )}
+          {deleteMutation.error === null ? null : (
+            <ErrorCallout error={deleteMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נמחקה" />
+          )}
 
-      <QueryState
-        empty={page?.total === 0}
-        emptyState={
-          /* On a phone the empty board is the whole screen's one message, so it stands on
-             the canvas without a frame, under a drawn sheet of paper with a plus: a large
-             title, the sentence, a full-width command, and - since a CV is built from the
-             reader's facts - the way to fill those in first. */
-          <EmptyState className="bg-cv-surface max-lg:border-0 max-lg:bg-transparent max-lg:px-4 max-lg:py-16">
-            <EmptyBoardMark />
-            <p className="text-body text-cv-text max-lg:text-heading-md max-lg:font-extrabold">
-              עוד לא נוצרה אף מועמדות.
-            </p>
-            <p className="mt-1 text-support text-cv-text-muted max-lg:mt-2 max-lg:text-body">
-              מועמדות חדשה מתחילה בהדבקת מודעת המשרה.
-            </p>
-            <div className="mt-5 flex justify-center max-lg:mt-6">
-              <Link
-                className={buttonClasses(
-                  "primary",
-                  "max-lg:min-h-13 max-lg:w-full max-lg:text-body max-lg:shadow-floating",
-                )}
-                to={routePaths.newApplication}
-              >
-                <Plus aria-hidden="true" className="size-icon-md lg:hidden" />
-                משרה חדשה
-              </Link>
-            </div>
-            <Link
-              className="mt-5 inline-flex min-h-11 items-center gap-1.5 text-support font-bold text-cv-text underline underline-offset-4 lg:hidden"
-              to={routePaths.facts}
-            >
-              <BookOpen aria-hidden="true" className="size-icon-md" />
-              קודם למלא את מאגר העובדות
-            </Link>
-          </EmptyState>
-        }
-        error={listQuery.error}
-        errorTitle="לא ניתן לטעון את המועמדויות"
-        loading={listQuery.isPending}
-        onRetry={() => void listQuery.refetch()}
-        /* No `loadingLabel`: `loadingState` always wins over it, so a label here would be
-           a string that never renders. The skeleton announces the wait itself. */
-        loadingState={<ApplicationCardsSkeleton />}
-      >
-        {page === undefined ? null : (
-          <div className="flex flex-col gap-4">
-            <ApplicationListToolbar
-              activity={query.activity ?? "open"}
-              filtered={filtered}
-              onActivityChange={(activity) => updateQuery({ ...query, activity })}
-              onClearFilters={clearFilters}
-              onPreparationStateChange={(stage) => updateQuery({ ...query, stages: stage ? [stage] : [] })}
-              onRecruitmentStageChange={(stageId) => {
-                const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
-                updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
-              }}
-              onSearchChange={setSearchInput}
-              onSortChange={(sort) => updateQuery({ ...query, sort })}
-              onViewModeChange={setViewMode}
-              preparationState={query.stages?.[0]}
-              recruitmentStage={selectedStage(query.recruitmentStatuses)}
-              recruitmentStageCounts={recruitmentStageCounts}
-              resultSummary={
-                page.matched === page.total
-                  ? `${page.total} מועמדויות`
-                  : !filtered
-                    ? `${page.matched} מתוך ${page.total} מועמדויות · תהליכים סגורים מוסתרים`
-                    : `${page.matched} מתוך ${page.total} מועמדויות`
-              }
-              search={searchInput}
-              sort={query.sort ?? "updated"}
-              stageCounts={page.stage_counts}
-              viewMode={viewMode}
-            />
-            <ApplicationListResults
-              clearingApplicationId={clearingApplicationId}
-              replacing={listQuery.isPlaceholderData}
-              items={items}
-              matchedCount={page.matched}
-              offset={query.offset ?? 0}
-              onClearFilters={clearFilters}
-              onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
-              onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
-              onRequestClose={(item) => setClosingApplicationId(item.id)}
-              onRequestDelete={(item) => setDeletingApplicationId(item.id)}
-              onRequestDetails={(item) => setDetailsApplicationId(item.id)}
-              onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
-              pageSize={PAGE_SIZE}
-              recruitmentStatusCounts={page.recruitment_status_counts}
-              recruitmentStatusFilter={query.recruitmentStatuses}
-              returnedId={returnedId}
-              viewMode={viewMode}
-            />
-            <NewApplicationFab />
-          </div>
-        )}
-      </QueryState>
+          <QueryState
+            empty={page?.total === 0}
+            emptyState={
+              /* On a phone the empty board is the whole screen's one message, so it stands on
+                     the canvas without a frame, under a drawn sheet of paper with a plus: a large
+                     title, the sentence, a full-width command, and - since a CV is built from the
+                     reader's facts - the way to fill those in first. */
+              <EmptyState className="bg-cv-surface max-lg:border-0 max-lg:bg-transparent max-lg:px-4 max-lg:py-16">
+                <EmptyBoardMark />
+                <p className="text-body text-cv-text max-lg:text-heading-md max-lg:font-extrabold">
+                  עוד לא נוצרה אף מועמדות.
+                </p>
+                <p className="mt-1 text-support text-cv-text-muted max-lg:mt-2 max-lg:text-body">
+                  מועמדות חדשה מתחילה בהדבקת מודעת המשרה.
+                </p>
+                <div className="mt-5 flex justify-center max-lg:mt-6">
+                  <Link
+                    className={buttonClasses(
+                      "primary",
+                      "max-lg:min-h-13 max-lg:w-full max-lg:text-body max-lg:shadow-floating",
+                    )}
+                    to={routePaths.newApplication}
+                  >
+                    <Plus aria-hidden="true" className="size-icon-md lg:hidden" />
+                    משרה חדשה
+                  </Link>
+                </div>
+                <Link
+                  className="mt-5 inline-flex min-h-11 items-center gap-1.5 text-support font-bold text-cv-text underline underline-offset-4 lg:hidden"
+                  to={routePaths.facts}
+                >
+                  <BookOpen aria-hidden="true" className="size-icon-md" />
+                  קודם למלא את מאגר העובדות
+                </Link>
+              </EmptyState>
+            }
+            error={listQuery.error}
+            errorTitle="לא ניתן לטעון את המועמדויות"
+            loading={listQuery.isPending}
+            onRetry={() => void listQuery.refetch()}
+            /* No `loadingLabel`: `loadingState` always wins over it, so a label here would be
+                   a string that never renders. The skeleton announces the wait itself. */
+            loadingState={<ApplicationCardsSkeleton />}
+          >
+            {page === undefined ? null : (
+              <div className="flex flex-col gap-4">
+                <ApplicationListToolbar
+                  activity={query.activity ?? "open"}
+                  filtered={filtered}
+                  onActivityChange={(activity) => updateQuery({ ...query, activity })}
+                  onClearFilters={clearFilters}
+                  onPreparationStateChange={(stage) => updateQuery({ ...query, stages: stage ? [stage] : [] })}
+                  onRecruitmentStageChange={(stageId) => {
+                    const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
+                    updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
+                  }}
+                  onSearchChange={setSearchInput}
+                  onSortChange={(sort) => updateQuery({ ...query, sort })}
+                  onViewModeChange={setViewMode}
+                  preparationState={query.stages?.[0]}
+                  recruitmentStage={selectedStage(query.recruitmentStatuses)}
+                  recruitmentStageCounts={recruitmentStageCounts}
+                  resultSummary={
+                    page.matched === page.total
+                      ? `${page.total} מועמדויות`
+                      : !filtered
+                        ? `${page.matched} מתוך ${page.total} מועמדויות · תהליכים סגורים מוסתרים`
+                        : `${page.matched} מתוך ${page.total} מועמדויות`
+                  }
+                  search={searchInput}
+                  sort={query.sort ?? "updated"}
+                  stageCounts={page.stage_counts}
+                  viewMode={viewMode}
+                />
+                <ApplicationListResults
+                  replacing={listQuery.isPlaceholderData}
+                  items={items}
+                  matchedCount={page.matched}
+                  offset={query.offset ?? 0}
+                  onClearFilters={clearFilters}
+                  onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
+                  onRequestClose={(item) => setClosingApplicationId(item.id)}
+                  onRequestDelete={(item) => setDeletingApplicationId(item.id)}
+                  onRequestDetails={(item) => setDetailsApplicationId(item.id)}
+                  onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
+                  pageSize={PAGE_SIZE}
+                  recruitmentStatusCounts={page.recruitment_status_counts}
+                  recruitmentStatusFilter={query.recruitmentStatuses}
+                  returnedId={returnedId}
+                  viewMode={viewMode}
+                />
+                <NewApplicationFab />
+              </div>
+            )}
+          </QueryState>
+        </div>
+      </div>
       <CloseApplicationDialog
         application={closingApplication}
         onCancel={() => setClosingApplicationId(null)}

@@ -60,29 +60,26 @@ export const ApplicationAttentionSummary = ({
     );
   }
 
-  /* Below the large breakpoint the hub is the board's one dark block: an accent frame
-     whose heading sits on the accent and whose rows sit on a light card inside it, so
-     what is waiting is the first thing a phone's reader sees under the slices. */
+  /* The hub is the board's one dark block: an accent frame whose heading sits on the
+     accent and whose rows sit on a light card inside it. On a phone it is the first thing
+     under the slices; on a wide screen it is the column beside the cards. */
   return (
     <section
       aria-labelledby="urgent-action-heading"
-      className="rounded-surface border border-cv-border bg-cv-surface max-lg:border-cv-accent max-lg:bg-cv-accent max-lg:p-1 max-lg:shadow-floating"
+      className="rounded-surface border border-cv-accent bg-cv-accent p-1 shadow-floating"
     >
       <details className="group/attention" open>
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 lg:hover:bg-cv-surface-muted">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5">
           <span className="flex min-w-0 items-baseline gap-2">
-            <Sparkles
-              aria-hidden="true"
-              className="size-icon-md shrink-0 self-center text-cv-warning max-lg:text-cv-on-accent"
-            />
-            <h2 className="text-support font-bold text-cv-text max-lg:text-cv-on-accent" id="urgent-action-heading">
+            <Sparkles aria-hidden="true" className="size-icon-md shrink-0 self-center text-cv-on-accent" />
+            <h2 className="text-support font-bold text-cv-on-accent" id="urgent-action-heading">
               מוקד פעולות
             </h2>
-            <span className="shrink-0 self-center rounded-pill bg-cv-accent px-2 text-support font-bold text-cv-on-accent tabular-nums max-lg:bg-cv-on-accent max-lg:text-cv-accent">
+            <span className="shrink-0 self-center rounded-pill bg-cv-on-accent px-2 text-support font-bold text-cv-accent tabular-nums">
               {waitingCount}
               <span className="sr-only"> ממתינות</span>
             </span>
-            <span className="truncate text-support text-cv-text-muted max-lg:text-cv-on-accent">
+            <span className="truncate text-support text-cv-on-accent">
               {waitingCount > displayItems.length
                 ? `${displayItems.length} הראשונות מוצגות`
                 : displayItems.length === 1
@@ -92,17 +89,18 @@ export const ApplicationAttentionSummary = ({
           </span>
           <ChevronDown
             aria-hidden="true"
-            className="size-icon-md shrink-0 text-cv-text-muted transition-transform group-open/attention:rotate-180 max-lg:text-cv-on-accent"
+            className="size-icon-md shrink-0 text-cv-on-accent transition-transform group-open/attention:rotate-180"
           />
         </summary>
 
         {/* The first column is a fixed width rather than `auto`: each row is its own
             grid, so a badge-width column let every title start at a different x and the
-            three rows read as unrelated blocks. */}
-        <div className="divide-y divide-cv-border border-t border-cv-border max-lg:overflow-hidden max-lg:rounded-control max-lg:border-t-0 max-lg:bg-cv-surface">
+            three rows read as unrelated blocks. In the wide screen's side column there
+            is no room for three, so each row stacks. */}
+        <div className="divide-y divide-cv-border overflow-hidden rounded-control bg-cv-surface">
           {displayItems.map((item) => (
             <article
-              className="grid gap-x-3 gap-y-2 px-3 py-2.5 transition-colors hover:bg-cv-surface-muted sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:items-center"
+              className="grid gap-x-3 gap-y-2 px-3 py-2.5 transition-colors hover:bg-cv-surface-muted sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:items-center lg:grid-cols-1 lg:items-start"
               key={`${item.application.id}-${item.type}`}
             >
               <StatusBadge className="w-fit px-2 py-0.5 whitespace-nowrap" tone={item.tone}>
@@ -122,7 +120,7 @@ export const ApplicationAttentionSummary = ({
                   <DuplicateIdentityHint createdAt={item.application.created_at} />
                 ) : null}
               </div>
-              <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+              <div className="flex flex-wrap items-center gap-1.5 sm:justify-end lg:justify-start">
                 {item.type === "overdue" || item.type === "due_today" ? (
                   <Tooltip label="הסרת התזכורת, ללא רישום השלמה">
                     <Button
@@ -164,9 +162,9 @@ export const ApplicationAttentionSummary = ({
           ))}
         </div>
         {filterActive ? null : (
-          <div className="flex justify-end border-t border-cv-border px-3 py-2 max-lg:border-t-0 max-lg:px-2 max-lg:py-1">
+          <div className="flex justify-end px-2 py-1">
             <Button
-              className="gap-1 max-lg:text-cv-on-accent max-lg:hover:bg-transparent max-lg:hover:underline"
+              className="gap-1 text-cv-on-accent hover:bg-transparent hover:underline"
               onClick={onShowAll}
               size="compact"
               variant="ghost"

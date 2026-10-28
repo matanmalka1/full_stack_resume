@@ -10,7 +10,6 @@ import { ApplicationListPagination } from "./ApplicationListPagination";
 import { ApplicationPipelineView } from "./ApplicationPipelineView";
 
 interface ApplicationListResultsProps {
-  clearingApplicationId: string | null;
   /* The page on screen is the previous query's, held while a changed query is read. */
   replacing: boolean;
   items: readonly ApplicationListItem[];
@@ -23,7 +22,6 @@ interface ApplicationListResultsProps {
   returnedId: string | null;
   viewMode: ViewMode;
   onClearFilters: () => void;
-  onClearNextAction: (item: ApplicationListItem) => void;
   onOffsetChange: (offset: number) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
@@ -39,7 +37,6 @@ interface ApplicationListResultsProps {
    drawn is a presentation decision and stays here; what is in the page and how it was
    narrowed remain the page's. */
 export const ApplicationListResults = ({
-  clearingApplicationId,
   replacing,
   items,
   matchedCount,
@@ -50,7 +47,6 @@ export const ApplicationListResults = ({
   returnedId,
   viewMode,
   onClearFilters,
-  onClearNextAction,
   onOffsetChange,
   onRequestClose,
   onRequestDelete,
@@ -101,9 +97,7 @@ export const ApplicationListResults = ({
         />
       ) : (
         <ApplicationCardsView
-          clearingApplicationId={clearingApplicationId}
           items={items}
-          onClearNextAction={onClearNextAction}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
           onRequestDetails={onRequestDetails}

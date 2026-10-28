@@ -14,12 +14,12 @@ const areas = () => [
 
 /* Below the large breakpoint each link is one cell of the bottom bar: the icon over a
    short label, sharing the bar's width equally. From the breakpoint it is a row of the
-   sidebar, text-first, with the indicator on its inline-start edge. */
+   sidebar - its icon, then its label - with the indicator on its inline-start edge. */
 const linkClasses = (isActive: boolean, collapsed: boolean): string =>
   cx(
     "inline-flex items-center rounded-control transition-colors",
     "min-w-0 flex-1 flex-col justify-center gap-0.5 text-caption lg:flex-none lg:flex-row lg:border-s-2 lg:text-support",
-    collapsed ? "lg:size-11 lg:justify-center" : "lg:justify-start lg:gap-2 lg:px-3 lg:py-2",
+    collapsed ? "lg:size-11 lg:justify-center" : "lg:min-h-10 lg:justify-start lg:gap-2.5 lg:px-3",
     isActive
       ? "font-bold text-cv-text lg:border-cv-nav-active-indicator lg:bg-cv-nav-active-bg"
       : "font-medium text-cv-text-muted hover:text-cv-text lg:border-transparent lg:hover:bg-cv-surface-muted",
@@ -62,7 +62,6 @@ export const AppNavigation = ({ collapsed = false }: { collapsed?: boolean }) =>
                 className={cx(
                   "inline-flex h-7 w-12 items-center justify-center rounded-pill transition-colors lg:h-auto lg:w-auto",
                   isActive && "bg-cv-nav-active-bg lg:bg-transparent",
-                  !collapsed && "lg:hidden",
                 )}
               >
                 <Icon aria-hidden="true" className="size-icon-md shrink-0" />
