@@ -251,7 +251,8 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("button", { name: "עריכה" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByRole("button", { name: "עריכה ותצוגה" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "עריכה" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "תצוגה מקדימה" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "עריכת השורה" }).length).toBeGreaterThan(0);

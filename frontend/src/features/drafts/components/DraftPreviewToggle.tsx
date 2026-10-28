@@ -9,8 +9,8 @@ import type { DraftWorkspaceMode } from "./DraftWorkspace";
    labels, and a full segmented control under the heading spent a row on it.
 
    It changes `mode` through the same handler as the switch, so leaving the rows still
-   settles the autosave buffer first. A toggle button, not a link: the route stays the
-   editor's. */
+   settles the autosave buffer first. Back from the document is `split`, the default, which
+   a phone shows as the rows. A toggle button, not a link: the route stays the editor's. */
 export const DraftPreviewToggle = ({
   mode,
   onModeChange,
@@ -26,7 +26,7 @@ export const DraftPreviewToggle = ({
          from a query, and two controls answering to one name is one too many. */
       aria-label={previewing ? "חזרה לעריכת השורות" : "הצגת המסמך המלא"}
       className="lg:hidden"
-      onClick={() => onModeChange(previewing ? "read" : "document")}
+      onClick={() => onModeChange(previewing ? "split" : "document")}
     >
       {previewing ? (
         <PenLine aria-hidden="true" className="size-icon-md" />
