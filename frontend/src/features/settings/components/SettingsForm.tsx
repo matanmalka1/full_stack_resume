@@ -37,7 +37,7 @@ export const settingsCardClasses = "bg-cv-surface p-5 shadow-surface max-lg:roun
    side, and a rule between one section and the next. The section's own card gives up its
    surface there, and the body under the header takes it. Below the breakpoint none of
    this applies and the section is the phone's card. */
-export const settingsSectionClasses =
+const settingsSectionClasses =
   "lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start lg:gap-x-10 lg:rounded-none lg:border-0 lg:border-b lg:border-cv-hairline lg:bg-transparent lg:p-0 lg:pb-8 lg:shadow-none";
 
 /* The section's header in its own column: no rule under it, and no icon tile - the
