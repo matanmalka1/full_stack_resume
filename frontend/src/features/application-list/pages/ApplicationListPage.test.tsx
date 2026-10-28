@@ -306,13 +306,16 @@ describe("ApplicationListPage", () => {
 
   /* The next-action block is read to decide which Application to open next, so it
      names what is waiting rather than counting it, and the badge is the way into the
-     Application that states each item beside the control that resolves it. */
+     Application that states each item beside the control that resolves it. The card
+     keeps to who and how far along; the block is in the record's details. */
   it("names a blocking reason and links it to preparation", async () => {
     stubList([item({ review_reasons: [reason("PENDING_FACT_REQUIRES_RESOLUTION")] })]);
 
     renderPage();
 
-    const attention = await screen.findByRole("link", { name: "Acme: טענה בלי עובדה מאושרת" });
+    fireEvent.click(await screen.findByText("Backend Engineer"));
+    const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
+    const attention = within(details).getByRole("link", { name: "Acme: טענה בלי עובדה מאושרת" });
     expect(attention).toHaveAttribute("href", "/applications/app-1");
     expect(within(attention).getByText("טענה בלי עובדה מאושרת")).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "מוקד פעולות" })).getByRole("link")).toHaveAttribute(
@@ -422,19 +425,18 @@ describe("ApplicationListPage", () => {
 
     renderPage();
 
-    /* The card's command goes to the same step the card itself opens. */
-    const command = await screen.findByRole("link", { name: /· Acme$/ });
+    fireEvent.click(await screen.findByText("Backend Engineer"));
+    const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
+    /* The details' command goes to the same step the card's own link opens. */
+    const command = within(details).getByRole("link", { name: /· Acme$/ });
     expect(command).toHaveTextContent("מעבר לשלב");
     /* The recommended step carries its fixed one-line description. */
-    expect(screen.getByText("הטיוטה מוכנה לבדיקה ולאישור שלך.")).toBeInTheDocument();
+    expect(within(details).getByText("הטיוטה מוכנה לבדיקה ולאישור שלך.")).toBeInTheDocument();
     expect(command.getAttribute("href")).toBe(
       screen.getByRole("link", { name: "פתיחת המועמדות של Acme" }).getAttribute("href"),
     );
 
-    fireEvent.click(await screen.findByText("Backend Engineer"));
-    fireEvent.click(
-      within(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).getByRole("link", { name: "המשך בהכנה" }),
-    );
+    fireEvent.click(within(details).getByRole("link", { name: "המשך בהכנה" }));
 
     expect(screen.getByRole("heading", { name: "עורך הטיוטה" })).toBeInTheDocument();
   });
@@ -493,13 +495,13 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("button", { name: "כרטיסים" })).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => expect(boardReadCount(fetchMock)).toBe(1));
 
-    /* A card is linked by its identity icon and carries every block of the record. */
+    /* A card is linked by its identity icon and keeps to who and how far along: its next
+       action and the status update are a press away, in its details and its menu. */
     expect(screen.getAllByRole("link", { name: "פתיחת המועמדות של Acme" })).toHaveLength(1);
     expect(screen.getAllByRole("link", { name: "פתיחת המועמדות של Binat" })).toHaveLength(1);
-    expect(screen.getAllByText("Follow up")).toHaveLength(2);
-    expect(screen.getAllByText(/באיחור/)).toHaveLength(2);
-    expect(screen.getAllByText("פעולה מומלצת הבאה")).toHaveLength(4);
-    expect(screen.getAllByRole("button", { name: "עדכון סטטוס ומשימות" })).toHaveLength(4);
+    const cardsRegion = screen.getByRole("region", { name: "כרטיסי מועמדויות" });
+    expect(within(cardsRegion).queryByText("Follow up")).not.toBeInTheDocument();
+    expect(within(cardsRegion).queryByText("פעולה מומלצת הבאה")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "פעולות נוספות עבור Acme" })).toBeInTheDocument();
     /* The leading edge says what asks for the reader before a word is read: a blocking
        reason over an overdue reminder, nothing for a card that is fine, and nothing for
@@ -525,6 +527,12 @@ describe("ApplicationListPage", () => {
     /* Each stage card's main control is the step to take, named for its company. */
     expect(within(pipeline).getAllByRole("link", { name: /^ניתוח המשרה · / })).toHaveLength(4);
     expect(within(pipeline).getByRole("button", { name: "עדכון שלב הגיוס של Binat" })).toBeInTheDocument();
+    /* A stage card carries the record's menu too, so closing or deleting from the stages
+       view is as near as from a card. */
+    fireEvent.click(within(pipeline).getByRole("button", { name: "פעולות נוספות עבור Binat" }));
+    expect(screen.getByRole("menuitem", { name: "סגירת המועמדות Binat" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "מחיקת המועמדות Binat" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
     fireEvent.click(within(pipeline).getByRole("button", { name: "פרטי המשרה של Binat" }));
     expect(screen.getByRole("dialog", { name: "פרטי משרה: Binat" })).toBeInTheDocument();
     expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();
@@ -546,9 +554,10 @@ describe("ApplicationListPage", () => {
     const hub = await screen.findByRole("region", { name: "מוקד פעולות" });
     expect(within(hub).getByText("Follow up with recruiter")).toBeInTheDocument();
     expect(within(hub).getByText("פעולה אחת בעדיפות")).toBeInTheDocument();
-    /* The card offers the same dismissal beside its reminder. */
+    /* The record's details offer the same dismissal beside its reminder. */
+    fireEvent.click(screen.getByText("Backend Engineer"));
     expect(
-      within(screen.getByRole("region", { name: "כרטיסי מועמדויות" })).getByRole("button", {
+      within(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).getByRole("button", {
         name: "הסרת התזכורת של Acme",
       }),
     ).toBeEnabled();

@@ -1,4 +1,4 @@
-import { Archive, EllipsisVertical, ExternalLink, Eye, Info, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Archive, Ellipsis, EllipsisVertical, ExternalLink, Eye, Info, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -30,18 +30,24 @@ const menuItemBase =
   "flex min-h-8 w-full items-center gap-2 px-3 py-1.5 text-start font-normal transition-colors max-lg:min-h-12 max-lg:gap-3 max-lg:px-5";
 const menuItemClasses = `${menuItemBase} text-cv-text hover:bg-cv-surface-muted`;
 
+/* "board" is the menu a card or a stage card carries. "record" is the same menu on the
+   Application's own screen: the way into the record would lead to the page already on
+   screen, so it is left out, and the trigger is a bordered button beside the screen's other
+   commands rather than a quiet mark in a card's corner. */
 export const ApplicationRecordActions = ({
   item,
   onRequestClose,
   onRequestDelete,
   onRequestDetails,
   onRequestUpdate,
+  variant = "board",
 }: {
   item: ApplicationListItem;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
   onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
+  variant?: "board" | "record";
 }) => {
   const [open, setOpen] = useState(false);
   const href = preparationResumeDestination(item);
@@ -89,9 +95,13 @@ export const ApplicationRecordActions = ({
           onClick={() => setOpen((current) => !current)}
           ref={triggerRef}
           size="md"
-          variant="quiet"
+          variant={variant === "record" ? "secondary" : "quiet"}
         >
-          <EllipsisVertical aria-hidden="true" className="size-icon-md" />
+          {variant === "record" ? (
+            <Ellipsis aria-hidden="true" className="size-icon-md" />
+          ) : (
+            <EllipsisVertical aria-hidden="true" className="size-icon-md" />
+          )}
         </IconButton>
       </Tooltip>
       {/* Below the large breakpoint the menu is an action sheet: pinned to the bottom edge
@@ -147,10 +157,12 @@ export const ApplicationRecordActions = ({
               <Info aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted" />
               פרטי משרה
             </button>
-            <Link className={menuItemClasses} onClick={() => setOpen(false)} role="menuitem" to={href}>
-              <Eye aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted" />
-              פתיחת המועמדות
-            </Link>
+            {variant === "record" ? null : (
+              <Link className={menuItemClasses} onClick={() => setOpen(false)} role="menuitem" to={href}>
+                <Eye aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted" />
+                פתיחת המועמדות
+              </Link>
+            )}
             {host === null || item.source_url == null ? null : (
               <a
                 className={menuItemClasses}
