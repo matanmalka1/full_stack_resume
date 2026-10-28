@@ -186,6 +186,9 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
             ("GET", "/api/v1/applications/{application_id}/document/pdf"): ForeignRequest(
                 "GET", f"{API_PREFIX}/applications/{setup.application_id}/document/pdf"
             ),
+            ("GET", "/api/v1/applications/{application_id}/document/page-count"): ForeignRequest(
+                "GET", f"{API_PREFIX}/applications/{setup.application_id}/document/page-count"
+            ),
             ("GET", "/api/v1/applications/{application_id}/document/preview"): ForeignRequest(
                 "GET", f"{API_PREFIX}/applications/{setup.application_id}/document/preview"
             ),

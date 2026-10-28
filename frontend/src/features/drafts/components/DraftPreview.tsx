@@ -8,6 +8,7 @@ import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
 import type { EditableDocument } from "../model/drafts.types";
+import { DraftPageCount } from "./DraftPageCount";
 
 /* A.4 frame 3's preview pane, and A.3's direction isolation.
 
@@ -52,6 +53,9 @@ export const DraftPreview = ({ draft }: { draft: EditableDocument }) => {
             {loading ? "מרענן…" : "מעודכן לגרסה השמורה"}
           </span>
           <LiveRegion>{!loading && loaded?.refreshed ? "התצוגה המקדימה עודכנה" : null}</LiveRegion>
+          {/* The saved version's pages against the Profile's limit, counted the way the
+              render lays it out: an overflow shows here, not when rendering fails. */}
+          <DraftPageCount applicationId={draft.application_id} documentHash={draft.document_hash} />
         </div>
         {/* The real PDF of the saved version, before any approval: stamped as a draft,
             stored nowhere. Looking at the layout must not cost an approved version. */}

@@ -127,3 +127,18 @@ class DecisionExportResponse(HttpSchema):
     application_id: str
     document_id: str
     markdown: str
+
+
+class DocumentPageCountResponse(HttpSchema):
+    """The current content's page count in its own template, and the limit it must meet.
+
+    `pages` is null when it could not be measured; `maximum` is null when the
+    document's Profile cannot be read. `document_hash` names the content counted.
+    """
+
+    application_id: str
+    document_id: str
+    document_hash: str
+    template: TemplateName | None
+    pages: int | None = Field(ge=1)
+    maximum: int | None = Field(ge=1)

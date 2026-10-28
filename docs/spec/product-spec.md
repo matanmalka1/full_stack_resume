@@ -290,7 +290,12 @@ Autosave uses the document hash as ETag. A stale save is a conflict: the UI show
 versions and the user chooses.
 
 The HTML preview and the on-demand draft PDF render the current content without
-approval and store nothing.
+approval and store nothing. Beside the preview the editor shows the saved content's page
+count in its template against the Profile's limit, measured the way the page fit above
+measures (`GET …/document/page-count`), and warns when it is over, so an overflow shows
+while editing rather than when rendering fails. Each count starts a browser, so it is
+asked once per saved version, after the saves settle; a count that cannot be measured
+shows nothing.
 
 ### 10.1 Reviewed wording
 
