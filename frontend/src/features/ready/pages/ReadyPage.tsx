@@ -169,6 +169,9 @@ export const ReadyPage = () => {
   return (
     <WizardStepShell
       applicationId={applicationId}
+      /* A wide screen reaches back through the trail to the board, as the design's
+         Ready screen draws it, rather than the bare chevron. */
+      desktopHeader={{ breadcrumb: true }}
       description="המסמך המוכן נשאר זמין כל עוד לא שונה. עריכה מחזירה אותו לטיוטה, וההגשות שנרשמו נשמרות כפי שנשלחו."
       detail={detail}
       eyebrow={
@@ -195,10 +198,10 @@ export const ReadyPage = () => {
       >
         {detail === undefined ? null : (
           <>
-            {/* A phone's mark that the step is done, at the top of the body: the wide
-                screen's spine shows it as its last step filled. */}
+            {/* The mark that the step is done, at the top of the body. A wide screen once
+                left it to the spine's last step, filled; its design states it here too. */}
             {ready ? (
-              <p className="-mb-3 flex w-fit items-center gap-1 rounded-pill bg-cv-surface-muted px-2.5 py-0.5 text-caption font-bold text-cv-text lg:hidden">
+              <p className="-mb-3 flex w-fit items-center gap-1 rounded-pill bg-cv-surface-muted px-2.5 py-0.5 text-caption font-bold text-cv-text lg:-mb-2">
                 <Check aria-hidden="true" className="size-icon-sm" />
                 מוכן
               </p>
@@ -234,14 +237,18 @@ export const ReadyPage = () => {
             )}
 
             {!ready ? null : (
-              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(19rem,1fr)]">
+              /* A wide screen gives the file the start half as a page-sized preview with
+                 its facts under it, and the end half to what is done with it and the
+                 ways into it - the design's document beside its actions. The card's own
+                 frame steps aside there: the preview is the surface. */
+              <div className="grid items-start gap-6 lg:grid-cols-2 lg:gap-8">
                 <Card
                   aria-labelledby="ready-file-heading"
-                  className="flex min-w-0 flex-col gap-4 rounded-surface bg-cv-surface p-5 max-lg:p-4"
+                  className="flex min-w-0 flex-col gap-4 rounded-surface bg-cv-surface p-5 max-lg:p-4 lg:border-0 lg:bg-transparent lg:p-0"
                 >
-                  {/* On a phone the file speaks through its summary below; the heading stays
-                      for assistive tech, which reads the card by it. */}
-                  <CardHeading className="max-lg:sr-only" icon={FileCheck2} id="ready-file-heading">
+                  {/* The file speaks through its summary below; the heading stays for
+                      assistive tech, which reads the card by it. */}
+                  <CardHeading className="sr-only" icon={FileCheck2} id="ready-file-heading">
                     קובץ קורות החיים
                   </CardHeading>
                   {document === undefined ? null : (

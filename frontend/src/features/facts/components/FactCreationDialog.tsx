@@ -152,7 +152,9 @@ export const FactCreationDialog = ({
         onSubmit={form.handleSubmit(submit)}
       >
         <FactSourceField register={register} />
-        <FactStyleField register={register} />
+        {/* A wide dialog leads with the presentation type, its chips on one line across
+            the form, as the desktop design draws it; a phone keeps the source first. */}
+        <FactStyleField className="lg:order-first lg:col-span-2" register={register} />
         <FactCoreFields className="sm:col-span-2" errors={errors} register={register} />
         <FactHebrewRenderingField register={register} />
         <FactTagsField

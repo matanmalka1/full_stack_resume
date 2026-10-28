@@ -73,9 +73,19 @@ one of these roles. Raw spacing remains appropriate for local optical adjustment
 
 ## Shell and surfaces
 
-On desktop the application uses a text-first navigation sidebar on the RTL inline-start
-edge. Active navigation there is a flat background step, a heavier label and a 2px edge
+On desktop the application uses a white navigation sidebar on the RTL inline-start edge.
+It reads top to bottom: the wordmark with its accent app mark, the new-job command, the
+quick switcher, the three destinations - each its icon then its label - and sign-out at
+the foot. Active navigation is a flat background step, a heavier label and a 2px edge
 indicator.
+
+Every route's masthead is a page header (`PageShell`): a 30px extrabold title with no
+rule under it, an optional bordered back chevron (`back`) or trail (`breadcrumb`), a
+leading mark (`leading`), the sub-line, and the page's commands at the inline end. A step
+of the CV wizard passes its header through `WizardStepShell`'s `desktopHeader` and draws
+a thin stepper under it. The step's commands stay in its pinned action bar at every
+width, so a command is one control rather than a copy in the header and another in the
+bar.
 
 Below the large breakpoint the masthead keeps only the wordmark, led by an accent app
 mark, and the quick switcher as an icon button. The three destinations move to a bar
@@ -98,18 +108,25 @@ masthead. On the rail every control keeps its accessible name and gains a `Toolt
 `placement="rail"`, which hangs beside the trigger and opens across the page rather than
 off the viewport edge.
 
-`Card` is flat by default: one hairline, no radius and no effective surface shadow.
-Use `surfaceClasses` only for genuinely floating UI such as dialogs, dropdowns and
-popovers. A normal table, form section or content panel should separate itself with a
-hairline or a background step, not border, radius and shadow together.
+A content panel on the canvas is a raised card: white, `rounded-surface`, one hairline
+and `shadow-card` (`Card variant="raised"`, or `"wide-raised"` for a panel that is raised
+on desktop only and flat on a phone; `raisedSurfaceClasses()` for other elements). A
+region inside a card stays flat - `Card`'s default, one hairline and no radius - and
+separates itself with a hairline or a background step. `surfaceClasses` remains for
+genuinely floating UI such as dropdowns and popovers.
 
-The application board is the one deliberate exception. Its table, its cards and its
-stage lanes follow the `demo_re` reference board the product owner chose: the table is a
-rounded (`rounded-surface`), shadowed card with a `canvas`-toned header, and each card
-and stage lane is rounded as well. Because the table cannot clip its own corners - row
-menus open over its edge - its header and last-row corner cells take the radius
-themselves (`rounded-ss-surface` and its siblings). Other screens keep the flat default;
-the exception does not extend to them by example.
+On desktop the board's cards take the same compact form as on a phone - who, the
+employer's status beside a segmented CV track, and when it last moved - in a grid beside
+the action hub, which is a dark column at the inline end. A card's next action and its
+commands are in its details (a drawer beside the board) and its menu; a stage card
+carries the same menu. The facts pool is a table, a fact is a page chosen by the URL at
+every width, and Settings lays each section out as its title and description beside a
+card.
+
+A dialog on desktop is a borderless rounded card with no rules between its parts. A
+confirmation (`presentation="alert"`, and always `ConfirmDialog`) has its icon tile and
+no ×; its two buttons and Escape answer it. `widePresentation="drawer"` docks a dialog to
+the inline-end edge.
 
 Hover labels use the `Tooltip` component, never a native `title` attribute: the browser's
 own tooltip arrives late, cannot be styled, and never shows on keyboard focus. Pass

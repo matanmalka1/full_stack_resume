@@ -11,17 +11,15 @@ import {
   formatRelativeUpdate,
   isNextActionOverdue,
 } from "../model/applicationListPresentation";
+import { preparationStateLabels } from "@/features/preparation";
 import { ApplicationRecordActions } from "./ApplicationListItemActions";
 import { ApplicationIdentity } from "./ApplicationIdentity";
 import { ApplicationFitStatus, ApplicationProgress } from "./ApplicationListStatuses";
-import { ApplicationCardNextAction, nextActionHeading } from "./ApplicationCardNextAction";
 
-const cardGridClasses = "grid gap-4 md:grid-cols-2 xl:grid-cols-3";
+const cardGridClasses = "grid gap-3.5 md:grid-cols-[repeat(auto-fill,minmax(18rem,1fr))]";
 
 interface ApplicationCardsViewProps {
-  clearingApplicationId: string | null;
   items: readonly ApplicationListItem[];
-  onClearNextAction: (item: ApplicationListItem) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
   onRequestDetails: (item: ApplicationListItem) => void;
@@ -57,33 +55,29 @@ const urgencyEdgeClasses: Record<CardUrgency, string> = {
   warning: "border-s-4 border-s-cv-warning",
 };
 
-/* One Application as a card, laid out after demo_re: who, how well it fits and the
-   menu; the progress; what to do next; and a footer with when it last moved and the way
-   into its recruitment record. The blocks are separated by space rather than each
-   boxed, so a board of cards is not a grid of boxes inside boxes. Every block is a
-   shared component, so the cards, the details dialog and the action hub cannot drift
-   apart in what they say.
+/* One Application as a card: who it is for, how well it fits and the menu, then how far
+   along it is - the employer's status beside the CV track - and when it last moved. What
+   to do next is not repeated here: the action hub beside the board names what is waiting,
+   and the card opens its details, which carry the next action and its commands; the menu
+   carries the status update. Every block is a shared component, so the cards, the details
+   dialog and the action hub cannot drift apart in what they say.
 
    The card itself takes focus and opens its details on Enter or Space, as a click on
    it does; its link icon stays the route straight to the work. */
 const ApplicationCard = ({
   ambiguous,
-  clearing,
   item,
-  onClearNextAction,
   onRequestClose,
   onRequestDelete,
   onRequestDetails,
   onRequestUpdate,
   returned,
-}: Omit<ApplicationCardsViewProps, "clearingApplicationId" | "items" | "returnedId"> & {
+}: Omit<ApplicationCardsViewProps, "items" | "returnedId"> & {
   ambiguous: boolean;
-  clearing: boolean;
   item: ApplicationListItem;
   returned: boolean;
 }) => {
   const open = useOpenRecord(() => onRequestDetails(item));
-  const hasNext = nextActionHeading(item, applicationAttention(item) !== null) !== null;
   const urgency = cardUrgency(item);
 
   return (
@@ -92,7 +86,7 @@ const ApplicationCard = ({
       aria-label={`${item.target_role} אצל ${item.company}`}
       className={surfaceClasses(
         cx(
-          "group flex h-full min-w-0 cursor-pointer flex-col gap-3 p-3.5 transition-all hover:border-cv-border-strong focus-visible:border-cv-border-strong lg:gap-4 lg:p-5",
+          "group flex h-full min-w-0 cursor-pointer flex-col gap-3 p-3.5 transition-all hover:border-cv-border-strong focus-visible:border-cv-border-strong lg:gap-3.5 lg:p-4.5",
           /* A closed Application is history: it sits flat and quiet so the open work
              around it is what the eye lands on. Its text keeps full contrast. */
           item.is_closed
@@ -133,38 +127,24 @@ const ApplicationCard = ({
 
       <ApplicationProgress item={item} />
 
-      {/* A phone's card stops at who and how far along: what to do next is the action
-          hub's above the list and the details sheet's a tap away, and repeated on every
-          card it pushed the second card off the screen. */}
-      {hasNext ? (
-        <div className="max-lg:hidden">
-          {/* Named for assistive tech only: drawn on every card it said nothing the
-              action under it does not already say. */}
-          <p className="sr-only">פעולה מומלצת הבאה</p>
-          <ApplicationCardNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
-        </div>
-      ) : (
-        <p className="text-support text-cv-text-muted max-lg:hidden">אין פעולה מתוזמנת כעת</p>
-      )}
-
-      <div className="mt-auto flex items-center justify-between gap-3 border-t border-cv-border pt-3 text-support text-cv-text-muted max-lg:border-t-0 max-lg:pt-0">
+      {/* The bar says how far the CV has come; on a wide card there is room to name the
+          state it stands at too, before when the record last moved. A phone's card keeps
+          to the bar and leaves the name to the details sheet. */}
+      <p className="mt-auto text-support text-cv-text-muted">
+        <span className="hidden font-medium text-cv-text lg:inline">
+          {preparationStateLabels[item.preparation_state]}
+        </span>
+        <span aria-hidden="true" className="hidden lg:inline">
+          {" · "}
+        </span>
         <UpdatedAt item={item} />
-        <button
-          className="shrink-0 font-semibold text-cv-accent hover:underline max-lg:hidden"
-          onClick={() => onRequestUpdate(item)}
-          type="button"
-        >
-          עדכון סטטוס ומשימות
-        </button>
-      </div>
+      </p>
     </article>
   );
 };
 
 export const ApplicationCardsView = ({
-  clearingApplicationId,
   items,
-  onClearNextAction,
   onRequestClose,
   onRequestDelete,
   onRequestDetails,
@@ -182,10 +162,8 @@ export const ApplicationCardsView = ({
       {items.map((item) => (
         <ApplicationCard
           ambiguous={ambiguous.has(item.id)}
-          clearing={clearingApplicationId === item.id}
           item={item}
           key={item.id}
-          onClearNextAction={onClearNextAction}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
           onRequestDetails={onRequestDetails}

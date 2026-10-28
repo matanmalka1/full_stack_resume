@@ -71,28 +71,19 @@ export const ApplicationRecruitmentStatus = ({ item }: { item: ApplicationListIt
   </span>
 );
 
-/* The CV track, drawn after demo_re: the state named on one line with its position at
-   the far end, and one bar under it filled to that position. The bar is a position
-   among the five states, not a percentage of work - an edit to an approved document
-   projects back to `draft_in_progress` and the bar shortens with it. */
+/* The CV track as one line of a card: a bar of one segment per state, then the position.
+   The bar is a position among the five states, not a percentage of work - an edit to an
+   approved document projects back to `draft_in_progress` and the bar shortens with it.
+   The state's name is the progress element's own label, which assistive tech reads; the
+   eye reads the bar and the position. */
 const PreparationTrack = ({ state }: { state: ApplicationListItem["preparation_state"] }) => {
   const { step, total } = preparationProgress(state);
   const label = preparationStateLabels[state];
 
-  /* Below the large breakpoint the track is one line of a compact card: a bar of one
-     segment per state, then the position. The state's name folds away there; the
-     progress element's own label still says it. */
   return (
-    <span className="flex w-full flex-col gap-1 max-lg:min-w-0 max-lg:flex-1 max-lg:flex-row-reverse max-lg:items-center max-lg:gap-2">
-      <span className="flex items-baseline justify-between gap-2 text-support max-lg:shrink-0">
-        <span className="min-w-0 font-medium text-cv-text max-lg:hidden">
-          <span className="text-cv-text-muted">הכנת קו״ח: </span>
-          <span>{label}</span>
-        </span>
-        <span className="shrink-0 text-cv-text-muted tabular-nums max-lg:font-bold">
-          <span className="lg:hidden">קו״ח </span>
-          <span dir="ltr">{`${step}/${total}`}</span>
-        </span>
+    <span className="flex min-w-0 flex-1 flex-row-reverse items-center gap-2">
+      <span className="shrink-0 text-support font-bold text-cv-text-muted tabular-nums">
+        קו״ח <span dir="ltr">{`${step}/${total}`}</span>
       </span>
       <progress
         aria-label={`הכנת קורות החיים: ${label}`}
@@ -101,13 +92,7 @@ const PreparationTrack = ({ state }: { state: ApplicationListItem["preparation_s
         max={total}
         value={step}
       />
-      <span
-        aria-hidden="true"
-        className="flex h-1.5 w-full overflow-hidden rounded-pill bg-cv-surface-muted max-lg:hidden"
-      >
-        <span className="h-full rounded-pill bg-cv-accent" style={{ width: `${(step / total) * 100}%` }} />
-      </span>
-      <span aria-hidden="true" className="grid min-w-0 flex-1 auto-cols-fr grid-flow-col gap-0.75 lg:hidden">
+      <span aria-hidden="true" className="grid min-w-0 flex-1 auto-cols-fr grid-flow-col gap-0.75">
         {Array.from({ length: total }, (_, index) => (
           <span className={cx("h-1.5 rounded-pill", index < step ? "bg-cv-accent" : "bg-cv-border")} key={index} />
         ))}
@@ -137,13 +122,12 @@ export const ApplicationPreparationStatus = ({
     </StatusBadge>
   );
 
-/* The progress block the card draws: the CV track, and under it
-   the employer's status with any run still going beside it. On a phone the two share
-   one line, the employer's status leading. */
+/* The progress line the card draws: the employer's status leading, with any run still
+   going beside it, then the CV track. */
 export const ApplicationProgress = ({ item }: { item: ApplicationListItem }) => (
-  <div className="flex w-full flex-col items-start gap-2 max-lg:flex-row-reverse max-lg:items-center max-lg:gap-2.5">
+  <div className="flex w-full flex-row-reverse items-center gap-2.5">
     <ApplicationPreparationStatus item={item} variant="card" />
-    <div className="flex flex-wrap items-center gap-1.5 max-lg:shrink-0 max-lg:flex-nowrap">
+    <div className="flex shrink-0 items-center gap-1.5">
       <ApplicationRecruitmentStatus item={item} />
       <ApplicationRunningOperation item={item} />
     </div>

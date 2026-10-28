@@ -35,26 +35,36 @@ export const FactManagementDetail = ({
 
   return (
     /* The bottom padding is the room a phone's pinned command takes, so it never covers
-       the last line of the record. */
-    <div className="flex flex-col gap-5 max-lg:pb-24" key={fact.fact_id}>
-      <FactOverview fact={fact} />
+       the last line of the record.
 
-      {mutationsBlocked ? null : <FactConfirmationControl fact={fact} />}
+       A wide screen reads the record in two columns: the fact and what can be done to it
+       on the reader's side, and its record-keeping - correction, history, deletion - in a
+       narrow column at the far side. Below the breakpoint the first column's wrapper is
+       `contents`, so a phone reads the same blocks top down exactly as before. */
+    <div
+      className="flex flex-col gap-5 max-lg:pb-24 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start lg:gap-8"
+      key={fact.fact_id}
+    >
+      <div className="flex flex-col gap-5 max-lg:contents">
+        <FactOverview fact={fact} />
 
-      {fact.status === "canonical" && !mutationsBlocked ? (
-        <QueryState
-          error={targets.error}
-          errorTitle="לא ניתן לטעון את יעדי הצירוף"
-          loading={targets.isPending}
-          loadingLabel="טוען פרופילים וסעיפים…"
-        >
-          {targets.data === undefined ? null : <FactAttachmentControl fact={fact} targets={targets.data} />}
-        </QueryState>
-      ) : fact.status !== "canonical" && !mutationsBlocked ? (
-        <Callout title="שיוך לפרופיל יתאפשר לאחר הקידום למקור אמת" tone="info" />
-      ) : null}
+        {mutationsBlocked ? null : <FactConfirmationControl fact={fact} />}
 
-      <div className="flex flex-col gap-3 border-t border-cv-border pt-4">
+        {fact.status === "canonical" && !mutationsBlocked ? (
+          <QueryState
+            error={targets.error}
+            errorTitle="לא ניתן לטעון את יעדי הצירוף"
+            loading={targets.isPending}
+            loadingLabel="טוען פרופילים וסעיפים…"
+          >
+            {targets.data === undefined ? null : <FactAttachmentControl fact={fact} targets={targets.data} />}
+          </QueryState>
+        ) : fact.status !== "canonical" && !mutationsBlocked ? (
+          <Callout title="שיוך לפרופיל יתאפשר לאחר הקידום למקור אמת" tone="info" />
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-cv-border pt-4 lg:gap-4 lg:border-t-0 lg:pt-0">
         {/* A canonical fact is never edited in place, so correcting one is not an edit
             form folded under the fact it would appear to change. It is its own write, and
             it reads as one: a stated action here, the consequence spelled out where the

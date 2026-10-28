@@ -129,7 +129,7 @@ describe("RecruitmentUpdateDialog", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel(value);
 
-    expect(screen.queryByLabelText("עדכון שלב")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /^סגור/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
@@ -142,7 +142,7 @@ describe("RecruitmentUpdateDialog", () => {
     expect(screen.getByRole("button", { name: "היסטוריה" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "עדכון" }));
 
-    fireEvent.change(screen.getByLabelText("עדכון שלב"), { target: { value: "closed" } });
+    fireEvent.click(screen.getByRole("radio", { name: /^סגור/ }));
     fireEvent.change(screen.getByLabelText("סיבת השינוי"), {
       target: { value: "Position filled" },
     });
@@ -357,7 +357,7 @@ describe("RecruitmentUpdateDialog", () => {
     fireEvent.change(await screen.findByLabelText("הפעולה הבאה"), {
       target: { value: "My unsaved follow-up" },
     });
-    fireEvent.change(screen.getByLabelText("עדכון שלב"), { target: { value: "closed" } });
+    fireEvent.click(screen.getByRole("radio", { name: /^סגור/ }));
     rerenderPanel(
       detail({
         allowed_recruitment_transitions: ["withdrawn"],
@@ -370,7 +370,7 @@ describe("RecruitmentUpdateDialog", () => {
     );
 
     expect(screen.getByLabelText("הפעולה הבאה")).toHaveValue("My unsaved follow-up");
-    expect(screen.getByLabelText("עדכון שלב")).toHaveValue("closed");
+    expect(screen.getByRole("radio", { name: "סגור · הבחירה שלך" })).toBeChecked();
     await waitFor(() => expect(screen.getByLabelText(/תאריך יעד/)).toHaveValue("2026-09-12"));
     expect(await screen.findByText("פרטי המועמדות השתנו בינתיים")).toBeInTheDocument();
   });

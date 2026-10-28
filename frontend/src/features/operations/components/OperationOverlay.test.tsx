@@ -627,7 +627,10 @@ describe("OperationOverlay", () => {
 
     update({ operation: failed({ failure_code: "VALIDATION_EXECUTION_FAILED" }), settled: true });
     expect(overlay().open).toBe(true);
-    expect(screen.getByRole("alert")).toHaveTextContent("לא ניתן להשלים את בדיקות הפעולה");
+    /* A run that ended without a result opens as its own page at every width: the
+       catalogue's headline is the dialog's title, the run's name and outcome its line. */
+    expect(within(overlay()).getByRole("heading", { name: "לא ניתן להשלים את בדיקות הפעולה" })).toBeInTheDocument();
+    expect(within(overlay()).getByText("מה קרה")).toBeInTheDocument();
 
     fireEvent.click(within(overlay()).getByRole("button", { name: "סגירה" }));
     expect(overlay().open).toBe(false);

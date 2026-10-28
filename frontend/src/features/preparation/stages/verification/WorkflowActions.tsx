@@ -211,7 +211,16 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
   return (
     <div className="flex flex-col gap-4">
       {!hasNotes ? null : (
-        <section aria-label={hasRecommendation ? "הפעולה המומלצת" : "פעולות זמינות"} className="flex flex-col gap-4">
+        /* From the large breakpoint the notes stand on the design's raised card, named in
+           view, at the head of the step's work. The command itself stays in the pinned bar
+           at every width: it is one control, and the bar is where every step keeps it. */
+        <section
+          aria-label={hasRecommendation ? "הפעולה המומלצת" : "פעולות זמינות"}
+          className="flex flex-col gap-4 lg:rounded-surface lg:border lg:border-cv-hairline lg:bg-cv-surface lg:p-card-padding lg:shadow-card"
+        >
+          <p aria-hidden="true" className="text-support font-bold text-cv-text max-lg:hidden">
+            {hasRecommendation ? "הפעולה המומלצת" : "פעולות זמינות"}
+          </p>
           {error === null ? null : (
             <ErrorCallout
               error={error}

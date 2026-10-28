@@ -18,6 +18,11 @@ import { RequirementFactAction } from "../../components/RequirementFactAction";
 import { coverageLabels, coverageTones } from "../../model/analysisLabels";
 import type { RequirementEvidence } from "./useRequirementEvidence";
 
+/* The desktop table's four columns: requirement, coverage, gap, evidence. Shared with the
+   header row `RequirementList` draws above the groups, so the two cannot drift apart. */
+export const requirementColumns =
+  "lg:grid lg:grid-cols-[minmax(0,1.4fr)_8.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)] lg:gap-x-5";
+
 const shortfallLabels: Record<ShortfallSeverity, string> = {
   none: "אין פער",
   minor: "פער קטן",
@@ -129,13 +134,24 @@ export const RequirementRow = ({
     ).length > 1;
 
   return (
-    <li className="flex flex-col gap-2 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <h4 className={cx("min-w-0 flex-1 text-body font-semibold", matched ? "text-cv-text-muted" : "text-cv-text")}>
+    /* From the large breakpoint a row of the desktop design's requirements table: the
+       requirement, its coverage, its gap and its evidence in four columns that line up with
+       the header `RequirementList` draws. Only classes change - the heading row dissolves
+       into the grid and each part takes its column - so the phone's stacked row is the same
+       markup in the same order. The rationale and the shortfall never appear together
+       (one is a covered row's, the other an uncovered one's), so they share the gap column. */
+    <li className={cx("flex flex-col gap-2 py-4", requirementColumns, "lg:items-start lg:gap-y-0 lg:py-3")}>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 lg:contents">
+        <h4
+          className={cx(
+            "min-w-0 flex-1 text-body font-semibold lg:col-start-1 lg:row-start-1 lg:text-support",
+            matched ? "text-cv-text-muted" : "text-cv-text",
+          )}
+        >
           <bdi>{requirement.text}</bdi>
         </h4>
         <StatusBadge
-          className="shrink-0"
+          className="shrink-0 lg:col-start-2 lg:row-start-1 lg:justify-self-start"
           icon={coverageIcons[requirement.coverage]}
           tone={coverageTones[requirement.coverage]}
         >
@@ -144,14 +160,19 @@ export const RequirementRow = ({
       </div>
 
       {rationale === null ? null : (
-        <p className="text-support leading-6 text-cv-text-muted">
+        <p className="text-support leading-6 text-cv-text-muted lg:col-start-3 lg:row-start-1">
           <span className="font-semibold text-cv-text">הסבר ה-AI: </span>
           <bdi>{rationale}</bdi>
         </p>
       )}
 
       {shortfall === null ? null : (
-        <p className={cx("ps-3 text-support leading-6 text-cv-text-muted", shortfallRules[severity])}>
+        <p
+          className={cx(
+            "ps-3 text-support leading-6 text-cv-text-muted lg:col-start-3 lg:row-start-1",
+            shortfallRules[severity],
+          )}
+        >
           <span className="font-semibold text-cv-text">{shortfallLabels[severity]}: </span>
           <bdi>{shortfall}</bdi>
         </p>
@@ -162,7 +183,7 @@ export const RequirementRow = ({
       ) : null}
 
       {citedCount === 0 && detailRationale === null ? null : (
-        <details onToggle={(event) => setOpen(event.currentTarget.open)}>
+        <details className="lg:col-start-4 lg:row-start-1" onToggle={(event) => setOpen(event.currentTarget.open)}>
           <DisclosureSummary
             className="w-fit text-support font-medium text-cv-text-muted transition-colors hover:text-cv-text"
             open={open}

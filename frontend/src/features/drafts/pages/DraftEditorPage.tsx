@@ -378,6 +378,25 @@ export const DraftEditorPage = () => {
     >
       <WizardStepShell
         applicationId={applicationId}
+        /* From the large breakpoint the step is a grid of two columns: the workspace in
+           the wide one, and the fit card pinned in the narrow end column beside it, as the
+           desktop design draws them. Everything else - status, alerts, the progress line,
+           the commit bar the shell portals in - spans both, so it reads above or below the
+           pair rather than squeezed beside it. The fit card comes first in the DOM (it
+           opens the step on a phone); `order` places it last, and the dense flow then puts
+           it in the first free end cell, which is the workspace's row. */
+        bodyClassName="lg:grid lg:grid-flow-row-dense lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start lg:[&>*]:col-span-full lg:[&>.contents>*]:col-span-full"
+        desktopHeader={{
+          /* The desktop's way to the preview, at the masthead's end as the design puts
+             it. A phone has the header's icon toggle for the same choice. */
+          actions:
+            draft === undefined ? undefined : (
+              <span className="max-lg:hidden">
+                <DraftWorkspaceSwitch mode={mode} onModeChange={changeMode} />
+              </span>
+            ),
+          title: "טיוטת קורות החיים",
+        }}
         detail={detail}
         eyebrow={
           detail === undefined ? (
@@ -418,12 +437,6 @@ export const DraftEditorPage = () => {
             {fit === null || draft === undefined ? null : <DraftFitCard fit={fit} />}
             {draft === undefined || content === undefined ? null : (
               <DraftProgress
-                actions={
-                  /* On a phone the header's preview toggle is this switch. */
-                  <span className="max-lg:hidden">
-                    <DraftWorkspaceSwitch mode={mode} onModeChange={changeMode} />
-                  </span>
-                }
                 content={content}
                 detail={detail}
                 dirty={editing.dirty}
@@ -578,14 +591,14 @@ export const DraftEditorPage = () => {
                 validationPending={check.isPending}
                 validationResult={
                   check.error !== null && check.error !== undefined
-                    ? "לא ניתן להשלים את בדיקת הקובץ. פרטי השגיאה מופיעים לצד הטיוטה."
+                    ? "לא ניתן להשלים את בדיקת הקובץ. פרטי השגיאה מופיעים בתצוגה המקדימה."
                     : check.lastCheck === undefined
                       ? undefined
                       : check.lastCheck.passed
                         ? approvalUnavailable
                           ? "הבדיקה עברה על הגרסה המוצגת. יש לפתור את החסמים לפני הכנת ה־PDF."
                           : "הבדיקה הושלמה בהצלחה. אפשר לאשר ולהכין את ה־PDF."
-                        : "הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים לצד הטיוטה."
+                        : "הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים בתצוגה המקדימה."
                 }
               />
             )}

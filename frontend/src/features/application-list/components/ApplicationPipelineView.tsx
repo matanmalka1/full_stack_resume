@@ -11,6 +11,7 @@ import { useOpenRecord } from "../hooks/useOpenRecord";
 import { applicationAttention } from "../model/applicationListPresentation";
 import { closedStage, recruitmentStages } from "../model/recruitmentStages";
 import { ApplicationIdentity } from "./ApplicationIdentity";
+import { ApplicationRecordActions } from "./ApplicationListItemActions";
 import { ApplicationNextAction } from "./ApplicationNextAction";
 import { AttentionLink, nextActionHeading } from "./ApplicationCardNextAction";
 
@@ -21,6 +22,8 @@ interface ApplicationPipelineViewProps {
      selects (none: no filter). Together they give each column its whole size. */
   recruitmentStatusCounts: Readonly<Record<string, number>>;
   recruitmentStatusFilter: readonly string[] | undefined;
+  onRequestClose: (item: ApplicationListItem) => void;
+  onRequestDelete: (item: ApplicationListItem) => void;
   onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
   returnedId: string | null;
@@ -72,17 +75,26 @@ const AttentionMark = ({ item }: { item: ApplicationListItem }) => {
   );
 };
 
-/* One Application in its stage, after demo_re: who, what is waiting on it, and a
-   footer whose main control is the step to take - or, with none, the way into its
-   recruitment record - beside a pencil for the stage itself. */
+/* One Application in its stage, after demo_re: who, with the record's menu beside it,
+   what is waiting on it, and a footer whose main control is the step to take - or, with
+   none, the way into its recruitment record - beside a pencil for the stage itself.
+
+   The menu is the stage card's one control at every width: it carries the details, the
+   status update, the posting, and the close and delete the stages view otherwise had no
+   way to, and it is the keyboard's way to the details on a phone, where the footer folds
+   away. */
 const PipelineCard = ({
   item,
+  onRequestClose,
+  onRequestDelete,
   onRequestDetails,
   onRequestUpdate,
   returned,
 }: {
   item: ApplicationListItem;
   returned: boolean;
+  onRequestClose: (item: ApplicationListItem) => void;
+  onRequestDelete: (item: ApplicationListItem) => void;
   onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => {
@@ -101,7 +113,22 @@ const PipelineCard = ({
       data-application-id={item.id}
       onClick={open.onClick}
     >
-      <ApplicationIdentity afterCompany={<AttentionMark item={item} />} item={item} variant="pipeline" />
+      <ApplicationIdentity
+        afterCompany={
+          <span className="flex shrink-0 items-start gap-1">
+            <AttentionMark item={item} />
+            <ApplicationRecordActions
+              item={item}
+              onRequestClose={onRequestClose}
+              onRequestDelete={onRequestDelete}
+              onRequestDetails={onRequestDetails}
+              onRequestUpdate={onRequestUpdate}
+            />
+          </span>
+        }
+        item={item}
+        variant="pipeline"
+      />
 
       {attention === null ? null : (
         <div
@@ -176,6 +203,8 @@ export const ApplicationPipelineView = ({
   items,
   recruitmentStatusCounts,
   recruitmentStatusFilter,
+  onRequestClose,
+  onRequestDelete,
   onRequestDetails,
   onRequestUpdate,
   returnedId,
@@ -243,6 +272,8 @@ export const ApplicationPipelineView = ({
                   <PipelineCard
                     item={item}
                     key={item.id}
+                    onRequestClose={onRequestClose}
+                    onRequestDelete={onRequestDelete}
                     onRequestDetails={onRequestDetails}
                     onRequestUpdate={onRequestUpdate}
                     returned={returnedId === item.id}

@@ -71,7 +71,7 @@ export const AnalysisStatusBanner = ({
   supersededAnalysis: boolean;
 }) => {
   const { body, title, tone } = bannerContent(classification, supersededAnalysis);
-  /* On a phone the verdict is the step's one dark block, the way the board's action hub
+  /* The verdict is the step's one dark block, the way the board's action hub
      is: the fit is what the reader opened the analysis for, and it leads the screen above
      the requirements. The two states with no verdict - no analysis yet, or one made
      against an older posting - keep their tone, since that tone is their message. */
@@ -82,9 +82,12 @@ export const AnalysisStatusBanner = ({
      banner left two identical buttons on one screen. */
   return (
     <Callout
+      /* The desktop design draws the verdict the same way: the screen's one dark card.
+         Stated per breakpoint rather than unprefixed: a variant is what outranks the tone's
+         own fill in the stylesheet's order. */
       className={
         verdict
-          ? "max-lg:border-cv-accent max-lg:bg-cv-accent max-lg:shadow-floating max-lg:**:text-cv-on-accent"
+          ? "max-lg:border-cv-accent max-lg:bg-cv-accent max-lg:shadow-floating max-lg:**:text-cv-on-accent lg:border-cv-accent lg:bg-cv-accent lg:shadow-floating lg:**:text-cv-on-accent"
           : undefined
       }
       emphasis="banner"

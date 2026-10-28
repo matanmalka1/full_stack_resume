@@ -31,13 +31,11 @@ interface DraftSectionCardProps {
    the claims in it. The only thing it adds to the list below it is the section context an
    unsupported line needs to become a fact.
 
-   Drawn as the document's own section - a heading over a rule - rather than as a card:
-   every section was a framed, shadowed box, so the editor read as a stack of panels
-   instead of as the CV it is editing.
-
-   Below the large breakpoint it is a card after all: a phone shows one section at a time
-   between the section tabs and the approval bar, and a framed block is what says where
-   one ends. Its scroll margin clears the masthead and the pinned tabs together. */
+   A card at every width now, as both designs draw it. On a phone a section sits between
+   the section tabs and the approval bar, and a framed block is what says where one ends;
+   its scroll margin clears the masthead and the pinned tabs together. On a desktop it is
+   the raised card on the grey canvas beside the section list, its heading over a hairline
+   that runs edge to edge and its lines inset to the card's padding. */
 export const DraftSectionCard = ({
   actions,
   draft,
@@ -65,9 +63,9 @@ export const DraftSectionCard = ({
   return (
     <section
       aria-labelledby={headingId}
-      className="flex scroll-mt-24 flex-col gap-3 max-lg:scroll-mt-36 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-card-padding"
+      className="flex scroll-mt-24 flex-col gap-3 max-lg:scroll-mt-36 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-card-padding lg:overflow-hidden lg:rounded-surface lg:border lg:border-cv-hairline lg:bg-cv-surface lg:px-5 lg:pt-4 lg:pb-3 lg:shadow-card"
     >
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-cv-border-strong pb-2 max-lg:flex-nowrap max-lg:border-cv-border">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-cv-border-strong pb-2 max-lg:flex-nowrap max-lg:border-cv-border lg:-mx-5 lg:border-cv-hairline lg:px-5 lg:pb-3">
         <div className="flex min-w-0 items-baseline gap-2">
           <h3 className="truncate text-heading-sm font-bold text-cv-text" dir="auto" id={headingId}>
             {section.name}
