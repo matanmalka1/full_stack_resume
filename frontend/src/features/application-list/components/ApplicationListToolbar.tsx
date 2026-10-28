@@ -195,7 +195,9 @@ export const ApplicationListToolbar = ({
 
         {/* Sorting orders the page rather than narrowing it, so it sits beside the view
           switch rather than among the filters, and every view keeps the order it sets. */}
-        <div className="cv-fields-compact ms-auto flex flex-wrap items-center gap-3">
+        {/* On a phone the view switch takes a row of its own above the sort, as a
+          segmented control across the width. */}
+        <div className="cv-fields-compact ms-auto flex flex-wrap items-center gap-3 max-lg:w-full">
           <label className="flex items-center gap-2 text-support text-cv-text-muted">
             מיון
             <Select
@@ -210,12 +212,15 @@ export const ApplicationListToolbar = ({
               ))}
             </Select>
           </label>
-          <ViewSwitch
-            label="בחירת תצוגת מועמדויות"
-            onChange={onViewModeChange}
-            options={viewModeOptions}
-            value={viewMode}
-          />
+          <div className="max-lg:order-first max-lg:w-full lg:contents">
+            <ViewSwitch
+              label="בחירת תצוגת מועמדויות"
+              onChange={onViewModeChange}
+              options={viewModeOptions}
+              stretch
+              value={viewMode}
+            />
+          </div>
         </div>
       </div>
     </div>

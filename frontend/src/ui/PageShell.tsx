@@ -57,7 +57,7 @@ export const PageShell = ({
       )}
     >
       <div>
-        {landmark === undefined ? null : <aside className="mb-5">{landmark}</aside>}
+        {landmark === undefined ? null : <aside className="mb-5 max-lg:mb-3">{landmark}</aside>}
         <div className="min-w-0">
           {/* A phone's heading stands on the canvas without a rule under it: the design
               separates the masthead from the body by space alone there. */}

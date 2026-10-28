@@ -115,9 +115,14 @@ const PipelineCard = ({
         </div>
       )}
 
-      <ApplicationNextAction item={item} />
+      {/* A phone's stage card stops at who, how far along and what needs the reader, as
+          the cards view's does: the next step and the stage pencil are the details
+          sheet's, a tap on the card away. */}
+      <div className="max-lg:hidden">
+        <ApplicationNextAction item={item} />
+      </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-cv-border pt-2">
+      <div className="flex items-center justify-between gap-2 border-t border-cv-border pt-2 max-lg:hidden">
         {head?.command == null ? (
           <button
             className="text-support font-medium text-cv-accent hover:underline"
@@ -201,7 +206,14 @@ export const ApplicationPipelineView = ({
       : [...populatedOrActiveColumns, { id: "other", title: "שלב אחר", statuses: unknownStatuses, tone: "neutral" }];
 
   return (
-    <ul aria-label="מועמדויות לפי שלב גיוס" className="flex items-start gap-3.5 overflow-x-auto pt-1 pb-4">
+    /* On a phone the lanes are a horizontal strip across the full screen width, each lane
+       most of it wide so the next one peeks in at the edge and says the strip scrolls; the
+       strip snaps lane by lane. A lane there is a heading over bare cards, not a boxed
+       column: the boxes nested inside one another at that width. */
+    <ul
+      aria-label="מועמדויות לפי שלב גיוס"
+      className="flex items-start gap-3.5 overflow-x-auto pt-1 pb-4 max-lg:-mx-4 max-lg:snap-x max-lg:snap-mandatory max-lg:scroll-px-4 max-lg:gap-3 max-lg:px-4 sm:max-lg:-mx-6 sm:max-lg:scroll-px-6 sm:max-lg:px-6"
+    >
       {columns.map((column) => {
         const stageItems = items.filter((item) => column.statuses.includes(item.recruitment_status));
         const total = columnTotal(column, stageItems.length);
@@ -210,6 +222,7 @@ export const ApplicationPipelineView = ({
           <li
             className={cx(
               "flex max-h-[75vh] w-72 shrink-0 flex-col rounded-surface border border-t-[3px] border-cv-border bg-cv-surface-muted p-3",
+              "max-lg:max-h-none max-lg:w-[78vw] max-lg:max-w-80 max-lg:snap-start max-lg:border-0 max-lg:bg-transparent max-lg:p-0",
               pipelineEdgeClasses[column.tone],
             )}
             key={column.id}
@@ -220,7 +233,7 @@ export const ApplicationPipelineView = ({
                 {total === stageItems.length ? stageItems.length : `${stageItems.length} מתוך ${total}`}
               </span>
             </div>
-            <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto">
+            <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto max-lg:overflow-visible">
               {stageItems.length === 0 ? (
                 <p className="rounded-control border border-dashed border-cv-border py-8 text-center text-support text-cv-text-muted">
                   אין מועמדויות בשלב זה

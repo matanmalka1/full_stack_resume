@@ -1,3 +1,5 @@
+import { Filter } from "lucide-react";
+
 import type { ApplicationListItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
@@ -57,10 +59,20 @@ export const ApplicationListResults = ({
 }: ApplicationListResultsProps) => {
   if (items.length === 0) {
     return (
-      <EmptyState className="bg-cv-surface">
-        <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
+      /* On a phone the message stands on the canvas under a filter mark, unframed, with
+         the way out a full-size button: it is the whole region, not a gap in a list. */
+      <EmptyState className="bg-cv-surface max-lg:border-0 max-lg:bg-transparent max-lg:py-12">
+        <span
+          aria-hidden="true"
+          className="mx-auto mb-4 flex size-16 items-center justify-center rounded-surface border border-cv-border bg-cv-surface text-cv-text lg:hidden"
+        >
+          <Filter className="size-7" />
+        </span>
+        <p className="text-body text-cv-text max-lg:text-heading-sm max-lg:font-extrabold">
+          אין מועמדות שמתאימה לסינון.
+        </p>
         <div className="mt-5 flex justify-center">
-          <Button onClick={onClearFilters} variant="secondary">
+          <Button className="max-lg:min-h-11 max-lg:px-5" onClick={onClearFilters} variant="secondary">
             ניקוי הסינון
           </Button>
         </div>
