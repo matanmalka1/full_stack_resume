@@ -1,5 +1,5 @@
 import { useIsFetching } from "@tanstack/react-query";
-import { PanelRightClose, PanelRightOpen, Plus } from "lucide-react";
+import { FileText, PanelRightClose, PanelRightOpen, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { buttonClasses } from "@/ui/Button";
@@ -64,11 +64,25 @@ const SidebarToggle = ({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
    rail classes below never reach the narrow masthead. Where a rail class replaces an
    expanded `lg:` one it replaces it outright, rather than being added beside it: two
    utilities for the same property at the same breakpoint resolve by stylesheet order,
-   not by the order they are written in. */
-export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean; onToggleCollapsed: () => void }) => {
+   not by the order they are written in.
+
+   `hiddenOnPhone` drops the whole header - masthead and bottom navigation, which lives
+   inside it - below the large breakpoint, for a screen that brings its own. */
+export const AppHeader = ({
+  collapsed,
+  hiddenOnPhone = false,
+  onToggleCollapsed,
+}: {
+  collapsed: boolean;
+  hiddenOnPhone?: boolean;
+  onToggleCollapsed: () => void;
+}) => {
   return (
     <header
-      className="sticky top-0 z-(--cv-z-navigation) border-b border-cv-hairline bg-cv-canvas lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-b-0 lg:border-e"
+      className={cx(
+        "sticky top-0 z-(--cv-z-navigation) bg-cv-canvas lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-e lg:border-cv-hairline",
+        hiddenOnPhone && "max-lg:hidden",
+      )}
       id={SIDEBAR_ID}
     >
       {/* The rail drops `page-gutter`: that class is unlayered CSS, so its 2rem inline
@@ -98,10 +112,20 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
                 collapsed ? "lg:justify-center" : "lg:justify-between",
               )}
             >
+              {/* On a narrow screen the wordmark leads with an app mark, as an installed
+                  app's title bar does; the sidebar keeps the underlined word alone. */}
               {!collapsed && (
-                <Link className="group shrink-0 rounded-control" to={boardPath()}>
-                  <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
-                  <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
+                <Link className="group flex shrink-0 items-center gap-2.5 rounded-control lg:block" to={boardPath()}>
+                  <span
+                    aria-hidden="true"
+                    className="flex size-9 items-center justify-center rounded-control bg-cv-accent text-cv-on-accent lg:hidden"
+                  >
+                    <FileText className="size-icon-md" />
+                  </span>
+                  <span className="block">
+                    <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
+                    <span className="hidden h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full lg:block" />
+                  </span>
                 </Link>
               )}
               <SidebarToggle collapsed={collapsed} onToggle={onToggleCollapsed} />
@@ -119,15 +143,14 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
               collapsed ? "lg:flex-col" : "lg:flex-wrap",
             )}
           >
-            {/* The quick switcher and sign-out live in the sidebar only. On a narrow screen
-                the board's own search field covers finding a job, Settings carries
-                sign-out, and the masthead keeps to the wordmark and the new-job command.
-                The ⌘K shortcut stays live everywhere. */}
+            {/* On a narrow screen the masthead keeps the wordmark and the quick switcher,
+                there an icon - its label and shortcut hint fold away below `md`. Sign-out
+                moves to Settings and the new-job command to the board's floating button. */}
             <GlobalSearch
-              className={collapsed ? undefined : "lg:w-full"}
+              className={collapsed ? undefined : "max-lg:size-11 max-lg:justify-center max-lg:px-0 lg:w-full"}
               compact={collapsed}
               showTrigger
-              triggerWrapperClassName={cx("hidden lg:flex", !collapsed && "lg:w-full")}
+              triggerWrapperClassName={cx("flex", !collapsed && "lg:w-full")}
             />
             <span className={cx("hidden lg:flex", !collapsed && "lg:w-full")}>
               <SignOutButton compact={collapsed} />
@@ -144,14 +167,17 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
                 </Link>
               </Tooltip>
             ) : (
-              <Link
-                aria-label="קליטת משרה חדשה"
-                className={buttonClasses("primary", "whitespace-nowrap lg:flex-1 lg:px-3", "default")}
-                to={routePaths.newApplication}
-              >
-                <Plus aria-hidden="true" className="size-icon-md" />
-                <span className="hidden sm:inline">משרה חדשה</span>
-              </Link>
+              /* The wrapper carries the breakpoint, for the reason `SidebarToggle` gives. */
+              <span className="hidden lg:flex lg:flex-1">
+                <Link
+                  aria-label="קליטת משרה חדשה"
+                  className={buttonClasses("primary", "whitespace-nowrap lg:flex-1 lg:px-3", "default")}
+                  to={routePaths.newApplication}
+                >
+                  <Plus aria-hidden="true" className="size-icon-md" />
+                  <span>משרה חדשה</span>
+                </Link>
+              </span>
             )}
           </div>
         </div>

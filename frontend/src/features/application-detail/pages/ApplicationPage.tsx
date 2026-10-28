@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
@@ -10,6 +10,7 @@ import { Disclosure } from "@/ui/Disclosure";
 import { problemSentence } from "@/ui/errorMessages";
 import { QueryState } from "@/ui/QueryState";
 import { WideRow } from "@/ui/WideRow";
+import { formatDateTime } from "@/utils/formatDateTime";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Skeleton } from "@/ui/Skeleton";
 import {
@@ -19,10 +20,13 @@ import {
   operationTypeLabels,
   useWatchedOperation,
 } from "@/features/operations";
-import { PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
+import { PreparationChecklist, PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
+import { RecruitmentUpdateDialog } from "@/features/recruitment";
 import { applicationLabel } from "../model/applicationPresentation";
 import { analysisViewState } from "../model/analysisViewState";
 import { JobPostingPanel } from "../components/JobPostingPanel";
+import { NextActionCard } from "../components/NextActionCard";
+import { RecruitmentStageCard } from "../components/RecruitmentStageCard";
 
 /* The news that an Application was just created, handed over in route state by the intake
    screen. It is the one thing on this page that is not read from the projection, because
@@ -67,15 +71,19 @@ const analysisPending: PendingWork = {
    waiting on, beside the diagnosis behind it; and the posting and the files sit below as
    reference a press away, never as panels competing for the same space.
 
-   Recruitment is not here at all. Where the application stands with the employer moves on
-   its own axis and is managed from the board; putting it beside the CV work claimed a
-   relationship between the two that does not exist and crowded the one task this screen is
-   for. */
+   Recruitment is stated, not managed, here. Where the application stands with the
+   employer moves on its own axis; it was once left off this screen entirely, so as not
+   to claim a relationship with the CV work that does not exist. The mobile design brought
+   it back as the opening card, because a reader who opens an application asks where it
+   stands before what to do with its CV. It sits above the step, on its own card with its
+   own reminder beside it, and changing it opens the board's recruitment manager rather
+   than growing a second editor here. */
 export const ApplicationPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const location = useLocation();
 
   const query = useQuery(watchedApplicationDetailQueryOptions(applicationId));
+  const [managingRecruitment, setManagingRecruitment] = useState(false);
   const detail = query.data;
   const { awaitingRecord, operation: watched, settled, watch } = useWatchedOperation(applicationId, detail);
 
@@ -149,6 +157,22 @@ export const ApplicationPage = () => {
           <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
         )
       }
+      /* A phone's header names the application itself - its initial, the role, and the
+         company with the day it was taken in - since the stage card and the checklist
+         below say where the work stands, so its stage bar is left out. */
+      phoneHeader={{
+        bar: false,
+        mark: true,
+        ...(detail === undefined
+          ? {}
+          : {
+              subtitle: (
+                <span dir="auto">
+                  {detail.application.company} · נקלטה ב־{formatDateTime(detail.application.created_at, "date")}
+                </span>
+              ),
+            }),
+      }}
       stage="analysis"
     >
       {/* Live work is reported the moment this screen knows about it, whether that
@@ -161,6 +185,7 @@ export const ApplicationPage = () => {
       <OperationOverlay
         awaitingRecord={awaitingRecord}
         continuation={continuation}
+        eyebrow={detail === undefined ? undefined : `${detail.application.target_role} · ${detail.application.company}`}
         /* While the analysis runs this step has no body to show - `PreparationView` waits
            for its result - so the run is reported where that body will be, not in a corner
            over an empty page. */
@@ -168,6 +193,9 @@ export const ApplicationPage = () => {
         onQueued={watch}
         operation={watched}
         pending={pending}
+        /* While the analysis runs this step has no bar of its own - `PreparationView`
+           waits for the result - so on a phone the run closes on its own. */
+        phoneRunBar={viewState === "processing"}
         settled={settled}
       />
 
@@ -191,6 +219,25 @@ export const ApplicationPage = () => {
           </Callout>
         ) : (
           <div className="space-y-6">
+            {/* Where the application stands with the employer, and the reminder the reader
+                set for it - the two things a reader opening it from the board asks before
+                the CV work. Both open the board's own recruitment manager to change them.
+                Withheld while a run is the step's whole body: then the run is the answer. */}
+            {viewState === "processing" ? null : (
+              <div className="grid items-start gap-3 lg:grid-cols-2">
+                <RecruitmentStageCard detail={detail} onUpdate={() => setManagingRecruitment(true)} />
+                <NextActionCard detail={detail} onUpdate={() => setManagingRecruitment(true)} />
+              </div>
+            )}
+
+            {/* Where the CV work stands, as a phone's checklist of the five steps. A wide
+                screen has the workflow spine beside the step saying the same thing. */}
+            {viewState === "processing" ? null : (
+              <div className="lg:hidden">
+                <PreparationChecklist detail={detail} />
+              </div>
+            )}
+
             {/* A successfully queued analysis is reported by the Operation overlay above,
                 which follows the run through its current and terminal states. Route state
                 only owns the exceptional creation outcome where no Operation exists to
@@ -234,8 +281,11 @@ export const ApplicationPage = () => {
                 comment above says it should. */}
             {viewState === "content" || viewState === "analysis_failed" ? (
               <WideRow>
-                <div className="flex flex-col gap-2 border-t border-cv-border pt-5">
-                  <p className="text-support font-semibold text-cv-text-muted">חומר עזר</p>
+                {/* On a phone the rule and the quiet heading give way to a card row of its
+                    own, the shape every folded section on a phone's screen takes, so the
+                    posting reads as one tap away rather than as a footnote under the step. */}
+                <div className="flex flex-col gap-2 border-t border-cv-border pt-5 max-lg:border-t-0 max-lg:pt-0">
+                  <p className="text-support font-semibold text-cv-text-muted max-lg:sr-only">חומר עזר</p>
 
                   {postingRepairRelevant ? (
                     /* Repair is the task now, not optional reference reading. Keep the
@@ -243,7 +293,7 @@ export const ApplicationPage = () => {
                        second disclosure the reader has no reason to discover. */
                     <JobPostingPanel detail={detail} operationLive={operationLive} />
                   ) : (
-                    <Disclosure flush summary="צפייה בנוסח המשרה שנשמר">
+                    <Disclosure flush summary="צפייה בנוסח המשרה שנשמר" variant="card">
                       <div className="pt-2">
                         <JobPostingPanel detail={detail} operationLive={operationLive} />
                       </div>
@@ -255,6 +305,19 @@ export const ApplicationPage = () => {
           </div>
         )}
       </QueryState>
+
+      <RecruitmentUpdateDialog
+        application={
+          managingRecruitment && detail !== undefined
+            ? {
+                company: detail.application.company,
+                id: detail.application.id,
+                target_role: detail.application.target_role,
+              }
+            : null
+        }
+        onClose={() => setManagingRecruitment(false)}
+      />
     </WizardStepShell>
   );
 };

@@ -36,9 +36,15 @@ export const DraftConflictDialog = ({
   return (
     <Dialog
       dismissible={false}
+      /* The two outcomes are long sentences: side by side on a phone each wrapped to
+         three lines, so they stack there, one full-width command per line. */
+      footerLayout="stack"
       footer={
         <>
-          <Button onClick={onDiscardLocal} variant="secondary">
+          {/* On a phone the two outcomes stack, and the one that keeps the reader's own
+              text leads: it is what they were in the middle of. The DOM order, and with it
+              the desktop's, is unchanged. */}
+          <Button className="max-lg:order-last" onClick={onDiscardLocal} variant="secondary">
             שמירה על הגרסה הנוכחית
           </Button>
           <Button onClick={onReapplyLocal}>החלת הטקסט שלי על הגרסה הנוכחית</Button>
@@ -53,16 +59,19 @@ export const DraftConflictDialog = ({
         גרסה חדשה יותר של הטיוטה נשמרה לפני השמירה שלך, ולכן השמירה נעצרה. שום דבר לא אוחד אוטומטית ושום טקסט לא נמחק.
       </p>
 
-      <ul className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-4 max-lg:mt-3">
         {pending.map((edit) => (
+          /* On a phone each text is its own panel - the reader's framed in the strong
+             border, the saved one muted - so the two read as the two sides of the choice
+             below them rather than as one paragraph. */
           <li className="flex flex-col gap-2" key={edit.claim_id}>
-            <div>
+            <div className="max-lg:rounded-control max-lg:border max-lg:border-cv-border-strong max-lg:p-card-padding">
               <p className="text-support font-medium text-cv-text">הטקסט שלי</p>
               <p className="text-body text-cv-text" dir="auto">
                 {edit.text ?? ""}
               </p>
             </div>
-            <div>
+            <div className="max-lg:rounded-control max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface-muted max-lg:p-card-padding">
               <p className="text-support font-medium text-cv-text">הגרסה הנוכחית</p>
               <p className="text-body text-cv-text-muted" dir="auto">
                 {texts.get(edit.claim_id) ?? "השורה אינה קיימת עוד בגרסה הנוכחית."}

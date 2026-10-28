@@ -5,13 +5,7 @@ import { Disclosure } from "@/ui/Disclosure";
 import { LtrText } from "@/ui/LtrText";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { formatUsd } from "@/utils/formatUsd";
-
-const duration = (start: string, end: string | number): string | null => {
-  const milliseconds = (typeof end === "number" ? end : Date.parse(end)) - Date.parse(start);
-  if (!Number.isFinite(milliseconds) || milliseconds < 0) return null;
-  const seconds = Math.floor(milliseconds / 1000);
-  return seconds < 60 ? `${seconds} שניות` : `${Math.floor(seconds / 60)} דקות ו־${seconds % 60} שניות`;
-};
+import { durationLabel as duration } from "../model/operationElapsed";
 
 type Row = [string, string | number | null | undefined];
 

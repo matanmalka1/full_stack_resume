@@ -1,3 +1,5 @@
+import { RefreshCw } from "lucide-react";
+
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 interface BuildFromAnalysisDialogProps {
@@ -25,7 +27,10 @@ export const BuildFromAnalysisDialog = ({
     confirmDisabled={commandsBlocked}
     confirmLabel="בנייה מחדש מהניתוח החדש"
     dismissible={false}
+    /* The design stacks the two answers full-width on a phone: the rebuild over the way out. */
+    footerLayout="stack"
     headingId="build-from-analysis-heading"
+    icon={<RefreshCw aria-hidden="true" />}
     onCancel={onClose}
     onConfirm={onConfirm}
     open={open}
@@ -34,7 +39,9 @@ export const BuildFromAnalysisDialog = ({
     title="בניית המסמך מחדש מהניתוח החדש"
   >
     <div className="flex flex-col gap-3">
-      <p>
+      {/* On a phone what the rebuild loses is set apart on a muted ground, the one block
+          of the sheet to read before either button. */}
+      <p className="max-lg:rounded-control max-lg:bg-cv-surface-muted max-lg:p-3 max-lg:text-support max-lg:leading-6">
         המסמך יעבור לניתוח החדש, וטיוטה חדשה תיווצר ממנו. תוכן הטיוטה הנוכחית יימחק, וכל אישור או קובץ שהופק ממנה לא
         יחולו עוד.
       </p>

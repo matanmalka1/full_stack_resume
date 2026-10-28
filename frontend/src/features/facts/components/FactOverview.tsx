@@ -5,8 +5,9 @@ import type { Fact } from "@/api/contracts";
 import { factLabelInLanguage, factSourceLabel, factStyleLabel } from "../model/factLabels";
 import { FactStatusBadge } from "./FactStatusBadge";
 
+/* On a phone the fact stands on the canvas, so its wording is a white card there. */
 const DetailBlock = ({ children, label }: { children: ReactNode; label: string }) => (
-  <div className="min-w-0 rounded-control bg-cv-surface-muted px-3.5 py-3">
+  <div className="min-w-0 rounded-control bg-cv-surface-muted px-3.5 py-3 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-4">
     <p className="text-support font-medium text-cv-text-muted">{label}</p>
     <div className="mt-1 text-support leading-6 text-cv-text" dir="auto">
       {children}
@@ -23,9 +24,11 @@ export const FactOverview = ({ fact }: { fact: Fact }) => {
 
   return (
     <section aria-labelledby="selected-fact-heading">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-cv-border pb-4">
-        <div className="min-w-0 flex-1">
-          <p className="mb-1.5 text-support font-semibold text-cv-accent">עובדת מועמד</p>
+      {/* A phone reads the record top down: what state it is in and what kind of line it
+          is, as two pills, then the wording. The eyebrow and the rule give way there. */}
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-cv-border pb-4 max-lg:flex-col-reverse max-lg:border-b-0 max-lg:pb-0">
+        <div className="min-w-0 flex-1 max-lg:w-full">
+          <p className="mb-1.5 text-support font-semibold text-cv-accent max-lg:hidden">עובדת מועמד</p>
           <h2
             className="text-heading-sm font-bold leading-7 text-cv-text text-right"
             dir="auto"
@@ -39,7 +42,12 @@ export const FactOverview = ({ fact }: { fact: Fact }) => {
             </p>
           )}
         </div>
-        <FactStatusBadge className="px-2.5 py-0.5" status={fact.status} />
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <FactStatusBadge className="px-2.5 py-0.5" status={fact.status} />
+          <span className="rounded-pill bg-cv-surface-sunken px-2.5 py-0.5 text-support font-semibold text-cv-text lg:hidden">
+            {factStyleLabel(fact.resume_style)}
+          </span>
+        </span>
       </div>
 
       <div className="mt-4">

@@ -113,6 +113,48 @@ describe("FactsPage", () => {
     expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();
   });
 
+  /* The phone's forms of the filters - the pending banner and the source chips - drive the
+     same filters as the wide screen's selects. */
+  it("narrows the pool from the pending banner and the source chips", async () => {
+    const backend = fact();
+    const sales = fact({
+      fact_id: "fact.sales",
+      meaning: "Managed accounts",
+      renderings: { en: "Managed accounts" },
+      source: "sales.json",
+      status: "pending",
+      tags: ["sales"],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) => {
+        const url = String(input);
+        if (url === "/api/v1/facts")
+          return Promise.resolve(
+            json({ items: [backend, sales].map((item) => ({ fact: item, recorded_status: item.status })) }),
+          );
+        if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
+        if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: backend, events: [event(backend)] }));
+        return Promise.resolve(json({}, 404));
+      }),
+    );
+
+    renderRoute("/facts", "/facts", <FactsPage />);
+
+    const banner = await screen.findByRole("button", { name: /עובדה אחת ממתינה לאישורך/ });
+    fireEvent.click(banner);
+    expect(banner).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("מעמד")).toHaveValue("pending");
+    expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();
+    fireEvent.click(banner);
+    expect(screen.getByLabelText("מעמד")).toHaveValue("all");
+
+    fireEvent.click(screen.getByRole("button", { name: "ניסיון במכירות" }));
+    expect(screen.getByLabelText("מאגר מקור")).toHaveValue("sales.json");
+    expect(screen.getByRole("link", { name: /Managed accounts/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();
+  });
+
   it("opens and marks the exact fact history event from a deep link", async () => {
     const item = fact();
     vi.stubGlobal(

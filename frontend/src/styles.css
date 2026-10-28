@@ -38,6 +38,14 @@
   }
 }
 
+/* A step of the CV wizard has no bottom bar on a phone either (AppLayout drops the shell
+   there), so its own action bar stands on the home indicator's inset alone. */
+@media (max-width: 63.999rem) {
+  [data-route-density="focus"] {
+    --cv-bottom-nav-height: env(safe-area-inset-bottom, 0px);
+  }
+}
+
 :root[data-theme="light"] {
   color-scheme: light;
 }
@@ -102,6 +110,10 @@
   --color-cv-blocker-soft: var(--cv-alabaster-grey);
   --color-cv-focus: var(--cv-carbon-black);
   --color-cv-on-accent: var(--cv-bright-snow);
+  /* The dim behind a modal surface: the neutral charcoal the shadows are cast in, in both
+     themes, so it dims the page rather than tinting it. A native dialog's ::backdrop and
+     a phone's action sheet, which is not a dialog, share it. */
+  --color-cv-scrim: rgb(33 37 41 / 0.45);
   --font-sans:
     "Heebo", "Assistant", "Rubik", "Arial Hebrew", "Noto Sans Hebrew", system-ui, -apple-system, "Segoe UI", Arial,
     sans-serif;
@@ -145,6 +157,9 @@
   --radius-control: 0.5rem;
   --radius-surface: 0.875rem;
   --radius-pill: 9999px;
+  /* The top corners of a bottom sheet and of a phone's centred confirmation. Larger than
+     `surface`: a sheet spans the whole width, and a card's radius on it reads as square. */
+  --radius-sheet: 1.5rem;
   --shadow-surface: none;
   --shadow-floating: 0 0 0 1px var(--cv-shadow-edge), 0 18px 40px -24px var(--cv-shadow-medium);
   --shadow-overlay: 0 0 0 1px var(--cv-shadow-edge), 0 28px 70px -24px var(--cv-shadow-strong);
@@ -489,9 +504,7 @@ dialog {
 }
 
 dialog::backdrop {
-  /* The same neutral charcoal the shadows are cast in, so the scrim dims the page
-     rather than tinting it. */
-  background: rgb(33 37 41 / 0.45);
+  background: var(--color-cv-scrim);
   backdrop-filter: blur(2px);
   opacity: 1;
   transition:
@@ -508,6 +521,23 @@ dialog::backdrop {
 ::selection {
   color: var(--color-cv-text);
   background: var(--color-cv-accent-soft);
+}
+
+/* Below the large breakpoint a form dialog is a bottom sheet (`Dialog`), so it rises
+   from the viewport's bottom edge instead of settling in place. A confirmation keeps the
+   centred settle above. The reduced-motion rule below collapses the rise like every
+   other transition, so the sheet is simply there. */
+@media (width < 64rem) {
+  dialog.cv-sheet {
+    transition-duration: 0.24s;
+    transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  @starting-style {
+    dialog.cv-sheet[open] {
+      opacity: 1;
+      transform: translateY(100%);
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

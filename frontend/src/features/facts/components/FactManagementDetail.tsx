@@ -34,7 +34,9 @@ export const FactManagementDetail = ({
   const correctable = fact.status === "canonical" && !mutationsBlocked;
 
   return (
-    <div className="flex flex-col gap-5" key={fact.fact_id}>
+    /* The bottom padding is the room a phone's pinned command takes, so it never covers
+       the last line of the record. */
+    <div className="flex flex-col gap-5 max-lg:pb-24" key={fact.fact_id}>
       <FactOverview fact={fact} />
 
       {mutationsBlocked ? null : <FactConfirmationControl fact={fact} />}
@@ -64,10 +66,18 @@ export const FactManagementDetail = ({
             <p className="min-w-0 text-support leading-6 text-cv-text-muted">
               נוסח שגוי או לא מדויק? התיקון נוצר כעובדה ממתינה חדשה, והעובדה הקנונית הזו נשארת כפי שהיא.
             </p>
-            <Button onClick={() => setCorrecting(true)} size="compact" variant="secondary">
-              <PenLine aria-hidden="true" className="size-icon-md shrink-0" />
-              יצירת תיקון לעובדה
-            </Button>
+            {/* A settled fact's one command on a phone, pinned like the pending fact's. */}
+            <div className="max-lg:fixed max-lg:inset-x-0 max-lg:bottom-(--cv-bottom-nav-height) max-lg:z-(--cv-z-sticky) max-lg:border-t max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-4">
+              <Button
+                className="max-lg:min-h-12 max-lg:w-full max-lg:rounded-surface max-lg:text-body"
+                onClick={() => setCorrecting(true)}
+                size="compact"
+                variant="secondary"
+              >
+                <PenLine aria-hidden="true" className="size-icon-md shrink-0" />
+                יצירת תיקון לעובדה
+              </Button>
+            </div>
           </div>
         ) : null}
 
@@ -96,6 +106,8 @@ export const FactManagementDetail = ({
           key={selectedEventId ?? "closed"}
           initiallyOpen={selectedEventId != null}
           summary="היסטוריית העובדה"
+          /* A phone draws it as a card row, like the record's other blocks there. */
+          variant="card"
         >
           {detail.events.length === 0 ? (
             <Callout title="לא נמצאה היסטוריית lifecycle" tone="blocker">

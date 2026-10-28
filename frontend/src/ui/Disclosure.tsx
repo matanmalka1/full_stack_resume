@@ -12,6 +12,11 @@ interface DisclosureProps {
   flush?: boolean;
   initiallyOpen?: boolean;
   summary: string;
+  /* "card" is a row of a phone's list of ways into longer content: below the large
+     breakpoint the disclosure is a full-width card whose summary is a 56px row in body
+     text, its content inside the card. From the large breakpoint it is the default
+     disclosure, unchanged. */
+  variant?: "default" | "card";
 }
 
 /* Content that belongs to the screen but is longer than the screen's own text: the job
@@ -33,19 +38,44 @@ interface DisclosureProps {
    attribute. Both describe the same fact, but a class recomputed in JS cannot be defeated
    by a CSS selector matching an unexpected ancestor - and `toggle` fires for every way a
    reader can open a `<details>` (click, Space, Enter), keyboard included. */
-export const Disclosure = ({ children, className, flush = false, initiallyOpen = false, summary }: DisclosureProps) => {
+export const Disclosure = ({
+  children,
+  className,
+  flush = false,
+  initiallyOpen = false,
+  summary,
+  variant = "default",
+}: DisclosureProps) => {
+  const card = variant === "card";
   const [open, setOpen] = useState(initiallyOpen);
 
   return (
     <details
-      className={cx("text-support", className)}
+      className={cx(
+        "text-support",
+        card && "max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface",
+        className,
+      )}
       onToggle={(event) => setOpen(event.currentTarget.open)}
       open={open}
     >
-      <DisclosureSummary className="font-medium text-cv-text-muted transition-colors hover:text-cv-text" open={open}>
+      <DisclosureSummary
+        className={cx(
+          "font-medium text-cv-text-muted transition-colors hover:text-cv-text",
+          card && "max-lg:min-h-14 max-lg:px-4 max-lg:text-body max-lg:font-bold max-lg:text-cv-text",
+        )}
+        open={open}
+      >
         {summary}
       </DisclosureSummary>
-      <div className={flush ? "mt-2" : "mt-2 ps-6 leading-6 text-cv-text-muted"}>{children}</div>
+      <div
+        className={cx(
+          flush ? "mt-2" : "mt-2 ps-6 leading-6 text-cv-text-muted",
+          card && "max-lg:mt-0 max-lg:px-4 max-lg:pb-4",
+        )}
+      >
+        {children}
+      </div>
     </details>
   );
 };

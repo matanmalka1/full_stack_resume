@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ApiProblem } from "@/api/client";
 import type { Settings, UpdateSettingsRequest } from "@/api/contracts";
 import { type SettingsRead, readSettings, settingsQueryKey, updateSettings } from "@/api/settings";
-import { type SampleLanguage, templateSampleSrc } from "@/api/templates";
+import { type SampleLanguage, templateLabel, templateSampleSrc } from "@/api/templates";
 import { TemplateGallery } from "@/features/templates";
 import { useDisplaySettingsPreview } from "./DisplaySettingsPreview";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -24,11 +24,13 @@ import { Select } from "@/ui/Select";
 import { SuccessNotice } from "@/ui/SuccessNotice";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 import { Switch } from "@/ui/Switch";
+import { PhoneFoldRow, usePhoneFold } from "./PhoneFold";
 import { SettingsConflict } from "./SettingsConflict";
 import { editableSettings, reasoningEffortLabels } from "../settings.model";
 
-/* The settings card surface, shared with the page's own account card and loading state. */
-export const settingsCardClasses = "bg-cv-surface p-5 shadow-surface sm:p-6";
+/* The settings card surface, shared with the page's own account card and loading state.
+   On a phone the cards are the rounded groups of a settings list. */
+export const settingsCardClasses = "bg-cv-surface p-5 shadow-surface max-lg:rounded-surface max-lg:p-4 sm:p-6";
 
 const themeOptions = [
   { icon: Sun, label: "בהירה", value: "light" },
@@ -49,6 +51,7 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
   const [conflict, setConflict] = useState<{ base: UpdateSettingsRequest; local: UpdateSettingsRequest } | null>(null);
   const [latest, setLatest] = useState<SettingsRead | null>(null);
   const [sampleLanguage, setSampleLanguage] = useState<SampleLanguage>("en");
+  const templateFold = usePhoneFold();
   const values = editableSettings(baseline.settings);
   const {
     formState: { isDirty },
@@ -136,8 +139,10 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
         })}
       >
         <fieldset disabled={save.isPending || conflict !== null} className="flex min-w-0 flex-col gap-6">
+          {/* A phone reads the cards in the order a person reaches for them - the look of the
+              interface, then the CV's, then the AI - so the display card leads there. */}
           {!themeOnly && (
-            <Card className={settingsCardClasses}>
+            <Card className={cx(settingsCardClasses, "max-lg:order-3")}>
               <SectionHeader
                 className="mb-5"
                 description="איך ומתי המערכת נעזרת במודל שפה."
@@ -218,14 +223,22 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
             </Card>
           )}
           {!themeOnly && (
-            <Card className={settingsCardClasses}>
+            <Card className={cx(settingsCardClasses, "max-lg:order-2")}>
               <SectionHeader
                 className="mb-5"
                 description="העיצוב שבו נפתחים קורות חיים חדשים. כל משרה יכולה להחליף תבנית בעורך; שינוי כאן לא משנה קורות חיים קיימים."
                 icon={LayoutTemplate}
                 title="תבנית קורות חיים"
               />
-              <div className="flex flex-col gap-4">
+              <PhoneFoldRow
+                {...templateFold.rowProps}
+                label="תבנית עיצוב"
+                value={templateLabel(settings.available_templates, form.default_template ?? null)}
+              />
+              <div
+                className={cx("flex flex-col gap-4 max-lg:mt-3", templateFold.panelProps.className)}
+                id={templateFold.panelProps.id}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-support text-cv-text-muted">התצוגה המקדימה מציגה קורות חיים לדוגמה.</p>
                   <ViewSwitch
@@ -249,7 +262,7 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
               </div>
             </Card>
           )}
-          <Card className={settingsCardClasses}>
+          <Card className={cx(settingsCardClasses, "max-lg:order-1")}>
             <SectionHeader
               className="mb-5"
               description="משפיע מיד על הממשק, לכל מסך. נשמר רק בלחיצה על שמירה."

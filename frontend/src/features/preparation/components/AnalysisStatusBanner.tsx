@@ -71,12 +71,26 @@ export const AnalysisStatusBanner = ({
   supersededAnalysis: boolean;
 }) => {
   const { body, title, tone } = bannerContent(classification, supersededAnalysis);
+  /* On a phone the verdict is the step's one dark block, the way the board's action hub
+     is: the fit is what the reader opened the analysis for, and it leads the screen above
+     the requirements. The two states with no verdict - no analysis yet, or one made
+     against an older posting - keep their tone, since that tone is their message. */
+  const verdict = classification !== null && !supersededAnalysis;
 
   /* A missing AI provider is not repeated here. The step's bar says it beside the inert
      analysis button and leads with the way to Settings; a second copy of both in this
      banner left two identical buttons on one screen. */
   return (
-    <Callout emphasis="banner" title={title} tone={tone}>
+    <Callout
+      className={
+        verdict
+          ? "max-lg:border-cv-accent max-lg:bg-cv-accent max-lg:shadow-floating max-lg:**:text-cv-on-accent"
+          : undefined
+      }
+      emphasis="banner"
+      title={title}
+      tone={tone}
+    >
       <p>{body}</p>
     </Callout>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { BookOpen, FileText, Plus, X } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem, RecruitmentStatus } from "@/api/contracts";
@@ -41,13 +41,47 @@ interface ClosedResult {
   previousStatus: RecruitmentStatus;
 }
 
+/* A phone's masthead has no room for the new-job command, so below the large breakpoint
+   it floats over the board, above the bottom navigation, where a thumb reaches it. */
+const NewApplicationFab = () => (
+  <>
+    {/* Room under the last card, so the floating button never covers it. */}
+    <div aria-hidden="true" className="h-16 lg:hidden" />
+    <div className="fixed end-4 bottom-[calc(var(--cv-bottom-nav-height)+1rem)] z-(--cv-z-sticky) lg:hidden">
+      <Link
+        aria-label="קליטת משרה חדשה"
+        className={buttonClasses("primary", "h-14 rounded-surface px-5 text-body shadow-floating")}
+        to={routePaths.newApplication}
+      >
+        <Plus aria-hidden="true" className="size-icon-lg" />
+        משרה חדשה
+      </Link>
+    </div>
+  </>
+);
+
+/* The empty board's picture on a phone: a page of a CV with a plus on its corner, drawn
+   from the product's own icon and surfaces rather than an image. Decorative. */
+const EmptyBoardMark = () => (
+  <div aria-hidden="true" className="relative mx-auto mb-6 size-24 lg:hidden">
+    <span className="absolute inset-y-1 start-5 end-1 rotate-6 rounded-surface border border-cv-border bg-cv-surface" />
+    <span className="absolute inset-y-0 start-3 end-3 flex items-center justify-center rounded-surface border border-cv-border bg-cv-surface shadow-floating">
+      <FileText className="size-10 text-cv-border-strong" strokeWidth={1.5} />
+    </span>
+    <span className="absolute -bottom-1 start-0 flex size-10 items-center justify-center rounded-pill bg-cv-accent text-cv-on-accent shadow-floating">
+      <Plus className="size-icon-lg" />
+    </span>
+  </div>
+);
+
 /* The board reads top to bottom as four answers: where the reader is, what is waiting
    for them, which slice of the work they are looking at, and the work itself.
 
    The one action that starts something - a new Application - is the shell's, not this
    screen's, and is on screen already; repeating it here would give the reader two
-   buttons for one thing. The empty database is the exception: there is no board to act
-   on yet, so the offer is the only thing on the page. */
+   buttons for one thing. On a phone the shell has no room for it and the board carries
+   it instead (`NewApplicationFab`). The empty database is the exception: there is no
+   board to act on yet, so the offer is the only thing on the page. */
 export const ApplicationListPage = () => {
   const { listQuery, query, searchInput, setSearchInput, updateQuery } = useApplicationListQuery();
   const [viewMode, setViewModeState] = useState<ViewMode>(initialViewMode);
@@ -224,14 +258,37 @@ export const ApplicationListPage = () => {
       <QueryState
         empty={page?.total === 0}
         emptyState={
-          <EmptyState className="bg-cv-surface">
-            <p className="text-body text-cv-text">עוד לא נוצרה אף מועמדות.</p>
-            <p className="mt-1 text-support text-cv-text-muted">מועמדות חדשה מתחילה בהדבקת מודעת המשרה.</p>
-            <div className="mt-5 flex justify-center">
-              <Link className={buttonClasses("primary")} to={routePaths.newApplication}>
+          /* On a phone the empty board is the whole screen's one message, so it stands on
+             the canvas without a frame, under a drawn sheet of paper with a plus: a large
+             title, the sentence, a full-width command, and - since a CV is built from the
+             reader's facts - the way to fill those in first. */
+          <EmptyState className="bg-cv-surface max-lg:border-0 max-lg:bg-transparent max-lg:px-4 max-lg:py-16">
+            <EmptyBoardMark />
+            <p className="text-body text-cv-text max-lg:text-heading-md max-lg:font-extrabold">
+              עוד לא נוצרה אף מועמדות.
+            </p>
+            <p className="mt-1 text-support text-cv-text-muted max-lg:mt-2 max-lg:text-body">
+              מועמדות חדשה מתחילה בהדבקת מודעת המשרה.
+            </p>
+            <div className="mt-5 flex justify-center max-lg:mt-6">
+              <Link
+                className={buttonClasses(
+                  "primary",
+                  "max-lg:min-h-13 max-lg:w-full max-lg:text-body max-lg:shadow-floating",
+                )}
+                to={routePaths.newApplication}
+              >
+                <Plus aria-hidden="true" className="size-icon-md lg:hidden" />
                 משרה חדשה
               </Link>
             </div>
+            <Link
+              className="mt-5 inline-flex min-h-11 items-center gap-1.5 text-support font-bold text-cv-text underline underline-offset-4 lg:hidden"
+              to={routePaths.facts}
+            >
+              <BookOpen aria-hidden="true" className="size-icon-md" />
+              קודם למלא את מאגר העובדות
+            </Link>
           </EmptyState>
         }
         error={listQuery.error}
@@ -291,6 +348,7 @@ export const ApplicationListPage = () => {
               returnedId={returnedId}
               viewMode={viewMode}
             />
+            <NewApplicationFab />
           </div>
         )}
       </QueryState>

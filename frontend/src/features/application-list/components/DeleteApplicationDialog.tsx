@@ -1,3 +1,5 @@
+import { Trash2 } from "lucide-react";
+
 import type { ApplicationListItem } from "@/api/contracts";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { applicationLabel } from "@/features/application-detail";
@@ -21,6 +23,7 @@ export const DeleteApplicationDialog = ({
   <ConfirmDialog
     confirmLabel="מחיקת המועמדות"
     confirmVariant="destructive"
+    icon={<Trash2 />}
     headingId="delete-application-heading"
     onCancel={onCancel}
     onConfirm={onConfirm}

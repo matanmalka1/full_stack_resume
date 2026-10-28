@@ -77,11 +77,13 @@ On desktop the application uses a text-first navigation sidebar on the RTL inlin
 edge. Active navigation there is a flat background step, a heavier label and a 2px edge
 indicator.
 
-Below the large breakpoint the masthead keeps only the wordmark and the new-job command,
-and the three destinations move to a bar pinned to the bottom of the viewport: icon over
-a short visible label, the active one marked by a pill behind its icon and a heavier
-label. The quick switcher's trigger and sign-out appear in the sidebar only; the ⌘K
-shortcut stays live everywhere and sign-out moves to the Settings account card. The bar's
+Below the large breakpoint the masthead keeps only the wordmark, led by an accent app
+mark, and the quick switcher as an icon button. The three destinations move to a bar
+pinned to the bottom of the viewport: icon over a short visible label, the active one
+marked by a pill behind its icon and a heavier label. The new-job command becomes a
+floating button over the board, above the bottom bar; sign-out moves to the Settings
+account card. The board's own search field folds away there, and its action hub becomes
+a dark accent frame around a light list. The bar's
 height is `--cv-bottom-nav-height` (zero at the large breakpoint), and every other
 bottom-pinned surface - `CommitBar`, a sticky `ActionBar`, the Settings save row, the
 page's own bottom padding and scroll padding - stands on top of it by that height.
@@ -115,10 +117,44 @@ own tooltip arrives late, cannot be styled, and never shows on keyboard focus. P
 visible gets no tooltip; clamp it to two lines instead of truncating it.
 
 Workflow routes place their stage spine beside the active content at desktop widths.
-The spine uses heading-weight labels, larger marks and a continuous vertical connector;
-below the large breakpoint it becomes one row of marks above the content, joined by
-horizontal connectors, with only the open step labelled. It stays the same navigation
-landmark, and every step keeps its accessible name.
+The spine uses heading-weight labels, larger marks and a continuous vertical connector.
+Below the large breakpoint a step gets the whole screen: the masthead and bottom bar
+fold away (`--cv-bottom-nav-height` is the home-indicator inset alone there) and the
+spine becomes the step's compact header - back chevron, role over company, an optional
+trailing action (`WizardStepShell`'s `phoneHeader`), then the open stage's name and
+position over one segment per stage. The page heading stays in the document for
+assistive tech (`phoneHeading="compact"`). Intake keeps a numbered stepper under its
+heading, led by a close mark. It stays the same navigation landmark, and every step
+keeps its accessible name.
+
+### Phone surfaces
+
+The mobile design draws its own rules below the large breakpoint, all on the same
+components through `max-lg:` utilities - never a second tree, which would double every
+name a test or a screen reader finds:
+
+- List screens (the board, the facts pool, Settings) draw their groups as rounded
+  white cards on the canvas under plain labels, extending the board exception to phones.
+  A filter used often becomes chips; the rest fold behind a "סינון" toggle that counts
+  the active ones. A list and its record are two views chosen by the URL, and the
+  record's one command is pinned above the bottom bar.
+- `Dialog` is a bottom sheet (`presentation="sheet"`, the default): grab handle,
+  `rounded-t-sheet`, an X, safe-area inset. A two-answer question is a centred card
+  (`presentation="alert"`, and always for `ConfirmDialog`) with an icon tile. A footer
+  splits its commands into halves or stacks them (`footerLayout`). A record menu becomes
+  an action sheet, and the quick switcher is full screen.
+- `CommitBar` and a sticky `ActionBar` run edge to edge on the bottom bar with 48px
+  commands; `CommitBar` takes a `secondary` beside its primary and can drop `back`.
+  Folded reference material is a `Disclosure variant="card"` row with a 56px summary.
+- A run reported inline is the step's whole screen: a turning ring, its phases stacked
+  in a card, and a bar with the way back and cancel. A run that ended without a result
+  is a page in its report sheet - warning mark, the catalogue's title, a "מה קרה" card
+  and the steps with the failed one marked.
+- The application screen opens on the recruitment stage card and the dark next-action
+  card at every width; the draft step opens with the job-fit card. On phones a draft's
+  sections are cards under a pinned segmented strip of anchors - every section stays
+  mounted - and a claim's edit and remove are labelled pills.
+- Every touch target is at least 44px.
 
 Route frames start at the navigation edge rather than centring, so a page heading keeps
 its position when moving between routes whatever the route's measure. Top-level areas

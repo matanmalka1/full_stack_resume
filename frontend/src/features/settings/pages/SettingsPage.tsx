@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, Settings } from "lucide-react";
+import { KeyRound, Lock, Settings, User } from "lucide-react";
 
+import { meQueryOptions } from "@/api/auth";
 import { settingsQueryOptions } from "@/api/settings";
 import { ChangePasswordForm, SignOutButton } from "@/features/auth";
 import { Card } from "@/ui/Card";
@@ -9,6 +10,8 @@ import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { SectionHeader } from "@/ui/SectionHeader";
 import { Skeleton } from "@/ui/Skeleton";
+import { cx } from "@/ui/cx";
+import { PhoneFoldRow, usePhoneFold } from "../components/PhoneFold";
 import { SettingsForm, settingsCardClasses } from "../components/SettingsForm";
 
 /* The sections the form opens with - AI, automation, display - held at their
@@ -35,6 +38,10 @@ const settingsLoading = (
 
 export const SettingsPage = () => {
   const query = useQuery(settingsQueryOptions);
+  /* Already read by the session gate this screen renders inside. The query only reads that
+     cache (`enabled: false`): the card is a courtesy, not a reason for a request. */
+  const me = useQuery({ ...meQueryOptions, enabled: false });
+  const passwordFold = usePhoneFold();
 
   return (
     <PageShell
@@ -42,11 +49,26 @@ export const SettingsPage = () => {
       measure="form"
       title={
         <span className="inline-flex items-center gap-2">
-          <Settings aria-hidden="true" className="size-6 text-cv-accent" />
+          <Settings aria-hidden="true" className="size-6 text-cv-accent max-lg:hidden" />
           הגדרות המערכת
         </span>
       }
     >
+      {/* A phone's Settings opens on whose they are, as a phone's own settings do. A wide
+          screen names the account in the sidebar's session controls instead. */}
+      {me.data == null ? null : (
+        <Card className={cx(settingsCardClasses, "flex items-center gap-3 lg:hidden")}>
+          <span
+            aria-hidden="true"
+            className="flex size-12 shrink-0 items-center justify-center rounded-pill bg-cv-accent text-cv-on-accent"
+          >
+            <User className="size-icon-lg" />
+          </span>
+          <span className="min-w-0 truncate text-body font-bold text-cv-text" dir="ltr">
+            {me.data.email}
+          </span>
+        </Card>
+      )}
       {/* One card per area - AI, display, account - instead of one long card. The two
           settings cards are one form with one save, so they come from `SettingsForm`. */}
       <QueryState
@@ -64,10 +86,13 @@ export const SettingsPage = () => {
           icon={KeyRound}
           title="חשבון"
         />
-        <ChangePasswordForm />
+        <PhoneFoldRow {...passwordFold.rowProps} icon={Lock} label="שינוי סיסמה" />
+        <div className={cx("max-lg:mt-3", passwordFold.panelProps.className)} id={passwordFold.panelProps.id}>
+          <ChangePasswordForm />
+        </div>
         {/* On a wide screen sign-out sits in the sidebar; a narrow screen's masthead keeps
-            only the wordmark and the new-job command, so it lives here instead. */}
-        <div className="mt-6 border-t border-cv-hairline pt-4 lg:hidden">
+            only the wordmark and the quick switcher, so it lives here instead. */}
+        <div className="mt-6 border-t border-cv-hairline pt-4 max-lg:mt-3 max-lg:pt-1 lg:hidden">
           <SignOutButton />
         </div>
       </Card>

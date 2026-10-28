@@ -27,9 +27,11 @@ import { DraftConflictDialog } from "../components/DraftConflictDialog";
 import { DraftContentSummary } from "../components/DraftContentSummary";
 import { DraftEditorNotices } from "../components/DraftEditorNotices";
 import { DraftEmptyState } from "../components/DraftEmptyState";
+import { DraftFitCard } from "../components/DraftFitCard";
 import { DraftHistoryControls } from "../components/DraftHistoryControls";
 import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
+import { DraftPreviewToggle } from "../components/DraftPreviewToggle";
 import { DraftProgress } from "../components/DraftProgress";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
 import { DraftTemplateControl } from "../components/DraftTemplateControl";
@@ -39,6 +41,7 @@ import { useDraftDocument } from "../api/queries";
 import { useDocumentCheck } from "../hooks/useDocumentCheck";
 import { useDraftEditing } from "../hooks/useDraftEditing";
 import { useRenderDocument } from "../hooks/useRenderDocument";
+import { draftFit } from "../model/draftFit";
 import { summarizeContent, summarizeSelection } from "../model/draftOverview";
 import { isEditable } from "../model/drafts.types";
 
@@ -331,6 +334,9 @@ export const DraftEditorPage = () => {
     return operation.failure_reason.claims.every((refused) => current.get(refused.claim_id) !== refused.text);
   }, [draft, operation]);
   const selection = useMemo(() => (draft === undefined ? undefined : summarizeSelection(draft)), [draft]);
+  /* The posting's requirements against the facts, from the analysis the projection
+     already carries - no read of its own. */
+  const fit = useMemo(() => (detail === undefined ? null : draftFit(detail)), [detail]);
 
   return (
     <div
@@ -356,6 +362,18 @@ export const DraftEditorPage = () => {
           )
         }
         measure="wide"
+        /* The phone's compact header, as the design draws it: the document as title, who
+           it is for under it, and the preview toggle where the desktop has its mode
+           switch. The stage bar stays, though the design drops it: with the approval
+           bar's back link gone on a phone, it is the one tap back to the analysis step. */
+        phoneHeader={{
+          action: draft === undefined ? undefined : <DraftPreviewToggle mode={mode} onModeChange={changeMode} />,
+          subtitle:
+            detail === undefined ? undefined : (
+              <span dir="auto">{`${detail.application.target_role} · ${detail.application.company}`}</span>
+            ),
+          title: "טיוטת קורות החיים",
+        }}
         stage="draft"
       >
         <QueryState
@@ -370,9 +388,17 @@ export const DraftEditorPage = () => {
 
         {detail === undefined ? null : (
           <>
+            {/* First in the step, as the design opens it: what the posting asks against
+                what the facts meet, before anything about the draft's own state. */}
+            {fit === null || draft === undefined ? null : <DraftFitCard fit={fit} />}
             {draft === undefined || content === undefined ? null : (
               <DraftProgress
-                actions={<DraftWorkspaceSwitch mode={mode} onModeChange={changeMode} />}
+                actions={
+                  /* On a phone the header's preview toggle is this switch. */
+                  <span className="max-lg:hidden">
+                    <DraftWorkspaceSwitch mode={mode} onModeChange={changeMode} />
+                  </span>
+                }
                 content={content}
                 detail={detail}
                 dirty={editing.dirty}

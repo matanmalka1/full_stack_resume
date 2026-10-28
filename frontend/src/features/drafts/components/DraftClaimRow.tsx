@@ -29,23 +29,48 @@ interface DraftClaimRowProps {
 }
 
 /* An icon button with its name in a tooltip: on sixty stacked rows spelled-out labels
-   were wider than the lines they acted on. */
+   were wider than the lines they acted on. On a phone it is the full touch target: a
+   finger has no hover to steady it, and five 32px icons in a row are a misplaced removal
+   waiting to happen.
+
+   `pill` is the short word a phone shows instead of the icon, for the two commands a
+   reader decides a line with - edit it or remove it. There a row shows one line at a time
+   and has the width for the words, and an unlabelled pencil and bin were the two icons
+   most often mistaken for each other. The accessible name stays `label` either way. */
 const RowAction = ({
   className,
   disabled,
   icon: Icon,
   label,
   onClick,
+  pill,
 }: {
   className?: string;
   disabled?: boolean;
   icon: LucideIcon;
   label: string;
   onClick: () => void;
+  pill?: string;
 }) => (
   <Tooltip label={label}>
-    <IconButton aria-label={label} disabled={disabled} onClick={onClick} size="sm" variant="quiet">
-      <Icon aria-hidden="true" className={cx("size-icon-md", className)} />
+    <IconButton
+      aria-label={label}
+      className={
+        pill === undefined
+          ? "max-lg:size-11"
+          : "max-lg:h-11 max-lg:w-auto max-lg:rounded-pill max-lg:border max-lg:border-cv-border max-lg:px-4 max-lg:text-support max-lg:font-semibold max-lg:text-cv-text"
+      }
+      disabled={disabled}
+      onClick={onClick}
+      size="sm"
+      variant="quiet"
+    >
+      <Icon aria-hidden="true" className={cx("size-icon-md", pill !== undefined && "max-lg:hidden", className)} />
+      {pill === undefined ? null : (
+        <span aria-hidden="true" className="lg:hidden">
+          {pill}
+        </span>
+      )}
     </IconButton>
   </Tooltip>
 );
@@ -199,7 +224,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
   return (
     <li
       className={cx(
-        "group/row flex scroll-mt-24 flex-col gap-2 py-3 first:pt-0 focus-visible:outline-offset-4",
+        "group/row flex scroll-mt-24 flex-col max-lg:scroll-mt-36 gap-2 py-3 first:pt-0 focus-visible:outline-offset-4",
         pending && "border-s-2 border-s-cv-blocker ps-3",
       )}
       id={`draft-claim-${claim.claim_id}`}
@@ -300,6 +325,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
             icon={editing ? Check : Pencil}
             label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
             onClick={toggleEditing}
+            pill={editing ? "סיום" : "עריכה"}
           />
           {regeneratable ? (
             <RowAction
@@ -315,6 +341,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
               icon={Trash2}
               label="הסרת השורה"
               onClick={() => setConfirmingRemoval(true)}
+              pill="הסרה"
             />
           )}
         </div>
@@ -372,6 +399,9 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
           headingId={`remove-claim-heading-${claim.claim_id}`}
           onClose={() => setConfirmingRemoval(false)}
           open={confirmingRemoval}
+          /* A two-answer question about one line, not a sheet of content: on a phone it
+             asks in the middle of the screen, over the row it is about. */
+          presentation="alert"
           title="הסרת השורה?"
         >
           <p dir="auto">השורה תוסר מהטיוטה. אפשר לבטל את ההסרה זמן קצר לאחר מכן.</p>

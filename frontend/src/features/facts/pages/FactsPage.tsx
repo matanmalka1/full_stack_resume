@@ -1,11 +1,12 @@
-import { useState } from "react";
-import { BookOpen, Plus } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { BookOpen, ChevronRight, Plus } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { routePaths } from "@/navigation/routePaths";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
+import { cx } from "@/ui/cx";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageShell } from "@/ui/PageShell";
 import { LiveRegion } from "@/ui/LiveRegion";
@@ -48,6 +49,10 @@ const factDetailLoading = (
   </div>
 );
 
+/* Below the large breakpoint, the width at which the pool and the fact stop standing side
+   by side. Mirrors Tailwind's `lg`. */
+const PHONE_QUERY = "(width < 64rem)";
+
 export const FactsPage = () => {
   const [filters, setFilters] = useState(emptyFactFilters);
   const [creating, setCreating] = useState(false);
@@ -63,6 +68,27 @@ export const FactsPage = () => {
   const poolEmpty = poolQuery.isSuccess && entries.length === 0;
   const sources = [...new Set(entries.map(({ fact }) => fact.source))];
   const tags = [...new Set(entries.flatMap(({ fact }) => fact.tags))];
+  const pendingCount = entries.filter(({ fact }) => fact.status === "pending").length;
+  /* On a phone the pool and the fact are two views of one screen, chosen by the address:
+     a `fact` in it shows that fact, none shows the pool. A wide screen draws both, and
+     opens the first fact when none is asked for; a phone opens nothing it was not asked
+     to. Only the layout differs - the address, the reads and the selection are the same. */
+  const factOpen = requestedId !== null;
+  const poolHref = (() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("fact");
+    next.delete("event");
+    const query = next.toString();
+    return query === "" ? routePaths.facts : `${routePaths.facts}?${query}`;
+  })();
+
+  /* Opening a fact from far down the pool would otherwise show it scrolled as far down
+     as the row was. A wide screen keeps its place: both halves are already in view. */
+  useEffect(() => {
+    if (globalThis.matchMedia?.(PHONE_QUERY).matches) globalThis.scrollTo?.({ top: 0 });
+    /* The effect reads nothing from the fact: it runs because the open fact changed. */
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+  }, [requestedId]);
   const selectFact = (factId: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("fact", factId);
@@ -70,148 +96,182 @@ export const FactsPage = () => {
     setSearchParams(next);
   };
 
+  /* An open fact is the phone's whole screen, as a record opened from a list is: the
+     pool's masthead - its title, its line and its add command - belongs to the pool view,
+     so it folds away there, still in the document for the route heading the shell focuses. */
   return (
-    <PageShell
-      description="יצירה, אישור, קידום ושיוך של עובדות המועמד. עובדה קנונית מתוקנת באמצעות עובדה מחליפה ואינה נערכת במקום."
-      measure="wide"
-      actions={
-        mutationsBlocked ? undefined : (
-          <Button onClick={() => setCreating(true)}>
-            <Plus aria-hidden="true" className="size-icon-md shrink-0" />
-            הוספת עובדה חדשה
-          </Button>
-        )
-      }
-      title={
-        <span className="inline-flex items-center gap-2">
-          <BookOpen aria-hidden="true" className="size-6 text-cv-accent" />
-          מאגר העובדות
-        </span>
-      }
-    >
-      {poolQuery.data?.outOfSyncCount ? (
-        <Callout role="alert" title="נמצאה אי־התאמה ביומן העובדות" tone="blocker">
-          יש לפנות למפעיל המערכת לבדיקת התקינות לפני קידום עובדות או שימוש בהן.
-        </Callout>
-      ) : null}
+    <div>
+      <PageShell
+        measure="wide"
+        phoneMasthead={factOpen ? "hidden" : "visible"}
+        /* A phone's heading row has room for the title and one square: the command keeps
+         its name for assistive tech and draws only its mark, and the description gives way
+         to one line, so the two still stand side by side. */
+        actions={
+          mutationsBlocked ? undefined : (
+            <Button className="max-lg:size-11 max-lg:rounded-surface max-lg:px-0" onClick={() => setCreating(true)}>
+              <Plus aria-hidden="true" className="size-icon-md shrink-0 max-lg:size-icon-lg" />
+              <span className="max-lg:sr-only">הוספת עובדה חדשה</span>
+            </Button>
+          )
+        }
+        description={
+          <>
+            <span className="max-lg:hidden">
+              יצירה, אישור, קידום ושיוך של עובדות המועמד. עובדה קנונית מתוקנת באמצעות עובדה מחליפה ואינה נערכת במקום.
+            </span>
+            <span className="lg:hidden">מה שקורות החיים נבנים ממנו</span>
+          </>
+        }
+        title={
+          <span className="inline-flex items-center gap-2">
+            <BookOpen aria-hidden="true" className="size-6 text-cv-accent max-lg:hidden" />
+            מאגר העובדות
+          </span>
+        }
+      >
+        {poolQuery.data?.outOfSyncCount ? (
+          <Callout role="alert" title="נמצאה אי־התאמה ביומן העובדות" tone="blocker">
+            יש לפנות למפעיל המערכת לבדיקת התקינות לפני קידום עובדות או שימוש בהן.
+          </Callout>
+        ) : null}
 
-      {mutationsBlocked ? null : (
-        <FactCreationDialog
-          formId="fact-creation-form"
-          headingId="fact-creation-heading"
-          intro={
-            <p className="text-support leading-6 text-cv-text-muted">
-              העובדה נוצרת במעמד ממתין. אישור וקידום למקור אמת הם פעולות נפרדות על העובדה שנוצרה.
-            </p>
-          }
-          onClose={() => setCreating(false)}
-          onCreated={selectFact}
-          open={creating}
-          reason="created from the candidate facts page"
-          submitLabel="יצירת עובדה ממתינה"
-          title="הוספת עובדה חדשה"
-        />
-      )}
+        {mutationsBlocked ? null : (
+          <FactCreationDialog
+            formId="fact-creation-form"
+            headingId="fact-creation-heading"
+            intro={
+              <p className="text-support leading-6 text-cv-text-muted">
+                העובדה נוצרת במעמד ממתין. אישור וקידום למקור אמת הם פעולות נפרדות על העובדה שנוצרה.
+              </p>
+            }
+            onClose={() => setCreating(false)}
+            onCreated={selectFact}
+            open={creating}
+            reason="created from the candidate facts page"
+            submitLabel="יצירת עובדה ממתינה"
+            title="הוספת עובדה חדשה"
+          />
+        )}
 
-      {/* An empty pool is one finding, said once. It used to draw the filter bar, a "0"
+        {/* An empty pool is one finding, said once. It used to draw the filter bar, a "0"
           count, and both halves of the split - the list saying nothing matched the filters
           and the detail saying to create a fact - so an empty pool read as two different
           empty states side by side, one of them blaming filters nobody had set. */}
-      {poolEmpty ? (
-        <EmptyState className="bg-cv-surface">
-          <p className="text-body text-cv-text">מאגר העובדות עדיין ריק.</p>
-          <p className="mt-1 text-support text-cv-text-muted">
-            עובדה חדשה נוצרת במעמד ממתין, ואחר כך מאושרת ומקודמת למקור אמת.
-          </p>
-          {mutationsBlocked ? null : (
-            <div className="mt-5 flex justify-center">
-              <Button onClick={() => setCreating(true)}>
-                <Plus aria-hidden="true" className="size-icon-md shrink-0" />
-                הוספת עובדה חדשה
-              </Button>
-            </div>
-          )}
-        </EmptyState>
-      ) : (
-        <>
-          {/* The count reads under the bar rather than inside it, as it does on the board.
+        {poolEmpty ? (
+          <EmptyState className="bg-cv-surface">
+            <p className="text-body text-cv-text">מאגר העובדות עדיין ריק.</p>
+            <p className="mt-1 text-support text-cv-text-muted">
+              עובדה חדשה נוצרת במעמד ממתין, ואחר כך מאושרת ומקודמת למקור אמת.
+            </p>
+            {mutationsBlocked ? null : (
+              <div className="mt-5 flex justify-center">
+                <Button onClick={() => setCreating(true)}>
+                  <Plus aria-hidden="true" className="size-icon-md shrink-0" />
+                  הוספת עובדה חדשה
+                </Button>
+              </div>
+            )}
+          </EmptyState>
+        ) : (
+          <>
+            {/* The count reads under the bar rather than inside it, as it does on the board.
               Sitting in the filter row it was the one thing there with no label above it and
               no control below it, so it took a field's slot while looking like neither. */}
-          <div className="flex flex-col gap-2">
-            <Card className="cv-fields-compact rounded-control bg-cv-surface p-3 shadow-surface sm:p-4">
-              <FactPoolFilters filters={filters} onChange={setFilters} sources={sources} tags={tags} />
-            </Card>
-            {/* Silent until there is something to count. While the read was in flight this
+            <div className={cx("flex flex-col gap-2", factOpen && "max-lg:hidden")}>
+              {/* On a phone the bar is not a panel: its field and chips sit on the canvas. */}
+              <Card className="cv-fields-compact rounded-control bg-cv-surface p-3 shadow-surface max-lg:border-0 max-lg:bg-transparent max-lg:p-0 sm:p-4">
+                <FactPoolFilters
+                  filters={filters}
+                  onChange={setFilters}
+                  pendingCount={pendingCount}
+                  sources={sources}
+                  tags={tags}
+                />
+              </Card>
+              {/* Silent until there is something to count. While the read was in flight this
                 said "0 עובדות" beside a skeleton of six rows - a number that was not a
                 finding, next to a placeholder saying the finding was still coming. */}
-            {poolQuery.isPending ? null : (
-              <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
-                {visible.length === entries.length
-                  ? `${entries.length} עובדות`
-                  : `${visible.length} מתוך ${entries.length}`}
-              </p>
-            )}
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-            <div className="lg:sticky lg:top-20 lg:self-start">
-              <QueryState
-                empty={!poolQuery.isPending && poolQuery.error === null && visible.length === 0}
-                emptyState={
-                  <EmptyState>
-                    <p>לא נמצאו עובדות התואמות למסננים.</p>
-                    <Button
-                      className="mt-4"
-                      onClick={() => setFilters(emptyFactFilters)}
-                      size="compact"
-                      variant="secondary"
-                    >
-                      ניקוי המסננים
-                    </Button>
-                  </EmptyState>
-                }
-                error={poolQuery.error}
-                errorTitle="לא ניתן לטעון את מאגר העובדות"
-                loading={poolQuery.isPending}
-                loadingState={factPoolLoading}
-              >
-                <FactPoolList
-                  entries={visible}
-                  factHref={(factId) => `${routePaths.facts}?fact=${encodeURIComponent(factId)}`}
-                  selectedFactId={selectedId}
-                />
-              </QueryState>
+              {poolQuery.isPending ? null : (
+                <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
+                  {visible.length === entries.length
+                    ? `${entries.length} עובדות`
+                    : `${visible.length} מתוך ${entries.length}`}
+                </p>
+              )}
             </div>
 
-            <Card
-              aria-live="polite"
-              className="rounded-control bg-cv-surface p-4 shadow-surface sm:p-5 lg:sticky lg:top-20 lg:h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-9rem)] lg:self-start lg:overflow-y-auto"
-              dir="ltr"
-            >
-              <div dir="rtl">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+              <div className={cx("lg:sticky lg:top-20 lg:self-start", factOpen && "max-lg:hidden")}>
                 <QueryState
-                  error={detailQuery.error}
-                  errorTitle="לא ניתן לטעון את פרטי העובדה"
-                  /* Also while the pool is in flight: nothing can be selected yet, so without
-                     this the detail half rendered an empty card beside the pool's skeleton and
-                     the two halves of one screen waited in two different ways. */
-                  loading={poolQuery.isPending || (detailQuery.isPending && selectedId !== null)}
-                  loadingState={factDetailLoading}
+                  empty={!poolQuery.isPending && poolQuery.error === null && visible.length === 0}
+                  emptyState={
+                    <EmptyState>
+                      <p>לא נמצאו עובדות התואמות למסננים.</p>
+                      <Button
+                        className="mt-4"
+                        onClick={() => setFilters(emptyFactFilters)}
+                        size="compact"
+                        variant="secondary"
+                      >
+                        ניקוי המסננים
+                      </Button>
+                    </EmptyState>
+                  }
+                  error={poolQuery.error}
+                  errorTitle="לא ניתן לטעון את מאגר העובדות"
+                  loading={poolQuery.isPending}
+                  loadingState={factPoolLoading}
                 >
-                  {detailQuery.data === undefined ? null : (
-                    <FactManagementDetail
-                      detail={detailQuery.data}
-                      mutationsBlocked={mutationsBlocked}
-                      onCreated={selectFact}
-                      selectedEventId={requestedEventId}
-                    />
-                  )}
+                  <FactPoolList
+                    entries={visible}
+                    factHref={(factId) => `${routePaths.facts}?fact=${encodeURIComponent(factId)}`}
+                    selectedFactId={selectedId}
+                  />
                 </QueryState>
               </div>
-            </Card>
-          </div>
-        </>
-      )}
-    </PageShell>
+
+              <Card
+                aria-live="polite"
+                className={cx(
+                  "rounded-control bg-cv-surface p-4 shadow-surface max-lg:border-0 max-lg:bg-transparent max-lg:p-0 sm:p-5 lg:sticky lg:top-20 lg:h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-9rem)] lg:self-start lg:overflow-y-auto",
+                  !factOpen && "max-lg:hidden",
+                )}
+                dir="ltr"
+              >
+                <div dir="rtl">
+                  {/* The phone's way back to the pool; a wide screen has the pool beside it. */}
+                  <Link
+                    aria-label="חזרה למאגר העובדות"
+                    className="-ms-2.5 mb-2 inline-flex size-11 items-center justify-center rounded-control text-cv-text hover:bg-cv-surface-muted lg:hidden"
+                    to={poolHref}
+                  >
+                    <ChevronRight aria-hidden="true" className="size-icon-lg" />
+                  </Link>
+                  <QueryState
+                    error={detailQuery.error}
+                    errorTitle="לא ניתן לטעון את פרטי העובדה"
+                    /* Also while the pool is in flight: nothing can be selected yet, so without
+                     this the detail half rendered an empty card beside the pool's skeleton and
+                     the two halves of one screen waited in two different ways. */
+                    loading={poolQuery.isPending || (detailQuery.isPending && selectedId !== null)}
+                    loadingState={factDetailLoading}
+                  >
+                    {detailQuery.data === undefined ? null : (
+                      <FactManagementDetail
+                        detail={detailQuery.data}
+                        mutationsBlocked={mutationsBlocked}
+                        onCreated={selectFact}
+                        selectedEventId={requestedEventId}
+                      />
+                    )}
+                  </QueryState>
+                </div>
+              </Card>
+            </div>
+          </>
+        )}
+      </PageShell>
+    </div>
   );
 };
