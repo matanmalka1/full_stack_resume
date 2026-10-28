@@ -56,7 +56,8 @@ export { ReasonCallout, ReasonDetails } from "./components/ReasonCallout";
    against its own draft; and the one way to record a fact for a requirement nothing
    supports, which the analysis step's rows offer too. */
 export { documentRequirements } from "./model/documentRequirements";
-export { RequirementFactAction } from "./components/RequirementFactAction";export {
+export { RequirementFactAction } from "./components/RequirementFactAction";
+export {
   actionDescription,
   actionLabel,
   preparationStateIcons,

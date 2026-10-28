@@ -45,10 +45,7 @@ const importancePriority: Record<RequirementImportance, number> = {
 const linkedFactIds = (outline: DocumentOutline): Set<string> =>
   new Set(outlineClaims(outline).flatMap((claim) => claim.fact_ids));
 
-const requirementDocumentState = (
-  requirement: Requirement,
-  linked: ReadonlySet<string>,
-): RequirementDocumentState =>
+const requirementDocumentState = (requirement: Requirement, linked: ReadonlySet<string>): RequirementDocumentState =>
   requirement.supportingFactIds.length === 0
     ? "no_facts"
     : requirement.supportingFactIds.some((factId) => linked.has(factId))
