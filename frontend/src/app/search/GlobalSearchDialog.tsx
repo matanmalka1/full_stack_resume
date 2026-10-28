@@ -121,7 +121,10 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
       // `open:flex` only: an unconditional `flex` would override the closed dialog's `display: none`.
       // Centred by `inset-x-0 mx-auto`: with a fixed width in RTL, `left` loses to the UA's `right: 0`.
       aria-label="מעבר מהיר למועמדות"
-      className="fixed inset-x-0 top-24 bottom-auto mx-auto my-0 hidden open:flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm"
+      // Below the large breakpoint it is the whole screen, as a phone's own search is: the
+      // field pinned at the top with a cancel beside it, then the results and the new-job
+      // row after them, scrolling as one column.
+      className="fixed inset-x-0 top-24 bottom-auto mx-auto my-0 hidden open:flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm max-lg:inset-0 max-lg:h-dvh max-lg:max-h-none max-lg:w-full max-lg:max-w-none max-lg:rounded-none max-lg:border-0 max-lg:pt-[env(safe-area-inset-top)] max-lg:overflow-y-auto max-lg:pb-[env(safe-area-inset-bottom)] max-lg:shadow-none"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -136,46 +139,56 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
       }}
       ref={dialogRef}
     >
-      <div className="flex items-center gap-3 border-b border-cv-border px-4 py-3">
-        <Search aria-hidden="true" className="size-icon-lg shrink-0 text-cv-accent" />
-        <input
-          aria-activedescendant={
-            activeItem === undefined || results.isPending || results.isError ? undefined : optionId(activeItem)
-          }
-          aria-autocomplete="list"
-          aria-controls={LISTBOX_ID}
-          aria-expanded={items.length > 0 && !results.isPending && !results.isError}
-          aria-label="חיפוש מועמדות"
-          autoComplete="off"
-          className="flex-1 bg-transparent text-body font-medium text-cv-text placeholder:text-cv-text-muted focus:ring-0"
-          dir="auto"
-          id="global-search-input"
-          name="global-search"
-          onChange={(event) => updateSearch(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="חברה, תפקיד או מילת מפתח…"
-          ref={inputRef}
-          role="combobox"
-          type="text"
-          value={search}
-        />
-        {search === "" ? null : (
-          <IconButton
-            aria-label="ניקוי חיפוש"
-            onClick={() => {
-              updateSearch("");
-              inputRef.current?.focus();
-            }}
-            size="sm"
-            variant="quiet"
-          >
-            <X aria-hidden="true" className="size-icon-md" />
-          </IconButton>
-        )}
-        <Kbd className="hidden bg-cv-surface-muted text-cv-text-muted sm:inline-block">ESC</Kbd>
+      {/* On a phone the field is drawn as a rounded box of its own, with the cancel
+          outside it - the box is the wrapper below, which dissolves from `lg`. */}
+      <div className="flex items-center gap-3 border-b border-cv-border px-4 py-3 max-lg:sticky max-lg:top-0 max-lg:z-(--cv-z-content-raised) max-lg:gap-2 max-lg:bg-cv-surface max-lg:py-3.5">
+        <div className="contents max-lg:flex max-lg:min-h-12 max-lg:min-w-0 max-lg:flex-1 max-lg:items-center max-lg:gap-2 max-lg:rounded-surface max-lg:border-[1.5px] max-lg:border-cv-accent max-lg:px-3">
+          <Search
+            aria-hidden="true"
+            className="size-icon-lg shrink-0 text-cv-accent max-lg:size-icon-md max-lg:text-cv-text-muted"
+          />
+          <input
+            aria-activedescendant={
+              activeItem === undefined || results.isPending || results.isError ? undefined : optionId(activeItem)
+            }
+            aria-autocomplete="list"
+            aria-controls={LISTBOX_ID}
+            aria-expanded={items.length > 0 && !results.isPending && !results.isError}
+            aria-label="חיפוש מועמדות"
+            autoComplete="off"
+            className="flex-1 bg-transparent text-body font-medium text-cv-text placeholder:text-cv-text-muted focus:ring-0"
+            dir="auto"
+            id="global-search-input"
+            name="global-search"
+            onChange={(event) => updateSearch(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="חברה, תפקיד או מילת מפתח…"
+            ref={inputRef}
+            role="combobox"
+            type="text"
+            value={search}
+          />
+          {search === "" ? null : (
+            <IconButton
+              aria-label="ניקוי חיפוש"
+              onClick={() => {
+                updateSearch("");
+                inputRef.current?.focus();
+              }}
+              size="sm"
+              variant="quiet"
+            >
+              <X aria-hidden="true" className="size-icon-md" />
+            </IconButton>
+          )}
+        </div>
+        <Kbd className="hidden bg-cv-surface-muted text-cv-text-muted lg:inline-block">ESC</Kbd>
+        <button className="min-h-11 shrink-0 px-1 font-bold text-cv-text lg:hidden" onClick={onClose} type="button">
+          ביטול
+        </button>
       </div>
 
-      <div className="max-h-[60vh] overflow-y-auto p-2">
+      <div className="max-h-[60vh] overflow-y-auto p-2 max-lg:max-h-none max-lg:shrink-0 max-lg:overflow-visible max-lg:px-3">
         <ResultsStatus results={results} />
         <LiveRegion>{announcement(results)}</LiveRegion>
 
@@ -242,16 +255,20 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-cv-border bg-cv-surface-muted/60 px-4 py-2.5 text-support text-cv-text-muted">
+      {/* On a phone the footer is no bar: "new job" becomes a dashed row at the end of the
+          results, an offer in the list's own shape, and the keyboard hints fold away. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-cv-border bg-cv-surface-muted/60 px-4 py-2.5 text-support text-cv-text-muted max-lg:border-t-0 max-lg:bg-transparent max-lg:px-3 max-lg:pt-1 max-lg:pb-4">
         <button
-          className="inline-flex items-center gap-1.5 font-medium text-cv-accent hover:underline"
+          className="inline-flex items-center gap-1.5 font-medium text-cv-accent hover:underline max-lg:min-h-16 max-lg:w-full max-lg:gap-3 max-lg:rounded-surface max-lg:border max-lg:border-dashed max-lg:border-cv-border-strong max-lg:px-3.5 max-lg:text-body max-lg:font-bold max-lg:text-cv-text max-lg:hover:no-underline"
           onClick={() => {
             onClose();
             void navigate(routePaths.newApplication);
           }}
           type="button"
         >
-          <Plus aria-hidden="true" className="size-icon-sm" />
+          <span className="contents max-lg:flex max-lg:size-9 max-lg:items-center max-lg:justify-center max-lg:rounded-control max-lg:bg-cv-accent max-lg:text-cv-on-accent">
+            <Plus aria-hidden="true" className="size-icon-sm max-lg:size-icon-md" />
+          </span>
           משרה חדשה
         </button>
 
@@ -273,7 +290,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           </button>
         ) : null}
 
-        <div className="hidden items-center gap-2 sm:flex">
+        <div className="hidden items-center gap-2 lg:flex">
           <span>ניווט במקשים:</span>
           <Kbd className="bg-cv-surface px-1 py-0">↑↓</Kbd>
           <span>לבחירה:</span>

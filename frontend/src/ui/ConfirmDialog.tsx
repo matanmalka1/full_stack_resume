@@ -13,6 +13,9 @@ interface ConfirmDialogProps {
   confirmVariant?: Extract<ButtonVariant, "primary" | "destructive">;
   /* Passed through to `Dialog`: false where Escape must not stand for either answer. */
   dismissible?: boolean;
+  /* Passed through to `Dialog`: "stack" puts the two answers one per line on a phone, for
+     answers whose labels are too long to share a row. */
+  footerLayout?: "row" | "stack";
   headingId: string;
   /* The question's subject as an icon, shown in a tile over the title on a phone. A
      destructive question draws its tile filled, so the one that cannot be undone does not
@@ -39,6 +42,7 @@ export const ConfirmDialog = ({
   confirmLabel,
   confirmVariant = "primary",
   dismissible,
+  footerLayout,
   headingId,
   icon,
   onCancel,
@@ -50,6 +54,7 @@ export const ConfirmDialog = ({
 }: ConfirmDialogProps) => (
   <Dialog
     dismissible={dismissible}
+    footerLayout={footerLayout}
     footer={
       <>
         <Button onClick={onCancel} variant="secondary">

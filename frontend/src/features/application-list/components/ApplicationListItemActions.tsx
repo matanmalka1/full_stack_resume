@@ -26,7 +26,8 @@ export const reportedOperation = (item: ApplicationListItem) => {
    any text-size utility on a button, and the items that are buttons take the menu's
    inherited size whatever their class says. The items that are links would take the
    utility and read a size smaller. Every item inheriting keeps the menu one size. */
-const menuItemBase = "flex min-h-8 w-full items-center gap-2 px-3 py-1.5 text-start font-normal transition-colors";
+const menuItemBase =
+  "flex min-h-8 w-full items-center gap-2 px-3 py-1.5 text-start font-normal transition-colors max-lg:min-h-12 max-lg:gap-3 max-lg:px-5";
 const menuItemClasses = `${menuItemBase} text-cv-text hover:bg-cv-surface-muted`;
 
 export const ApplicationRecordActions = ({
@@ -73,7 +74,10 @@ export const ApplicationRecordActions = ({
     /* Open, the menu's container rises to the dropdown layer: every record's container
        shares the raised layer, so a later record's trigger would otherwise paint over it. */
     <div
-      className={cx("relative shrink-0", open ? "z-(--cv-z-sticky)" : "z-(--cv-z-content-raised)")}
+      className={cx(
+        "relative shrink-0",
+        open ? "z-(--cv-z-sticky) max-lg:z-(--cv-z-overlay)" : "z-(--cv-z-content-raised)",
+      )}
       ref={containerRef}
     >
       <Tooltip label="פעולות נוספות">
@@ -90,9 +94,19 @@ export const ApplicationRecordActions = ({
           <EllipsisVertical aria-hidden="true" className="size-icon-md" />
         </IconButton>
       </Tooltip>
+      {/* Below the large breakpoint the menu is an action sheet: pinned to the bottom edge
+          over a dimmed page, full width, under a handle and the record's name, its items
+          thumb-sized rows. It stays the same menu - same items, same keys, same focus -
+          so only its placement changes. The scrim is part of the container, so a tap on
+          it is not an outside pointer; it closes the sheet by its own click. */}
+      {open ? (
+        // Escape and the menu's own items are the keyboard's ways out; this is the pointer's.
+        // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+        <div aria-hidden="true" className="fixed inset-0 bg-cv-scrim lg:hidden" onClick={() => setOpen(false)} />
+      ) : null}
       {open ? (
         <div
-          className="absolute end-0 top-full z-(--cv-z-sticky) mt-1.5 w-52 divide-y divide-cv-border rounded-surface border border-cv-border bg-cv-surface-raised py-1 text-start text-support shadow-floating"
+          className="absolute end-0 top-full z-(--cv-z-sticky) mt-1.5 w-52 rounded-surface border border-cv-border bg-cv-surface-raised py-1 text-start text-support shadow-floating max-lg:fixed max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:mt-0 max-lg:w-auto max-lg:rounded-t-sheet max-lg:rounded-b-none max-lg:border-x-0 max-lg:border-b-0 max-lg:px-2 max-lg:pt-0 max-lg:pb-[calc(env(safe-area-inset-bottom)+0.75rem)] max-lg:text-body max-lg:shadow-overlay"
           id={menuId}
           onKeyDown={(event) => {
             if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -110,6 +124,12 @@ export const ApplicationRecordActions = ({
           role="menu"
           tabIndex={-1}
         >
+          <div aria-hidden="true" className="lg:hidden">
+            <div className="mx-auto mt-2 h-1.5 w-10 rounded-pill bg-cv-border" />
+            <p className="px-5 pt-3 pb-2 text-support font-bold text-cv-text-muted" dir="auto">
+              ניהול מועמדות: {item.company}
+            </p>
+          </div>
           {/* Two groups, as in demo_re: the ways into the record, then the two that end
               it. The ending pair keeps the blocker tone; nothing else here is coloured. */}
           <div className="py-0.5">
@@ -162,7 +182,7 @@ export const ApplicationRecordActions = ({
               עדכון סטטוס ומשימות
             </button>
           </div>
-          <div className="py-0.5">
+          <div className="border-t border-cv-border py-0.5">
             {item.is_closed ? null : (
               <button
                 aria-label={`סגירת המועמדות ${item.company}`}

@@ -16,6 +16,10 @@ interface ViewSwitchProps<TValue extends string> {
   onChange: (value: TValue) => void;
   options: readonly ViewSwitchOption<TValue>[];
   showLabels?: boolean;
+  /* Below the large breakpoint the switch spans its row as a segmented control, every
+     option an equal segment with its label drawn beside its icon - the board's
+     cards/stages choice on a phone. From the large breakpoint it is the compact switch. */
+  stretch?: boolean;
   value: TValue;
 }
 
@@ -27,12 +31,15 @@ export const ViewSwitch = <TValue extends string>({
   onChange,
   options,
   showLabels = false,
+  stretch = false,
   value,
 }: ViewSwitchProps<TValue>) => {
   return (
     <div
       aria-label={label}
-      className={surfaceClasses("inline-flex gap-1 bg-cv-surface-muted p-1 shadow-inner")}
+      className={surfaceClasses(
+        cx("inline-flex gap-1 bg-cv-surface-muted p-1 shadow-inner", stretch && "max-lg:flex max-lg:w-full"),
+      )}
       // A non-form group of toggle buttons; role="group" is the ARIA authoring-practices
       // pattern here, and none of the suggested native tags (fieldset, etc.) fit.
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
@@ -52,6 +59,8 @@ export const ViewSwitch = <TValue extends string>({
                 ? "inline-flex items-center gap-1.5 px-3 text-support font-semibold"
                 : "p-2",
               active ? "bg-cv-surface text-cv-accent shadow-surface" : "text-cv-text-muted hover:bg-cv-surface-muted",
+              stretch &&
+                "max-lg:inline-flex max-lg:flex-1 max-lg:items-center max-lg:justify-center max-lg:gap-1.5 max-lg:px-3 max-lg:text-support max-lg:font-bold",
             )}
             key={option.value}
             onClick={() => onChange(option.value)}
@@ -61,8 +70,10 @@ export const ViewSwitch = <TValue extends string>({
             {Icon === undefined ? null : <Icon aria-hidden="true" className="size-icon-md" />}
             {Icon === undefined ? (
               option.label
-            ) : showLabels ? (
-              <span className="hidden sm:inline">{option.label}</span>
+            ) : showLabels || stretch ? (
+              <span className={cx("hidden", showLabels && "sm:inline", stretch && "max-lg:inline")}>
+                {option.label}
+              </span>
             ) : null}
           </button>
         );
