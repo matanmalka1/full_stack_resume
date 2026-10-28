@@ -17,6 +17,7 @@
   --cv-shadow-edge: light-dark(transparent, rgb(255 255 255 / 0.08));
   --cv-shadow-medium: light-dark(rgb(33 37 41 / 0.4), rgb(0 0 0 / 0.9));
   --cv-shadow-strong: light-dark(rgb(33 37 41 / 0.45), rgb(0 0 0 / 0.95));
+  --cv-shadow-faint: light-dark(rgb(33 37 41 / 0.05), rgb(0 0 0 / 0.4));
   --cv-spacing-unit: 0.25rem;
   --cv-z-content-raised: 10;
   --cv-z-sticky: 20;
@@ -140,6 +141,10 @@
   --text-heading-md--line-height: 1.35;
   --text-heading-lg: 2.25rem;
   --text-heading-lg--line-height: 1.15;
+  /* A route's title on desktop (PageHeading at the large breakpoint): one step below the
+     sign-in screen's display size, above every section heading. */
+  --text-heading-page: 1.875rem;
+  --text-heading-page--line-height: 1.2;
 
   /* A.2 spacing: 4px base, so the 8/12/16/24/32px gaps are 2/3/4/6/8. */
   --spacing: 0.25rem;
@@ -161,6 +166,9 @@
      `surface`: a sheet spans the whole width, and a card's radius on it reads as square. */
   --radius-sheet: 1.5rem;
   --shadow-surface: none;
+  /* A content card on the canvas (`Card variant="raised"`): enough to lift a white panel
+     off the grey ground, nowhere near the floating shadows below. */
+  --shadow-card: 0 0 0 1px var(--cv-shadow-edge), 0 1px 2px var(--cv-shadow-faint);
   --shadow-floating: 0 0 0 1px var(--cv-shadow-edge), 0 18px 40px -24px var(--cv-shadow-medium);
   --shadow-overlay: 0 0 0 1px var(--cv-shadow-edge), 0 28px 70px -24px var(--cv-shadow-strong);
   --shadow-document: 0 0 0 1px var(--cv-shadow-edge), 0 24px 56px -32px var(--cv-shadow-strong);
