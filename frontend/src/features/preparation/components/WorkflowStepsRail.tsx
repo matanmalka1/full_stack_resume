@@ -106,10 +106,7 @@ const StepBody = ({ index, phone, step }: { index: number; phone: PhoneLayout; s
     {phone === "segments" ? (
       <span
         aria-hidden="true"
-        className={cx(
-          "h-1 w-full rounded-pill lg:hidden",
-          step.state === "upcoming" ? "bg-cv-border" : "bg-cv-accent",
-        )}
+        className={cx("h-1 w-full rounded-pill lg:hidden", step.state === "upcoming" ? "bg-cv-border" : "bg-cv-accent")}
       />
     ) : null}
     {/* Below the large breakpoint the spine is a row of marks across the top of the

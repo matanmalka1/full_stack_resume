@@ -83,7 +83,9 @@ export const AnalysisStatusBanner = ({
   return (
     <Callout
       className={
-        verdict ? "max-lg:border-cv-accent max-lg:bg-cv-accent max-lg:shadow-floating max-lg:**:text-cv-on-accent" : undefined
+        verdict
+          ? "max-lg:border-cv-accent max-lg:bg-cv-accent max-lg:shadow-floating max-lg:**:text-cv-on-accent"
+          : undefined
       }
       emphasis="banner"
       title={title}

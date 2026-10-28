@@ -139,7 +139,8 @@ export const PreparationWorkflowSteps = ({
     <div
       className={cx(
         "flex flex-col gap-2",
-        !intake && "max-lg:grid max-lg:grid-cols-[auto_minmax(0,1fr)_auto] max-lg:items-center max-lg:gap-x-2 max-lg:gap-y-3",
+        !intake &&
+          "max-lg:grid max-lg:grid-cols-[auto_minmax(0,1fr)_auto] max-lg:items-center max-lg:gap-x-2 max-lg:gap-y-3",
       )}
     >
       <Link

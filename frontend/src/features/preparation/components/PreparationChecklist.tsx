@@ -83,7 +83,10 @@ export const PreparationChecklist = ({ detail }: { detail: ApplicationDetail }) 
             >
               <span
                 aria-hidden="true"
-                className={cx("flex size-6 shrink-0 items-center justify-center rounded-pill border", markClasses[state])}
+                className={cx(
+                  "flex size-6 shrink-0 items-center justify-center rounded-pill border",
+                  markClasses[state],
+                )}
               >
                 {state === "done" ? <Check className="size-icon-sm [stroke-width:var(--stroke-icon-strong)]" /> : null}
                 {state === "current" ? <span className="size-2.5 rounded-pill bg-cv-accent" /> : null}
@@ -91,7 +94,11 @@ export const PreparationChecklist = ({ detail }: { detail: ApplicationDetail }) 
               <span
                 className={cx(
                   "min-w-0 flex-1 text-support",
-                  state === "current" ? "font-bold text-cv-text" : state === "done" ? "text-cv-text" : "text-cv-text-muted",
+                  state === "current"
+                    ? "font-bold text-cv-text"
+                    : state === "done"
+                      ? "text-cv-text"
+                      : "text-cv-text-muted",
                 )}
               >
                 {row.label}
