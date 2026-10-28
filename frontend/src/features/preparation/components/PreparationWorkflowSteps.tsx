@@ -1,4 +1,5 @@
 import { ArrowRight, ChevronRight, X } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
@@ -21,6 +22,24 @@ import {
    the context carried a page's claim to a component that same page renders. A screen
    outside the workflow now shows no landmark by rendering none, instead of publishing
    `none` to reset what the previous screen left behind. */
+/* What a step adds to its compact header on a phone. Every part is optional: a step that
+   passes nothing gets the role as its title, the company under it and the stage bar. */
+export interface PhoneHeader {
+  /* One trailing control - an overflow menu, the draft's preview toggle. Rendered below
+     the large breakpoint only, so it must not repeat a control the step already shows on
+     a phone. Give it a 44px target and an accessible name; it is usually icon-only. */
+  action?: ReactNode;
+  /* Whether the stage bar is drawn under the title. A step whose own body already says
+     where the work stands (the Application's checklist) can drop it. Default true. */
+  bar?: boolean;
+  /* Leads the title with the company's initial in a tile, as the Application screen's
+     design does. */
+  mark?: boolean;
+  /* Replace the default subtitle (the company) or title (the role). */
+  subtitle?: ReactNode;
+  title?: ReactNode;
+}
+
 interface PreparationWorkflowStepsProps {
   /* Absent while the record naming the Application has not loaded: no stage has a
      destination yet, so the bar is an indicator until one does. */
@@ -32,7 +51,10 @@ interface PreparationWorkflowStepsProps {
      projection: the screen open is a fact the reader can see, and the chip must agree with
      it even while the projection is mid-refetch. */
   stage: WorkflowStage;
+  phoneHeader?: PhoneHeader;
 }
+
+const NO_PHONE_HEADER: PhoneHeader = {};
 
 const stepsFor = (
   stage: WorkflowStage,
@@ -67,7 +89,12 @@ const stepsFor = (
   });
 };
 
-export const PreparationWorkflowSteps = ({ applicationId, detail, stage }: PreparationWorkflowStepsProps) => {
+export const PreparationWorkflowSteps = ({
+  applicationId,
+  detail,
+  phoneHeader = NO_PHONE_HEADER,
+  stage,
+}: PreparationWorkflowStepsProps) => {
   const { pathname } = useLocation();
 
   const destinations = applicationId === undefined ? {} : workflowDestinations(applicationId, detail);
@@ -95,14 +122,26 @@ export const PreparationWorkflowSteps = ({ applicationId, detail, stage }: Prepa
      only unique destination was the board, so that is what is left: a way out of the
      wizard, not a level above it. It returns to the board as the reader left it, filters
      and all. */
-  /* On a phone the way out is an icon beside the stage bar, the compact header an app's
-     inner screen has. The new-job screen draws it as a close mark instead: nothing has been
-     created yet, so leaving is cancelling rather than going back. Its name stays the same
+  /* On a phone the step's top is the compact header an app's inner screen has: the way out
+     as a chevron, who the CV is for as the title, an optional trailing action, and the
+     stage bar under them. The new-job screen draws the way out as a close mark instead -
+     nothing has been created yet, so leaving is cancelling rather than going back - and
+     keeps its numbered stepper under the page's own heading. The link's name is the same
      words either way. */
   const intake = stage === "intake";
+  const company = detail?.application.company;
+  const role = detail?.application.target_role;
+  const title = phoneHeader.title ?? role ?? workflowStageLabels[stage];
+  const subtitle = phoneHeader.subtitle ?? company;
+  const initial = company?.trim().charAt(0);
 
   return (
-    <div className={cx("flex flex-col gap-2", !intake && "max-lg:flex-row max-lg:items-center max-lg:gap-1")}>
+    <div
+      className={cx(
+        "flex flex-col gap-2",
+        !intake && "max-lg:grid max-lg:grid-cols-[auto_minmax(0,1fr)_auto] max-lg:items-center max-lg:gap-x-2 max-lg:gap-y-3",
+      )}
+    >
       <Link
         className="inline-flex min-h-11 w-fit shrink-0 items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text max-lg:min-w-11 max-lg:justify-center max-lg:px-0 max-lg:text-cv-text"
         state={boardReturnState(applicationId)}
@@ -117,7 +156,37 @@ export const PreparationWorkflowSteps = ({ applicationId, detail, stage }: Prepa
         <span className="max-lg:sr-only">חזרה ללוח המועמדויות</span>
       </Link>
 
-      <WorkflowStepsRail label="שלבי הכנת קורות החיים" phone={intake ? "marks" : "segments"} steps={located} />
+      {/* Drawn for sighted readers only: the page's heading and its eyebrow, which say the
+          same in words, stay in the document for assistive tech and route focus. */}
+      {intake ? null : (
+        <div aria-hidden="true" className="flex min-w-0 items-center gap-3 lg:hidden">
+          {phoneHeader.mark === true && initial !== undefined && initial !== "" ? (
+            <span
+              className="flex size-12 shrink-0 items-center justify-center rounded-surface border border-cv-border bg-cv-surface text-heading-sm font-extrabold text-cv-text"
+              dir="auto"
+            >
+              {initial}
+            </span>
+          ) : null}
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-heading-sm leading-6 font-extrabold text-cv-text" dir="auto">
+              {title}
+            </span>
+            {subtitle === undefined ? null : (
+              <span className="truncate text-support text-cv-text-muted" dir="auto">
+                {subtitle}
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+      {intake || phoneHeader.action === undefined ? null : (
+        <div className="flex shrink-0 items-center lg:hidden">{phoneHeader.action}</div>
+      )}
+
+      <div className={cx(!intake && "max-lg:col-span-3", phoneHeader.bar === false && "max-lg:hidden")}>
+        <WorkflowStepsRail label="שלבי הכנת קורות החיים" phone={intake ? "marks" : "segments"} steps={located} />
+      </div>
     </div>
   );
 };

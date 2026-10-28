@@ -1,3 +1,5 @@
+import { RefreshCw } from "lucide-react";
+
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 interface BuildFromAnalysisDialogProps {
@@ -26,6 +28,7 @@ export const BuildFromAnalysisDialog = ({
     confirmLabel="בנייה מחדש מהניתוח החדש"
     dismissible={false}
     headingId="build-from-analysis-heading"
+    icon={<RefreshCw aria-hidden="true" />}
     onCancel={onClose}
     onConfirm={onConfirm}
     open={open}

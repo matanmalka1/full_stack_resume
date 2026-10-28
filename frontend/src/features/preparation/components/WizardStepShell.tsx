@@ -6,7 +6,7 @@ import { CommitBarTargetContext } from "@/ui/CommitBar";
 import { StatusSlotTargetContext } from "@/ui/StatusSlot";
 import { WideRowTargetContext } from "@/ui/WideRow";
 import { type WorkflowStage, workflowStageLabels } from "../model/workflowStages";
-import { PreparationWorkflowSteps } from "./PreparationWorkflowSteps";
+import { type PhoneHeader, PreparationWorkflowSteps } from "./PreparationWorkflowSteps";
 
 interface WizardStepShellProps {
   /* Absent on intake, where the Application does not exist yet, and while the record
@@ -47,6 +47,14 @@ interface WizardStepShellProps {
      chip: an in-flight edit can make the projection dip to an earlier state than the
      screen the reader is looking at, and the chip must not chase that back and forth. */
   stage: WorkflowStage;
+  /* What the step adds to its compact phone header - a trailing action, a different title
+     or subtitle, the company's initial, or no stage bar. See `PhoneHeader`. */
+  phoneHeader?: PhoneHeader;
+  /* Whether the page's own heading stays in view on a phone. "compact" (the default on
+     every step after intake) leaves the header above to name the step, and keeps the
+     heading for assistive tech and route focus only; "full" keeps the heading and its
+     description visible under the header, as the Ready screen's design does. */
+  phoneHeading?: "compact" | "full";
   /* Only where the record does not actually meet its stage - an approved document that is
      not deliverable is not "מוכן למסירה", and saying so in the heading is a distinction
      worth keeping. Everything else takes the stage's own name. */
@@ -68,6 +76,8 @@ export const WizardStepShell = ({
   detail,
   eyebrow,
   measure = "wide",
+  phoneHeader,
+  phoneHeading = "compact",
   queryError,
   stage,
   title,
@@ -76,6 +86,8 @@ export const WizardStepShell = ({
   const [commitBarTarget, setCommitBarTarget] = useState<HTMLDivElement | null>(null);
   const [wideRowTarget, setWideRowTarget] = useState<HTMLDivElement | null>(null);
   const [statusTarget, setStatusTarget] = useState<HTMLDivElement | null>(null);
+
+  const intake = stage === "intake";
 
   if (queryError !== null && queryError !== undefined) {
     return children;
@@ -101,18 +113,27 @@ export const WizardStepShell = ({
           ) : undefined
         }
         description={description}
-        eyebrow={eyebrow}
-        landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} stage={stage} />}
+        /* The phone header names who the CV is for, so the eyebrow saying it again stays
+           for assistive tech only there. */
+        eyebrow={eyebrow === undefined || intake ? eyebrow : <span className="max-lg:sr-only">{eyebrow}</span>}
+        landmark={
+          <PreparationWorkflowSteps
+            applicationId={applicationId}
+            detail={detail}
+            phoneHeader={phoneHeader}
+            stage={stage}
+          />
+        }
         measure={measure}
         title={
+          /* On a compact phone header the stage bar above already names the step, so the
+             heading stays for assistive tech and route focus only. A page's own title - a
+             stage its record does not actually meet - says something the bar does not,
+             and stays in view. */
           title ??
-          (stage === "intake" ? (
+          (intake || phoneHeading === "full" ? (
             workflowStageLabels[stage]
           ) : (
-            /* On a phone the stage bar above already names the step, in the place the
-               design's compact header gives it, so the heading stays for assistive tech
-               and route focus only. A page's own title - a stage its record does not
-               actually meet - says something the bar does not, and stays in view. */
             <span className="max-lg:sr-only">{workflowStageLabels[stage]}</span>
           ))
         }
