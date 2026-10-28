@@ -8,7 +8,7 @@ import { cx } from "./cx";
 
 /* One step of the trail above a record's heading. The last step is the page itself and
    takes no `to`; every step before it is a link back up the trail. */
-export interface PageShellCrumb {
+interface PageShellCrumb {
   label: ReactNode;
   /* Router state carried by the link, e.g. the board's return state. */
   state?: unknown;
