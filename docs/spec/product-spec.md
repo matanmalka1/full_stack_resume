@@ -330,6 +330,16 @@ basis moves.
 
 Warnings never block. Anything that needs a decision is a blocker or review reason.
 
+The content check also reports writing-style warnings, deterministically
+(`cv_engine/domain/writing_style.py`): `em-dash` (an em dash or `--` in a paragraph,
+bullet, or item), `long-bullet` (a bullet over 35 words), `repeated-opener` (three or
+more bullets under one heading opening with the same word), and `mixed-date-formats`
+(date lines writing months in more than one way: `Jan 2020`, `01/2020`, `2020-01`). In
+English documents only: `weak-opener` (a bullet opening "Responsible for", "Helped
+with", "Worked on", and the like) and `first-person` (I, me, my). Date formats are read
+as displayed, so a Hebrew month name counts as the `MM/YYYY` it is shown as; year-only
+lines are not counted.
+
 Approval is an explicit user action that stamps `approved_basis` and `approved_at`.
 
 Each document renders in a template: the track's own (`development_ltr`, `sales_ltr`,
