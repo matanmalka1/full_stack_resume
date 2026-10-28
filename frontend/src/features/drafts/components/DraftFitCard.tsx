@@ -1,5 +1,7 @@
 import { CircleAlert } from "lucide-react";
 
+import { cx } from "@/ui/cx";
+
 import type { DraftFit } from "../model/draftFit";
 
 /* How well the posting is answered, kept in view while the lines that answer it are
@@ -9,13 +11,18 @@ import type { DraftFit } from "../model/draftFit";
    a line knows which requirement is still open without going back a step to look. Nothing
    here gates anything - a gap is shown, not enforced, exactly as on the analysis step.
 
-   On a phone it opens the step. From the large breakpoint it is the step grid's end
-   column beside the workspace (see the page's `bodyClassName`), pinned while the lines
-   scroll past it - the `!` overrides the grid's default of spanning both columns. */
-export const DraftFitCard = ({ fit }: { fit: DraftFit }) => (
+   On a phone it opens the step. From the large breakpoint, `beside` makes it the step
+   grid's end column next to the workspace (see the page's `bodyClassName`), pinned while
+   the lines scroll past it - the `!` overrides the grid's default of spanning both
+   columns. Without it, it opens the step there too, across the full width: the split
+   workspace needs the row's whole width for the lines and the document. */
+export const DraftFitCard = ({ beside, fit }: { beside: boolean; fit: DraftFit }) => (
   <section
     aria-labelledby="draft-fit-heading"
-    className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface p-card-padding lg:sticky lg:top-6 lg:order-1 lg:col-span-1! lg:col-start-2! lg:border-cv-hairline lg:shadow-card"
+    className={cx(
+      "flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface p-card-padding lg:border-cv-hairline lg:shadow-card",
+      beside && "lg:sticky lg:top-6 lg:order-1 lg:col-span-1! lg:col-start-2!",
+    )}
   >
     <div className="flex items-baseline justify-between gap-3">
       <h2 className="text-support font-semibold text-cv-text-muted" id="draft-fit-heading">

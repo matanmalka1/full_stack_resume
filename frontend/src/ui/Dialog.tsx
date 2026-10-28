@@ -209,12 +209,14 @@ export const Dialog = ({
               )}
             </div>
           </div>
-          {/* A confirmation is closed by its own two answers at every width, as both
-              designs draw it; Escape still cancels it. */}
-          {dismissible && sheet ? (
+          {/* A sheet always has its ×. A confirmation is answered by its own two buttons,
+              and on a phone that is all it draws; on a wide screen it keeps the × it always
+              had, so a reader who reaches for the corner still finds a way out. Escape
+              cancels either. */}
+          {dismissible ? (
             <IconButton
               aria-label="סגירה"
-              className="-me-2 -mt-1 text-cv-text-muted hover:text-cv-text"
+              className={cx("-me-2 -mt-1 text-cv-text-muted hover:text-cv-text", !sheet && "max-lg:hidden")}
               onClick={onClose}
             >
               <svg aria-hidden="true" className="size-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -516,7 +516,17 @@ export const OperationOverlay = ({
         {...(failure === null
           ? {}
           : {
-              description: <>{heading} · הפעולה לא בוצעה</>,
+              /* The status word tells a failure from a cancellation or an interruption,
+                 as the report's callout did. A phone's design line leaves it out, so
+                 there it is for assistive tech only. */
+              description: (
+                <>
+                  {heading} · הפעולה לא בוצעה
+                  {record === undefined ? null : (
+                    <span className="max-lg:sr-only"> · {statusLabels[record.status]}</span>
+                  )}
+                </>
+              ),
               icon: (
                 <span className="flex size-16 items-center justify-center rounded-pill bg-cv-accent text-cv-on-accent">
                   <TriangleAlert className="size-7" />
