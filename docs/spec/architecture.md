@@ -381,7 +381,9 @@ pages (`Renderer.measure_pages`, product-spec §10): the composed HTML without t
 stamp, rendered in a temporary directory and discarded. It runs in the Operation's
 prepare, outside any database scope, and is not a render Operation, so it does not take
 the render slot. A measurement that fails is reported on the Operation as
-`page_fit.status = unavailable`; it never fails the draft.
+`page_fit.status = unavailable`; it never fails the draft. The editor's page count
+(`GET …/document/page-count`) is the same measurement, run in the API process for the
+owner's current content; a failed measurement is `pages: null`, never an error.
 
 Rotating JSON logs under `logs_root`: `server.jsonl` (API) and `operations.jsonl`
 (worker). Tracebacks go only to files. The API console logs one line per request

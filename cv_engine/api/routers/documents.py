@@ -42,6 +42,7 @@ from ..schemas.documents import (
     DocumentActionRequest,
     DocumentCheckResponse,
     DocumentMutationResponse,
+    DocumentPageCountResponse,
     DocumentResponse,
     PreviewTemplateParameter,
     RegenerateDocumentClaimRequest,
@@ -180,6 +181,25 @@ def preview_document_pdf(application_id: str, services: Services, actor: Current
             "ETag": document_etag(result.document_hash),
         },
     )
+
+
+@router.get(
+    "/page-count",
+    response_model=DocumentPageCountResponse,
+    summary="Count the pages the document's current content takes in its template",
+)
+def document_page_count(
+    application_id: str, services: Services, actor: CurrentActor, response: Response
+) -> DocumentPageCountResponse:
+    """`200` with the count and the Profile's limit; `412` before content exists.
+
+    Measured by the browser the render uses, so the client asks once per saved version.
+    Nothing is stored.
+    """
+    result = services.rendering.document_page_count(actor, application_id)
+    response.headers["ETag"] = document_etag(result.document_hash)
+    response.headers["Cache-Control"] = "no-store"
+    return DocumentPageCountResponse.model_validate(result.model_dump(mode="json"))
 
 
 @router.post(

@@ -13,13 +13,17 @@ when it answers and refuses anything that is not Ready at that moment.
 
 from __future__ import annotations
 
+import math
+from typing import cast
 from urllib.parse import unquote
 
 from api_harness import MUTATION_HEADERS
+from fake_renderer import PageCountingRenderer, evidence_lines
 from helpers import stored_document
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.api.responses import content_disposition
+from cv_engine.application.errors import InfrastructureFailure
 
 
 def _post(harness, path: str, body: dict | None = None, **headers):
@@ -274,3 +278,48 @@ def test_every_template_previews_over_the_sample_cv(api_worker) -> None:
         assert _get(api_worker, f"/templates/track/sample?language={language}").status_code == 200
     assert _get(api_worker, "/templates/nope/sample").status_code == 422
     assert _get(api_worker, "/templates/latex/sample?language=fr").status_code == 422
+
+
+def test_the_page_count_measures_the_current_content_against_its_limit(
+    api_worker, document_created, drafted_application
+) -> None:
+    """The editor's overflow hint: the render's measurement, stored nowhere."""
+    empty = document_created("Page Count Empty Co")
+    before_content = _get(api_worker, f"/applications/{empty.application_id}/document/page-count")
+    assert before_content.status_code == 412, before_content.text
+
+    setup = drafted_application("Page Count Co")
+    path = f"/applications/{setup.application_id}/document/page-count"
+    renderer = cast(PageCountingRenderer, api_worker.services.rendering.renderer)
+    document = stored_document(setup.services, setup.application_id)
+    assert document.content is not None
+    lines = evidence_lines(document.content)
+    renderer.claims_per_page = math.ceil(lines / 3)
+    renderer.measured.clear()
+
+    response = _get(api_worker, path)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["maximum"] in {1, 2}
+    assert body == {
+        "application_id": setup.application_id,
+        "document_id": document.id,
+        "document_hash": setup.document_hash,
+        "template": None,
+        "pages": math.ceil(lines / renderer.claims_per_page),
+        "maximum": body["maximum"],
+    }
+    assert response.headers["ETag"] == f'"{setup.document_hash}"'
+    assert response.headers["Cache-Control"] == "no-store"
+    assert renderer.measured == [lines]
+    # Nothing was stored.
+    assert stored_document(setup.services, setup.application_id).document_hash == (
+        setup.document_hash
+    )
+
+    # A measurement that fails is a missing count, not an error.
+    renderer.failure = InfrastructureFailure("no browser here")
+    unmeasured = _get(api_worker, path)
+    assert unmeasured.status_code == 200, unmeasured.text
+    assert unmeasured.json()["pages"] is None

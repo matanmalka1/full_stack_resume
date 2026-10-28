@@ -19,6 +19,7 @@ from .narrowing import (
 )
 from .views_prep import (
     BuiltWithView,
+    DocumentPageCountView,
     DocumentPdfPreviewView,
     DocumentPreviewView,
     DocumentView,
@@ -64,6 +65,7 @@ __all__ = (
     "BuiltWithView",
     "CLOSED_RECRUITMENT_STATUSES",
     "ContentCheck",
+    "DocumentPageCountView",
     "DocumentPdfPreviewView",
     "DocumentPreviewView",
     "DocumentView",

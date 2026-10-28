@@ -3,6 +3,7 @@ import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { invalidateApplicationViews } from "./applications";
 import { type ApiPath, apiRequest } from "./client";
 import type {
+  ApiSchemas,
   BuildFromAnalysisRequest,
   ClaimAddition,
   ClaimPatch,
@@ -107,6 +108,22 @@ export const documentPreviewPdfHref = (applicationId: string, documentHash: stri
    render from being answered by a cached earlier file; the server ignores it. */
 export const documentPdfHref = (applicationId: string, documentHash: string): string =>
   `${documentPath(applicationId, "/pdf")}?v=${encodeURIComponent(documentHash)}`;
+
+export type DocumentPageCount = ApiSchemas["DocumentPageCountResponse"];
+
+/* How many pages the saved content takes in its own template, and its Profile's limit.
+   The server measures it with the browser the render uses, so each request costs a
+   Chromium launch: it is keyed by the hash and never goes stale, so one saved version is
+   measured once, and the caller asks only for a hash that has settled. `pages` is null
+   when the server could not measure. */
+export const documentPageCountQueryOptions = (applicationId: string, documentHash: string) =>
+  queryOptions({
+    queryKey: ["document-page-count", applicationId, documentHash] as const,
+    queryFn: async ({ signal }): Promise<DocumentPageCount> =>
+      (await apiRequest<DocumentPageCount>(documentPath(applicationId, "/page-count"), { signal })).data,
+    staleTime: Infinity,
+    retry: false,
+  });
 
 export interface DocumentPatch {
   claim_edits: ClaimPatch[];

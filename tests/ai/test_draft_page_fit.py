@@ -32,7 +32,7 @@ from cv_engine.application.operations import (
     RejectedClaimReview,
 )
 from cv_engine.application.services.drafts import authoring
-from cv_engine.domain.drafts import draft_claims
+from cv_engine.domain.drafts import draft_claims, drop_claims
 from cv_engine.domain.page_fit import next_trim
 from cv_engine.domain.render_validation import page_limit
 from cv_engine.infrastructure.persistence.tables import operations
@@ -128,7 +128,7 @@ def test_an_overflowing_draft_is_trimmed_until_it_fits_and_says_what_went(
     assert report is not None and report.status == "trimmed"
     assert report.maximum == maximum
     assert report.pages is not None and report.pages <= maximum
-    assert 1 <= len(report.trimmed) <= 2
+    assert len(report.trimmed) == 2
     held = _content_ids(ai_services, application_id)
     for line in report.trimmed:
         assert line.claim_id not in held
@@ -138,11 +138,58 @@ def test_an_overflowing_draft_is_trimmed_until_it_fits_and_says_what_went(
     assert stored.page_fit == report
 
 
-def test_measurement_stops_at_its_cap_and_writes_the_most_trimmed_draft(
+def _drop_order(services, application_id: str) -> int:
+    """How many lines the page-fit rule could drop from the frame, one after another."""
+    actor = actor_of(services)
+    knowledge = services.drafts.load_knowledge(actor)
+    profile = knowledge.profiles.get(
+        services.drafts.document_source(actor, application_id).analysis.profile
+    )
+    current, count = composed_content(services, application_id), 0
+    while (claim_id := next_trim(current, profile, knowledge.facts)) is not None:
+        current = drop_claims(current, profile, {claim_id})
+        count += 1
+    return count
+
+
+def _fits_after(services, application_id: str, drops: int) -> None:
+    """Set the page size so the frame fits after exactly `drops` lines, and not before."""
+    lines = evidence_lines(composed_content(services, application_id))
+    maximum = _maximum(services, application_id)
+    per_page = math.ceil((lines - drops) / maximum)
+    assert math.ceil((lines - drops + 1) / per_page) > maximum
+    _renderer(services).claims_per_page = per_page
+
+
+def test_a_draft_needing_many_drops_drops_the_fewest_that_fit(ai_services, fake_openai) -> None:
+    application_id = _analyzed(ai_services)
+    frame_lines = evidence_lines(composed_content(ai_services, application_id))
+    # More drops than one measurement per drop could reach within the cap.
+    drops = authoring.MAX_PAGE_MEASUREMENTS + 1
+    assert _drop_order(ai_services, application_id) > drops
+    _fits_after(ai_services, application_id, drops)
+    fake_openai.script_draft()
+
+    completed = _create_draft(ai_services, application_id)
+
+    assert completed.status is OperationStatus.SUCCEEDED, completed.safe_failure_detail
+    report = completed.page_fit
+    assert report is not None and report.status == "trimmed"
+    assert len(report.trimmed) == drops
+    assert report.pages is not None and report.pages <= report.maximum
+    assert len(_renderer(ai_services).measured) <= authoring.MAX_PAGE_MEASUREMENTS
+    content = stored_document(ai_services, application_id).content
+    assert content is not None and evidence_lines(content) == frame_lines - drops
+    held = _content_ids(ai_services, application_id)
+    assert not {line.claim_id for line in report.trimmed} & held
+
+
+def test_a_draft_that_never_fits_is_written_with_every_droppable_line_gone(
     ai_services, fake_openai
 ) -> None:
     application_id = _analyzed(ai_services)
     frame_lines = evidence_lines(composed_content(ai_services, application_id))
+    droppable = _drop_order(ai_services, application_id)
     _renderer(ai_services).claims_per_page = 1
     fake_openai.script_draft()
 
@@ -151,12 +198,35 @@ def test_measurement_stops_at_its_cap_and_writes_the_most_trimmed_draft(
     assert completed.status is OperationStatus.SUCCEEDED, completed.safe_failure_detail
     report = completed.page_fit
     assert report is not None and report.status == "over"
-    assert len(_renderer(ai_services).measured) == authoring.MAX_PAGE_MEASUREMENTS
-    assert len(report.trimmed) == authoring.MAX_PAGE_MEASUREMENTS - 1
+    assert len(_renderer(ai_services).measured) <= authoring.MAX_PAGE_MEASUREMENTS
+    assert len(report.trimmed) == droppable
+    content = stored_document(ai_services, application_id).content
+    assert content is not None
+    assert evidence_lines(content) == frame_lines - droppable
+    assert report.pages == evidence_lines(content)
+
+
+def test_a_measurement_failing_after_a_fit_keeps_the_fit_found(ai_services, fake_openai) -> None:
+    application_id = _analyzed(ai_services)
+    frame_lines = evidence_lines(composed_content(ai_services, application_id))
+    droppable = _drop_order(ai_services, application_id)
+    # The search's first probe drops half the order, and fits; the next one fails.
+    _fits_after(ai_services, application_id, 1)
+    renderer = _renderer(ai_services)
+    renderer.failure = InfrastructureFailure("browser crashed")
+    renderer.fail_from = 3
+    fake_openai.script_draft()
+
+    completed = _create_draft(ai_services, application_id)
+
+    assert completed.status is OperationStatus.SUCCEEDED, completed.safe_failure_detail
+    report = completed.page_fit
+    assert report is not None and report.status == "trimmed"
+    assert len(report.trimmed) == (droppable + 1) // 2
+    assert len(renderer.measured) == 3
     content = stored_document(ai_services, application_id).content
     assert content is not None
     assert evidence_lines(content) == frame_lines - len(report.trimmed)
-    assert report.pages == evidence_lines(content)
 
 
 def test_a_draft_with_nothing_left_to_drop_is_reported_over(
