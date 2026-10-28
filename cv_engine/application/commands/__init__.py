@@ -8,6 +8,13 @@ importers name one place, as they did when this was a single 751-line module.
 from __future__ import annotations
 
 from ._base import BoundaryDTO, DuplicateMatchReason, WriteClient
+from .gap_questions import (
+    AskGapQuestionsCommand,
+    DraftGapFactCommand,
+    GapQuestionSetView,
+    GapQuestionState,
+    GapQuestionView,
+)
 from .knowledge import (
     ConfirmAndUseFactResult,
     FactAttachmentProfileTarget,
@@ -129,4 +136,9 @@ __all__ = [
     "FactReconciliationResult",
     "ReconciliationResult",
     "fact_event_view",
+    "AskGapQuestionsCommand",
+    "DraftGapFactCommand",
+    "GapQuestionSetView",
+    "GapQuestionState",
+    "GapQuestionView",
 ]

@@ -24,6 +24,8 @@ from ...domain.contracts.providers import (
     ClaimProposal,
     ClaimSupportProposal,
     DraftProposal,
+    FactDraftProposal,
+    GapQuestionsProposal,
     SectionProposal,
 )
 from ...domain.contracts.validation import ValidationReport
@@ -216,8 +218,38 @@ class RegenerateClaimContext(StrictModel):
     instruction: str = ""
 
 
+class GapQuestionsContext(StrictModel):
+    """`propose_gap_questions`: the requirements to ask about, and what is already known.
+
+    Each requirement carries its text, importance, coverage, the analysis' account
+    of what is missing, and the meaning of the facts the analysis cited for it, so a
+    question can ask for what is missing rather than for what the user already said.
+    """
+
+    language: str
+    track: str
+    requirements: list[dict[str, Any]]
+
+
+class FactFromAnswerContext(StrictModel):
+    """`draft_fact_from_answer`: one question, the user's answer, and the fact shape.
+
+    `answer` is the only source of content. `tag_vocabulary` is every tag the user's
+    facts already use; `examples` show how existing facts in the same source are
+    worded, for shape only.
+    """
+
+    language: str
+    track: str
+    requirement: str
+    question: str
+    answer: str
+    tag_vocabulary: list[str]
+    examples: list[dict[str, Any]] = []
+
+
 class AIProvider(Protocol):
-    """The five contracted AI tasks, as the application declares them.
+    """The contracted AI tasks, as the application declares them.
 
     One method per task rather than one `run(task, payload)`, because the
     tasks take different inputs and return different Proposal types, and a
@@ -273,3 +305,19 @@ class AIProvider(Protocol):
         model: str | None = None,
         reasoning_effort: str | None = None,
     ) -> AIAttempt[ClaimProposal]: ...
+
+    def propose_gap_questions(
+        self,
+        context: GapQuestionsContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIAttempt[GapQuestionsProposal]: ...
+
+    def draft_fact_from_answer(
+        self,
+        context: FactFromAnswerContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIAttempt[FactDraftProposal]: ...

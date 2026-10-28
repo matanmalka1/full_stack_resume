@@ -23,7 +23,9 @@ from ...actor import Actor
 from ...commands import (
     AnalysisResult,
     AnalyzeCommand,
+    AskGapQuestionsCommand,
     DraftCommand,
+    DraftGapFactCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
@@ -31,6 +33,7 @@ from ...commands import (
 from ...errors import (
     ApplicationError,
     InfrastructureFailure,
+    LineageBroken,
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
@@ -56,6 +59,12 @@ from ..analysis.service import AnalysisService
 from ..documents import load_knowledge
 from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation
+from ..gap_questions import (
+    GapQuestionActivation,
+    GapQuestionService,
+    PreparedGapFact,
+    PreparedGapQuestions,
+)
 from ..rendering import ExecutedRender, RenderingService
 from .failures import failure_code_for, failure_reason_for, safe_failure_detail_for
 from .service import draft_operation_request
@@ -386,6 +395,94 @@ class RegenerationOperationHandler(DraftTaskHandler):
         except StateConflict as exc:
             raise SourceChanged("The CV document changed before regeneration activated.") from exc
         return _document_output(result.document_id)
+
+
+class GapQuestionsOperationHandler(AITaskHandler):
+    """`ask_gap_questions`: bound to the analysis it reads; writes only new questions."""
+
+    def __init__(self, service: GapQuestionService, activation: GapQuestionActivation):
+        self.service = service
+        self.activation = activation
+
+    @staticmethod
+    def _command(operation: PersistedOperation) -> AskGapQuestionsCommand:
+        return AskGapQuestionsCommand.model_validate(operation.payload)
+
+    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
+        try:
+            self.activation.verify_question_sources(tx, owner(operation), self._command(operation))
+        except (UnknownRecord, StateConflict, LineageBroken) as exc:
+            raise SourceChanged("The analysis or its Application changed.") from exc
+
+    def execute(self, operation, still_owned) -> PreparedOperation:
+        if not still_owned():
+            return PreparedOperation()
+        try:
+            return self.prepared(
+                self.service.prepare_questions(
+                    owner(operation),
+                    self._command(operation),
+                    operation_id=operation.id,
+                    still_owned=still_owned,
+                )
+            )
+        except ApplicationError as exc:
+            raise self._classified(operation, exc) from exc
+
+    def activate(self, tx: WriteTransaction, operation, prepared):
+        if not isinstance(prepared.value, PreparedGapQuestions):
+            raise TypeError("gap question handler received an invalid prepared value")
+        identifiers = self.activation.activate_questions(
+            tx, owner(operation), self._command(operation), prepared.value, operation.id
+        )
+        return tuple(
+            OperationOutputReference(output_type="gap_question", output_id=identifier)
+            for identifier in identifiers
+        )
+
+
+class GapFactOperationHandler(AITaskHandler):
+    """`draft_gap_fact`: one pending fact and the answer beside it, or nothing."""
+
+    def __init__(self, service: GapQuestionService, activation: GapQuestionActivation):
+        self.service = service
+        self.activation = activation
+
+    @staticmethod
+    def _command(operation: PersistedOperation) -> DraftGapFactCommand:
+        return DraftGapFactCommand.model_validate(operation.payload)
+
+    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
+        try:
+            self.activation.verify_answer_sources(tx, owner(operation), self._command(operation))
+        except (UnknownRecord, StateConflict, LineageBroken) as exc:
+            raise SourceChanged("The question was answered or skipped meanwhile.") from exc
+
+    def execute(self, operation, still_owned) -> PreparedOperation:
+        if not still_owned():
+            return PreparedOperation()
+        try:
+            return self.prepared(
+                self.service.prepare_fact(
+                    owner(operation),
+                    self._command(operation),
+                    operation_id=operation.id,
+                    still_owned=still_owned,
+                )
+            )
+        except ApplicationError as exc:
+            raise self._classified(operation, exc) from exc
+
+    def activate(self, tx: WriteTransaction, operation, prepared):
+        if not isinstance(prepared.value, PreparedGapFact):
+            raise TypeError("gap fact handler received an invalid prepared value")
+        try:
+            fact_id = self.activation.activate_fact(
+                tx, owner(operation), self._command(operation), prepared.value, operation.id
+            )
+        except StateConflict as exc:
+            raise SourceChanged("The question or the facts changed before activation.") from exc
+        return (OperationOutputReference(output_type="fact", output_id=fact_id),)
 
 
 def _render_failure(

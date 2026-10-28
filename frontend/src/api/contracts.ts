@@ -117,3 +117,9 @@ export type FactTransitionRequest = ApiSchemas["FactTransitionRequest"];
 export type AttachFactRequest = ApiSchemas["AttachFactRequest"];
 export type ConfirmAndUseFactRequest = ApiSchemas["ConfirmAndUseFactRequest"];
 export type ConfirmAndUseFact = ApiSchemas["ConfirmAndUseFactResponse"];
+export type EditPendingFactRequest = ApiSchemas["EditPendingFactRequest"];
+/* §13a: the newest question set asked about the Application's newest analysis, each
+   question with its outcome. */
+export type GapQuestionSet = ApiSchemas["GapQuestionSetResponse"];
+export type GapQuestion = ApiSchemas["GapQuestionResponse"];
+export type FactDraftReason = ApiSchemas["FactDraftReason"];

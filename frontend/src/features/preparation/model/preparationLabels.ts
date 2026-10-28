@@ -32,6 +32,7 @@ export const preparationStateTones: Record<PreparationState, Tone> = {
 const actionLabels: Record<string, string> = {
   analyze: "ניתוח המשרה",
   edit_matching_configuration: "עריכת הגדרות ההתאמה",
+  ask_gap_questions: "שאלות על פערים",
   build_from_analysis: "בנייה מחדש מהניתוח החדש",
   confirm_and_use_fact: "אישור עובדה ושימוש בה",
   create_draft: "יצירת טיוטה",
@@ -54,6 +55,7 @@ export const actionLabel = (action: string): string => actionLabels[action] ?? a
 const actionDescriptions: Record<string, string> = {
   analyze: "קריאת דרישות המשרה ובדיקה אילו עובדות מאושרות עונות עליהן.",
   edit_matching_configuration: "עדכון הגדרות ההתאמה לפני יצירת הטיוטה.",
+  ask_gap_questions: "שאלות על דרישות שלא כוסו, כדי לתעד ניסיון אמיתי שלא נרשם עדיין כעובדה.",
   build_from_analysis: "קיים ניתוח חדש יותר מזה שהמסמך בנוי עליו, ואפשר לבנות ממנו את המסמך מחדש.",
   confirm_and_use_fact: "עובדה ממתינה לאישור לפני שאפשר להשתמש בה בטיוטה.",
   create_draft: "יצירת טיוטה ראשונה: ה־AI בוחר עובדות מאושרות ומנסח אותן.",
@@ -81,6 +83,7 @@ const blockedReasonLabels: Record<string, string> = {
   PENDING_FACT_REQUIRES_RESOLUTION: "יש טענה בלי עובדה מאושרת מאחוריה.",
   FACT_DELETED_REQUIRES_RESOLUTION: "הטיוטה נשענת על עובדה שנמחקה.",
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "צריך לאשר שזו מועמדות כפולה.",
+  GAP_QUESTIONS_IN_PROGRESS: "השאלות על הפערים מנוסחות כרגע.",
 };
 
 export const blockedReasonLabel = (reason: string): string | null => blockedReasonLabels[reason] ?? null;

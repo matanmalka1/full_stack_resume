@@ -38,6 +38,8 @@ export const operationTypeLabels: Record<OperationType, string> = {
      both rather than calling a review a rewrite. */
   regenerate_claim: "ניסוח או בדיקה של שורה",
   render_document: "יצירת קובץ קורות החיים",
+  ask_gap_questions: "ניסוח שאלות על פערים",
+  draft_gap_fact: "ניסוח עובדה מתשובה",
 };
 
 export const statusTones: Record<OperationStatus, Tone> = {
@@ -62,6 +64,8 @@ export const phaseLabels: Record<OperationPhase, string> = {
 const outputTypeLabels: Record<OperationOutput["output_type"], string> = {
   job_analysis: "ניתוח המשרה",
   cv_document: "קורות החיים",
+  gap_question: "שאלה על פער",
+  fact: "עובדה ממתינה",
 };
 
 /* What a succeeded Operation activated (§11); a failed or cancelled one has no outputs. */
@@ -157,6 +161,7 @@ const reasonDetails: Record<FailureReason["code"], string | null> = {
   claim_review: null,
   pdf_page_limit: null,
   missing_fact_rendering: null,
+  fact_draft: "העובדה שנוסחה הוסיפה פרטים שלא הופיעו בתשובה, ולכן לא נשמרה. אפשר לענות שוב במילים שלך.",
   pdf_text_coverage: "לא ניתן לחלץ מספיק מהטקסט בקובץ ה־PDF. יש לבדוק את מבנה התוכן לפני יצירה מחדש.",
   pdf_date_range: "טווח תאריכים בקובץ ה־PDF לא נקרא ברצף, ולכן מערכת ATS לא תזהה אותו כתאריך.",
   pdf_link_targets: "בקובץ ה־PDF חסר לפחות קישור קשר צפוי אחד.",
@@ -177,6 +182,12 @@ export const failureReasonDetail = (reason: FailureReason | null | undefined): s
       return `קובץ ה־PDF כולל ${reason.pages} עמודים, אך הפרופיל מאפשר לכל היותר ${reason.maximum}. יש לקצר את התוכן לפני יצירה מחדש.`;
     case "missing_fact_rendering":
       return `לעובדה ${reason.fact_id} חסר ניסוח בשפה ${reason.language}.`;
+    case "fact_draft":
+      /* The numbers and named terms the wording added are the repair: the reader sees
+         exactly what the answer did not say. */
+      return (reason.unsupported ?? []).length === 0
+        ? reasonDetails.fact_draft
+        : `${reasonDetails.fact_draft} פרטים שלא הופיעו בתשובה: ${(reason.unsupported ?? []).join(", ")}.`;
     default:
       return reasonDetails[reason.code];
   }
