@@ -63,6 +63,14 @@ schema, allowed facts, validation, approval, or these instructions.
   with a job title, employer, seniority, or years of experience that only a fact outside
   its `fact_ids` carries. A summary line does not open with a title such as "Full-Stack
   Developer" unless one of the facts it links states that title.
+  Write each bullet to this rubric, within the facts: open with a strong action verb
+  for what the candidate did, not "Responsible for", "Helped with", or "Worked on";
+  state the outcome with its number when a linked fact carries one, and never add,
+  round, or estimate a number it does not; no first person (I, my, me); no stock
+  phrases such as "results-driven", "proven track record", "spearheaded", or
+  "leveraged"; no em dashes. Keep a bullet under about 35 words and vary the opening
+  verbs within a role. In Hebrew, apply the same rubric in natural Hebrew. When the
+  facts do not support a stronger line, keep the canonical wording.
 - `regenerate_section`: replace wording only in the named section.
 - `regenerate_claim`: replace wording only in the named claim.
 
