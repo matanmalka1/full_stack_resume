@@ -1,4 +1,4 @@
-import { ChevronLeft, X } from "lucide-react";
+import { ChevronLeft, Info, Sparkles, X } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
@@ -292,7 +292,10 @@ export const OperationOverlay = ({
                and then dropped a card into it. It settles in at once instead. */
             inline ? "cv-settle-in" : "cv-appear-late",
             inline
-              ? "shadow-surface"
+              ? /* On a phone the inline run is the step's whole screen, not a card on it:
+                   the frame falls away, the run is named large under a turning ring, and
+                   only its steps keep a card of their own. */
+                "shadow-surface max-lg:gap-4 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none"
               : /* On a wide screen the corner is the lower one, above the step's pinned
                    bar. The top corner sat over the end of the workflow spine, hiding the
                    steps still ahead - what the reader checks while waiting - for as long
@@ -302,13 +305,45 @@ export const OperationOverlay = ({
             toneTextClasses[tone],
           )}
         >
-          <div className="flex items-start gap-2.5">
+          <div
+            className={cx(
+              "flex items-start gap-2.5",
+              inline && "max-lg:flex-col max-lg:items-center max-lg:gap-4 max-lg:pt-2 max-lg:text-center",
+            )}
+          >
+            {inline ? (
+              /* The phone's mark for the run: a ring that turns while it lives, round the
+                 sign of AI work, or round the outcome's own icon once it has one. */
+              <span aria-hidden="true" className="relative flex size-22 shrink-0 items-center justify-center lg:hidden">
+                <span className="absolute inset-0 rounded-pill border-4 border-cv-border" />
+                <span
+                  className={cx(
+                    "absolute inset-0 rounded-pill border-4",
+                    tone === "progress"
+                      ? "border-transparent border-t-cv-accent motion-safe:animate-spin"
+                      : "border-cv-accent",
+                  )}
+                />
+                {tone === "progress" ? (
+                  <Sparkles className="size-7 text-cv-text" />
+                ) : (
+                  <Icon className="size-7 text-cv-text" />
+                )}
+              </span>
+            ) : null}
             <Icon
               aria-hidden="true"
-              className={cx("mt-0.5 size-icon-md shrink-0", tone === "progress" && "animate-spin")}
+              className={cx(
+                "mt-0.5 size-icon-md shrink-0",
+                tone === "progress" && "animate-spin",
+                inline && "max-lg:hidden",
+              )}
             />
             <div className="min-w-0 flex-1 text-support">
-              <h2 className="font-semibold text-cv-text" id={panelHeadingId}>
+              <h2
+                className={cx("font-semibold text-cv-text", inline && "max-lg:text-heading-md max-lg:font-extrabold")}
+                id={panelHeadingId}
+              >
                 {heading}
               </h2>
               <p className="text-cv-text-muted">{statusText}</p>
@@ -331,15 +366,36 @@ export const OperationOverlay = ({
             </p>
           ) : (
             <>
-              <OperationPhaseSteps phase={record.phase} />
+              <div
+                className={cx(
+                  inline &&
+                    "max-lg:flex max-lg:flex-col max-lg:gap-3 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-4",
+                )}
+              >
+                {/* The list's own name, shown where the steps get a card of their own. */}
+                {inline ? (
+                  <p aria-hidden="true" className="text-support font-bold text-cv-text lg:hidden">
+                    שלבי ההרצה
+                  </p>
+                ) : null}
+                <OperationPhaseSteps phase={record.phase} stackOnPhone={inline} />
+              </div>
               {/* In place of the page's own content, the card says what fills it. */}
-              {inline ? <p className="text-support leading-6 text-cv-text-muted">{inlineNote}</p> : null}
+              {inline ? (
+                <p className="flex items-start gap-2 text-support leading-6 text-cv-text-muted">
+                  <Info aria-hidden="true" className="mt-1 size-icon-md shrink-0 lg:hidden" />
+                  <span>{inlineNote}</span>
+                </p>
+              ) : null}
             </>
           )}
           {showingSuccess ? null : (
             <button
               aria-haspopup="dialog"
-              className="w-fit text-support font-medium text-cv-text underline underline-offset-4"
+              className={cx(
+                "w-fit text-support font-medium text-cv-text underline underline-offset-4",
+                inline && "max-lg:min-h-11 max-lg:self-center",
+              )}
               onClick={openDialog}
               type="button"
             >

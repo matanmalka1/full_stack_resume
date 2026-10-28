@@ -234,8 +234,11 @@ export const ApplicationPage = () => {
                 comment above says it should. */}
             {viewState === "content" || viewState === "analysis_failed" ? (
               <WideRow>
-                <div className="flex flex-col gap-2 border-t border-cv-border pt-5">
-                  <p className="text-support font-semibold text-cv-text-muted">חומר עזר</p>
+                {/* On a phone the rule and the quiet heading give way to a card row of its
+                    own, the shape every folded section on a phone's screen takes, so the
+                    posting reads as one tap away rather than as a footnote under the step. */}
+                <div className="flex flex-col gap-2 border-t border-cv-border pt-5 max-lg:border-t-0 max-lg:pt-0">
+                  <p className="text-support font-semibold text-cv-text-muted max-lg:sr-only">חומר עזר</p>
 
                   {postingRepairRelevant ? (
                     /* Repair is the task now, not optional reference reading. Keep the
@@ -243,8 +246,12 @@ export const ApplicationPage = () => {
                        second disclosure the reader has no reason to discover. */
                     <JobPostingPanel detail={detail} operationLive={operationLive} />
                   ) : (
-                    <Disclosure flush summary="צפייה בנוסח המשרה שנשמר">
-                      <div className="pt-2">
+                    <Disclosure
+                      className="max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:[&>summary]:min-h-14 max-lg:[&>summary]:px-4 max-lg:[&>summary]:text-body max-lg:[&>summary]:font-bold max-lg:[&>summary]:text-cv-text"
+                      flush
+                      summary="צפייה בנוסח המשרה שנשמר"
+                    >
+                      <div className="pt-2 max-lg:px-2 max-lg:pb-2">
                         <JobPostingPanel detail={detail} operationLive={operationLive} />
                       </div>
                     </Disclosure>
