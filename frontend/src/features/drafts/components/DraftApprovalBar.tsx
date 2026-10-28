@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { Button, buttonClasses } from "@/ui/Button";
 import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
+import { cx } from "@/ui/cx";
 
 interface DraftApprovalBarProps {
   /* The step behind this one. It was a lone secondary link at the foot of the editor
@@ -59,6 +60,10 @@ export const DraftApprovalBar = ({
           : "הבדיקה עברה. האישור מכין את ה־PDF הסופי; עריכה אחריו תחזיר את המסמך לטיוטה.";
 
   const readyForApproval = passing && !reviewBlocked && !stale && !unavailable;
+  /* Whether the sentence says why the command is shut or needs running again, rather than
+     what the step is. Only that kind earns its lines on a phone, where the pinned bar sits
+     over the one card the reader is editing; the step's description folds away there. */
+  const obstacle = reviewBlocked || stale || unavailable === true;
 
   return (
     <CommitBar
@@ -82,7 +87,7 @@ export const DraftApprovalBar = ({
         </Button>
       }
     >
-      <p className="text-support leading-6 text-cv-text-muted" dir="auto">
+      <p className={cx("text-support leading-6 text-cv-text-muted", !obstacle && "max-lg:sr-only")} dir="auto">
         {reason}
       </p>
     </CommitBar>

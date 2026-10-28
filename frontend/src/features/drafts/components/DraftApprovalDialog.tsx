@@ -97,8 +97,12 @@ export const DraftApprovalDialog = ({
       {/* What is being approved, set apart from the sentence that approves it: it ran
           straight on from the paragraph with no space between the two. */}
       {detail === undefined || draft === undefined ? null : (
-        <div className="mt-section-gap rounded-control border border-cv-border bg-cv-surface p-card-padding">
+        /* On a phone, where the sheet is narrower than a term beside its value, the list
+           reads as rows - term at the start, value at the end - in a muted panel, rather
+           than as stacked pairs that pushed the command below the fold. */
+        <div className="mt-section-gap rounded-control border border-cv-border bg-cv-surface p-card-padding max-sm:bg-cv-surface-muted max-sm:px-card-padding max-sm:py-3">
           <SummaryList
+            className="max-sm:grid-cols-[max-content_minmax(0,1fr)] max-sm:items-baseline max-sm:[&_dd]:text-end max-sm:[&_dd]:font-semibold"
             items={[
               { term: "חברה", value: detail.application.company },
               { term: "תפקיד", value: detail.application.target_role },

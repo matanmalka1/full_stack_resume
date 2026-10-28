@@ -33,7 +33,9 @@ export const DraftOutlineEditor = ({
   onMoveClaim,
 }: DraftOutlineEditorProps) => (
   <section aria-labelledby="draft-outline-heading" className="flex flex-col gap-section-gap">
-    <div className="flex flex-col gap-3">
+    {/* Dissolved on a phone so the section tabs' sticky box is the whole outline rather
+        than this heading block, which ended before the tabs could pin. */}
+    <div className="flex flex-col gap-3 max-lg:contents">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-heading-sm font-bold text-cv-text" id="draft-outline-heading">
           תוכן קורות החיים

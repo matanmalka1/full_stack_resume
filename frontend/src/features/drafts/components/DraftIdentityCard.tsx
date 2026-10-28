@@ -11,10 +11,14 @@ interface DraftIdentityCardProps {
 /* The document's opening lines: the headline and the contact details. They come from the
    candidate's profile rather than from the selection plan, which is why they are their
    own part above the sections and why neither of them can be removed here. Drawn like the
-   sections below it, so the editor reads top to bottom as the CV does. */
+   sections below it, so the editor reads top to bottom as the CV does - a card on a phone,
+   as they are there. */
 export const DraftIdentityCard = ({ actions, draft, facts }: DraftIdentityCardProps) => (
-  <section aria-labelledby="draft-structure-heading" className="flex flex-col gap-3">
-    <header className="flex flex-col gap-0.5 border-b border-cv-border-strong pb-2">
+  <section
+    aria-labelledby="draft-structure-heading"
+    className="flex flex-col gap-3 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-card-padding"
+  >
+    <header className="flex flex-col gap-0.5 border-b border-cv-border-strong pb-2 max-lg:border-cv-border">
       <h3 className="text-heading-sm font-bold text-cv-text" id="draft-structure-heading">
         כותרת ופרטי קשר
       </h3>

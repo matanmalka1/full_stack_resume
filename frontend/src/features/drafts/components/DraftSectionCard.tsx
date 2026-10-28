@@ -33,7 +33,11 @@ interface DraftSectionCardProps {
 
    Drawn as the document's own section - a heading over a rule - rather than as a card:
    every section was a framed, shadowed box, so the editor read as a stack of panels
-   instead of as the CV it is editing. */
+   instead of as the CV it is editing.
+
+   Below the large breakpoint it is a card after all: a phone shows one section at a time
+   between the section tabs and the approval bar, and a framed block is what says where
+   one ends. Its scroll margin clears the masthead and the pinned tabs together. */
 export const DraftSectionCard = ({
   actions,
   draft,
@@ -59,8 +63,11 @@ export const DraftSectionCard = ({
   };
 
   return (
-    <section aria-labelledby={headingId} className="flex scroll-mt-24 flex-col gap-3">
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-cv-border-strong pb-2">
+    <section
+      aria-labelledby={headingId}
+      className="flex scroll-mt-24 flex-col gap-3 max-lg:scroll-mt-36 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-card-padding"
+    >
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-cv-border-strong pb-2 max-lg:flex-nowrap max-lg:border-cv-border">
         <div className="flex min-w-0 items-baseline gap-2">
           <h3 className="truncate text-heading-sm font-bold text-cv-text" dir="auto" id={headingId}>
             {section.name}
@@ -71,9 +78,16 @@ export const DraftSectionCard = ({
         </div>
         {/* No up/down controls for the section itself: section order is the Profile's,
             and validation refuses any other, so a moved section could never be approved. */}
-        <Button disabled={actions.regenerationDisabled} onClick={onRegenerate} variant="ghost">
+        {/* On a phone the label is the button's name only: spelled out it wrapped the
+            section's own heading onto two lines. */}
+        <Button
+          className="max-lg:size-11 max-lg:shrink-0 max-lg:px-0"
+          disabled={actions.regenerationDisabled}
+          onClick={onRegenerate}
+          variant="ghost"
+        >
           <RefreshCw aria-hidden="true" className="size-icon-md" />
-          יצירה מחדש של הפרק
+          <span className="max-lg:sr-only">יצירה מחדש של הפרק</span>
         </Button>
       </header>
 

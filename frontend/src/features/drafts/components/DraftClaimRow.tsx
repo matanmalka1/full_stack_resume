@@ -29,7 +29,9 @@ interface DraftClaimRowProps {
 }
 
 /* An icon button with its name in a tooltip: on sixty stacked rows spelled-out labels
-   were wider than the lines they acted on. */
+   were wider than the lines they acted on. On a phone it is the full touch target: a
+   finger has no hover to steady it, and five 32px icons in a row are a misplaced removal
+   waiting to happen. */
 const RowAction = ({
   className,
   disabled,
@@ -44,7 +46,14 @@ const RowAction = ({
   onClick: () => void;
 }) => (
   <Tooltip label={label}>
-    <IconButton aria-label={label} disabled={disabled} onClick={onClick} size="sm" variant="quiet">
+    <IconButton
+      aria-label={label}
+      className="max-lg:size-11"
+      disabled={disabled}
+      onClick={onClick}
+      size="sm"
+      variant="quiet"
+    >
       <Icon aria-hidden="true" className={cx("size-icon-md", className)} />
     </IconButton>
   </Tooltip>
@@ -199,7 +208,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
   return (
     <li
       className={cx(
-        "group/row flex scroll-mt-24 flex-col gap-2 py-3 first:pt-0 focus-visible:outline-offset-4",
+        "group/row flex scroll-mt-24 flex-col max-lg:scroll-mt-36 gap-2 py-3 first:pt-0 focus-visible:outline-offset-4",
         pending && "border-s-2 border-s-cv-blocker ps-3",
       )}
       id={`draft-claim-${claim.claim_id}`}
