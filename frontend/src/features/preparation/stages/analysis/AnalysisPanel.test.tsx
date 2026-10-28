@@ -129,6 +129,27 @@ describe("AnalysisPanel", () => {
     expect(screen.getByText("The CV states fluent English.")).toBeInTheDocument();
   });
 
+  it("offers a fact for a requirement nothing supports, with the requirement as a hint only", () => {
+    renderPanel(classification);
+
+    const action = screen.getByRole("button", { name: "הוסף עובדה לדרישה: Experience selling AWS-based solutions" });
+    fireEvent.click(action);
+
+    const dialog = screen.getByRole("dialog", { name: "הוספת עובדה לדרישה" });
+    expect(within(dialog).getByText("Experience selling AWS-based solutions")).toBeInTheDocument();
+    /* The posting's sentence is not seeded as the fact's own wording. */
+    expect(within(dialog).getByLabelText(/משמעות/)).toHaveValue("");
+  });
+
+  it("offers no fact action on a requirement that has supporting facts", () => {
+    renderPanel({
+      ...classification,
+      requirements: [{ ...classification.requirements[0], supportingFactIds: ["fact-1"] }],
+    });
+
+    expect(screen.queryByRole("button", { name: /הוסף עובדה לדרישה/ })).not.toBeInTheDocument();
+  });
+
   it("reports partial source anchoring as a reliability note", () => {
     renderPanel({ ...classification, sourceCoverage: 0.5 });
 
