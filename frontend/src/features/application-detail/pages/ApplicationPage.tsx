@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLayoutEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
+import type { RecruitmentStatus } from "@/api/contracts";
+import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
+import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
 import { problemSentence } from "@/ui/errorMessages";
@@ -13,6 +16,7 @@ import { WideRow } from "@/ui/WideRow";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Skeleton } from "@/ui/Skeleton";
+import { SuccessNotice } from "@/ui/SuccessNotice";
 import {
   OperationOverlay,
   type PendingWork,
@@ -21,9 +25,18 @@ import {
   useWatchedOperation,
 } from "@/features/operations";
 import { PreparationChecklist, PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
+import {
+  ApplicationDetailsDialog,
+  ApplicationRecordActions,
+  CloseApplicationDialog,
+  DeleteApplicationDialog,
+  useApplicationListMutations,
+} from "@/features/application-list";
 import { RecruitmentUpdateDialog } from "@/features/recruitment";
 import { applicationLabel } from "../model/applicationPresentation";
 import { analysisViewState } from "../model/analysisViewState";
+import { listItemFromDetail } from "../model/applicationListItem";
+import { ApplicationFacts } from "../components/ApplicationFacts";
 import { JobPostingPanel } from "../components/JobPostingPanel";
 import { NextActionCard } from "../components/NextActionCard";
 import { RecruitmentStageCard } from "../components/RecruitmentStageCard";
@@ -84,7 +97,27 @@ export const ApplicationPage = () => {
 
   const query = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const [managingRecruitment, setManagingRecruitment] = useState(false);
+  /* Which of the board's record commands is open over this screen. */
+  const [recordDialog, setRecordDialog] = useState<"close" | "delete" | "details" | null>(null);
+  /* A close just made, kept so it can be undone - the board's own offer, made here too. */
+  const [closed, setClosed] = useState<{ eventId: string | null; previousStatus: RecruitmentStatus } | null>(null);
   const detail = query.data;
+  /* The board's command mutations, so a close or a delete here is the same command the
+     board issues and invalidates the same views. A deleted record is not navigated away
+     from: the projection re-read marks it deleted, and this screen's deletion notice
+     takes the step's place. */
+  const { clearNextActionMutation, closeMutation, deleteMutation, undoCloseMutation } = useApplicationListMutations({
+    onApplicationClosed: (_applicationId, eventId) => {
+      setRecordDialog(null);
+      if (detail !== undefined) {
+        setClosed({ eventId: eventId ?? null, previousStatus: detail.recruitment_status as RecruitmentStatus });
+      }
+    },
+    onApplicationDeleted: () => setRecordDialog(null),
+    onCloseUndone: () => setClosed(null),
+    onNextActionCleared: () => undefined,
+  });
+  const record = detail === undefined ? null : listItemFromDetail(detail);
   const { awaitingRecord, operation: watched, settled, watch } = useWatchedOperation(applicationId, detail);
 
   const { continuation } = useAutomaticDraft({
@@ -125,6 +158,46 @@ export const ApplicationPage = () => {
     pending: pending !== undefined,
     settled,
   });
+
+  /* The masthead's commands on a wide screen, the design's top end: the recruitment
+     manager, and the way on to the screen the CV work continues on once there is one.
+     Both are wide-only - a phone opens the manager from the stage card and reaches the
+     editor from the checklist's row - so neither name is on the page twice. While the run
+     is the step's whole body, or the record is gone, the masthead offers nothing: the run
+     card and the deletion notice are the answer then. */
+  const continueTo =
+    detail === undefined || detail.document_id == null
+      ? null
+      : detail.preparation_state === "ready"
+        ? { label: "לקורות החיים המוכנים", to: routePaths.ready(applicationId) }
+        : detail.preparation_state === "draft_in_progress" || detail.preparation_state === "approved"
+          ? { label: "המשך לעריכת הטיוטה", to: routePaths.draft(applicationId) }
+          : null;
+  const headerActions =
+    detail === undefined || detail.application.deleted_at != null || viewState === "processing" ? undefined : (
+      <div className="flex items-center gap-2 max-lg:hidden">
+        <Button onClick={() => setManagingRecruitment(true)} variant="secondary">
+          עדכון סטטוס
+        </Button>
+        {/* The board's record menu (screen 24): the recruitment manager again, the
+            record's details, and the two commands that end it. */}
+        {record === null ? null : (
+          <ApplicationRecordActions
+            item={record}
+            onRequestClose={() => setRecordDialog("close")}
+            onRequestDelete={() => setRecordDialog("delete")}
+            onRequestDetails={() => setRecordDialog("details")}
+            onRequestUpdate={() => setManagingRecruitment(true)}
+            variant="record"
+          />
+        )}
+        {continueTo === null ? null : (
+          <Link className={buttonClasses("primary")} to={continueTo.to}>
+            {continueTo.label}
+          </Link>
+        )}
+      </div>
+    );
 
   return (
     /* The analysis step of the wizard. Its name and its spine are the shell's; what is left
@@ -173,6 +246,31 @@ export const ApplicationPage = () => {
               ),
             }),
       }}
+      /* A wide screen heads the step as the record it is for, as its design does: the
+         company's initial, the role as the title over "company · taken in on", the trail
+         back to the board, and the commands at the row's end. The stepper stays under it
+         once there is an analysis to lay out (screen 16); before that the checklist in the
+         body says where the work stands, and the spine would say it twice.
+
+         The role is the title from the large breakpoint only (the shell's rule): a
+         phone's compact header already names it, and keeps the stage's name as the
+         heading's accessible name. */
+      desktopHeader={{
+        actions: headerActions,
+        breadcrumb: true,
+        mark: true,
+        spine: detail?.latest_analysis != null,
+        ...(detail === undefined
+          ? {}
+          : {
+              subtitle: (
+                <span dir="auto">
+                  {detail.application.company} · נקלטה ב־{formatDateTime(detail.application.created_at, "date")}
+                </span>
+              ),
+              title: <span dir="auto">{detail.application.target_role}</span>,
+            }),
+      }}
       stage="analysis"
     >
       {/* Live work is reported the moment this screen knows about it, whether that
@@ -194,8 +292,8 @@ export const ApplicationPage = () => {
         operation={watched}
         pending={pending}
         /* While the analysis runs this step has no bar of its own - `PreparationView`
-           waits for the result - so on a phone the run closes on its own. */
-        phoneRunBar={viewState === "processing"}
+           waits for the result - so the run closes on its own ways on. */
+        runActions={viewState === "processing"}
         settled={settled}
       />
 
@@ -219,22 +317,52 @@ export const ApplicationPage = () => {
           </Callout>
         ) : (
           <div className="space-y-6">
+            {/* The close just made, where the eye is, with the board's own way back. */}
+            {closed === null ? null : (
+              <SuccessNotice onDismiss={() => setClosed(null)} title="המועמדות נסגרה והועברה למועמדויות הסגורות">
+                {closed.eventId === null ? null : (
+                  <Button
+                    onClick={() =>
+                      undoCloseMutation.mutate({
+                        applicationId,
+                        eventId: closed.eventId ?? "",
+                        previousStatus: closed.previousStatus,
+                      })
+                    }
+                    pending={undoCloseMutation.isPending}
+                    pendingLabel="מבטל סגירה…"
+                    size="compact"
+                    variant="secondary"
+                  >
+                    ביטול הסגירה
+                  </Button>
+                )}
+              </SuccessNotice>
+            )}
             {/* Where the application stands with the employer, and the reminder the reader
                 set for it - the two things a reader opening it from the board asks before
                 the CV work. Both open the board's own recruitment manager to change them.
                 Withheld while a run is the step's whole body: then the run is the answer. */}
-            {viewState === "processing" ? null : (
-              <div className="grid items-start gap-3 lg:grid-cols-2">
-                <RecruitmentStageCard detail={detail} onUpdate={() => setManagingRecruitment(true)} />
-                <NextActionCard detail={detail} onUpdate={() => setManagingRecruitment(true)} />
-              </div>
-            )}
+            {/* Then where the CV work stands, as the checklist of its five steps.
 
-            {/* Where the CV work stands, as a phone's checklist of the five steps. A wide
-                screen has the workflow spine beside the step saying the same thing. */}
+                One grid at every width, so a phone keeps its single column in this order
+                - stage, reminder, checklist - while a wide screen places the same three
+                as the design's two columns: the stage and the checklist in the main one,
+                and an aside at the end side holding the reminder over the record at a
+                glance (`ApplicationFacts`, wide only). The aside is `contents` on a phone,
+                so it adds no row of its own when there is no reminder. */}
             {viewState === "processing" ? null : (
-              <div className="lg:hidden">
-                <PreparationChecklist detail={detail} />
+              <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_20rem] lg:grid-rows-[auto_1fr] lg:gap-x-6 lg:gap-y-5">
+                <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+                  <RecruitmentStageCard detail={detail} onUpdate={() => setManagingRecruitment(true)} />
+                </div>
+                <div className="flex min-w-0 flex-col gap-3 max-lg:contents lg:col-start-2 lg:row-span-2 lg:row-start-1">
+                  <NextActionCard detail={detail} onUpdate={() => setManagingRecruitment(true)} />
+                  <ApplicationFacts detail={detail} />
+                </div>
+                <div className="min-w-0 max-lg:mt-3 lg:col-start-1 lg:row-start-2">
+                  <PreparationChecklist detail={detail} />
+                </div>
               </div>
             )}
 
@@ -306,6 +434,28 @@ export const ApplicationPage = () => {
         )}
       </QueryState>
 
+      <CloseApplicationDialog
+        application={recordDialog === "close" ? record : null}
+        onCancel={() => setRecordDialog(null)}
+        onConfirm={() => closeMutation.mutate(applicationId)}
+        pending={closeMutation.isPending}
+      />
+      <DeleteApplicationDialog
+        application={recordDialog === "delete" ? record : null}
+        onCancel={() => setRecordDialog(null)}
+        onConfirm={() => deleteMutation.mutate(applicationId)}
+        pending={deleteMutation.isPending}
+      />
+      <ApplicationDetailsDialog
+        application={recordDialog === "details" ? record : null}
+        clearing={clearNextActionMutation.isPending}
+        onClearNextAction={() => clearNextActionMutation.mutate(applicationId)}
+        onClose={() => setRecordDialog(null)}
+        onRequestUpdate={() => {
+          setRecordDialog(null);
+          setManagingRecruitment(true);
+        }}
+      />
       <RecruitmentUpdateDialog
         application={
           managingRecruitment && detail !== undefined

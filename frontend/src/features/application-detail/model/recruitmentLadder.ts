@@ -5,14 +5,15 @@ import type { RecruitmentStatus } from "@/api/contracts";
    (`application-list/model/recruitmentStages`) - an assignment is part of the interviews,
    a final stage part of the offer - so a card and the board's stage lanes never place
    one application on two different rungs. The names are the short ones a segmented bar's
-   end labels have room for. */
+   end labels have room for; `name` is the rung's full one, which a wide screen writes
+   under each segment of its own. */
 const rungs = [
-  { label: "טרם הוגש", statuses: ["saved"] },
-  { label: "הוגשה", statuses: ["applied"] },
-  { label: "סינון טלפוני", statuses: ["recruiter_screen"] },
-  { label: "ראיונות", statuses: ["interview", "assignment"] },
-  { label: "הצעה", statuses: ["final_stage", "offer", "accepted"] },
-] as const satisfies readonly { label: string; statuses: readonly RecruitmentStatus[] }[];
+  { label: "טרם הוגש", name: "טרם הוגש", statuses: ["saved"] },
+  { label: "הוגשה", name: "הוגשה מועמדות", statuses: ["applied"] },
+  { label: "סינון טלפוני", name: "סינון טלפוני / HR", statuses: ["recruiter_screen"] },
+  { label: "ראיונות", name: "ראיונות ומטלות", statuses: ["interview", "assignment"] },
+  { label: "הצעה", name: "שלב סופי והצעה", statuses: ["final_stage", "offer", "accepted"] },
+] as const satisfies readonly { label: string; name: string; statuses: readonly RecruitmentStatus[] }[];
 
 export interface RecruitmentRung {
   /* The rung the status sits on, from 0; null once the process has closed - a rejection
@@ -22,6 +23,8 @@ export interface RecruitmentRung {
   next: string | null;
   first: string;
   last: string;
+  /* Every rung's full name, in order. */
+  names: readonly string[];
   total: number;
 }
 
@@ -33,6 +36,7 @@ export const recruitmentRung = (status: string): RecruitmentRung => {
     next: index === null ? null : (rungs[index + 1]?.label ?? null),
     first: rungs[0].label,
     last: rungs[4].label,
+    names: rungs.map((rung) => rung.name),
     total: rungs.length,
   };
 };

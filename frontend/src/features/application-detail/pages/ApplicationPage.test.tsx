@@ -101,6 +101,28 @@ describe("ApplicationPage", () => {
     expect(screen.getByRole("link", { name: /טיוטה ואימות/ })).toHaveAttribute("href", "/applications/app-1/draft");
   });
 
+  /* The board's record commands, offered from the record itself on a wide screen: the
+     same menu, the same confirmation and the same command, and the same way back. */
+  it("closes the application from the masthead's record menu and offers to undo it", async () => {
+    const requests: string[] = [];
+    renderPage((input, init) => {
+      const url = String(input);
+      requests.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.endsWith("/close")) {
+        return Promise.resolve(json({ application_id: "app-1", event_id: "event-1" }));
+      }
+      return Promise.resolve(json(detail()));
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "פעולות נוספות עבור Acme" }));
+    expect(screen.queryByRole("menuitem", { name: "פתיחת המועמדות" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "סגירת המועמדות Acme" }));
+    fireEvent.click(await screen.findByRole("button", { name: "סגירת המועמדות" }));
+
+    await waitFor(() => expect(requests).toContain("POST /api/v1/applications/app-1/close"));
+    expect(await screen.findByRole("button", { name: "ביטול הסגירה" })).toBeInTheDocument();
+  });
+
   it("keeps recruitment state off the CV preparation step", async () => {
     renderPage();
 
