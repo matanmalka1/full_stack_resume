@@ -67,6 +67,9 @@ export const DraftApprovalBar = ({
 
   return (
     <CommitBar
+      /* On a phone the step's compact header and its stage bar carry the way back, and
+         the bar is the one full-width command the design gives it. */
+      backOnPhone={false}
       back={
         <Link className={buttonClasses("ghost")} to={applicationHref}>
           <ArrowRight aria-hidden="true" className="size-icon-md" />
