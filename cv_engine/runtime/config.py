@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,6 +57,17 @@ def nonnegative_int(raw: str) -> int:
     if value < 0:
         raise ValueError("must be at least 0")
     return value
+
+
+def https_origin(raw: str) -> str:
+    """One exact `https://host[:port]` origin, as a browser sends it in `Origin`.
+
+    A path, a trailing slash, or a wildcard would never equal a real `Origin`
+    header, so it is refused here rather than silently refusing every mutation.
+    """
+    if not re.fullmatch(r"https://[a-z0-9.-]+(:[0-9]{1,5})?", raw):
+        raise ValueError("must be exactly https://host or https://host:port")
+    return raw
 
 
 # The HTTP body limit lives here rather than in the API package because the
@@ -115,6 +127,9 @@ SETTINGS: dict[str, Setting] = {
         # second origin to allow. A value here is the one development Vite origin
         # and nothing else — never a wildcard, never a list.
         Setting("api_dev_origin", "CV_API_DEV_ORIGIN", default=None),
+        # The HTTPS origin a deployed instance is reached on behind a TLS proxy,
+        # e.g. `https://cv.example.com`. Unset locally. Exactly one origin.
+        Setting("api_public_origin", "CV_PUBLIC_ORIGIN", default=None, cast=https_origin),
         # Immutable payload storage. "local" is the default and keeps every
         # payload below the application root; "s3" stores them in a bucket,
         # which is what a deployed installation uses. Nothing else about the

@@ -1,0 +1,52 @@
+# Render Blueprint: one web service — API, Operation worker and the built UI in one
+# container (see Dockerfile). PostgreSQL lives on Neon, immutable payloads
+# (Submission files) in an S3-compatible bucket such as Cloudflare R2.
+#
+# Free plan: no disk, and the service sleeps after ~15 idle minutes, which stops
+# the worker too. Rendered HTML/PDF are working files on the container's own disk,
+# so a restart or a deploy drops them and a document has to be rendered again.
+# Submitted files are safe in the bucket. 512 MB RAM is tight next to Chromium.
+#
+# Set by hand in the dashboard (sync: false):
+# - DATABASE_URL: Neon's *direct* connection string (host without `-pooler`).
+#   The pooler runs PgBouncer in transaction mode, which breaks the worker's
+#   session advisory lock and Alembic's migration transaction.
+# - CV_PUBLIC_ORIGIN: the service's https:// URL, once Render assigns it.
+# - OPENAI_API_KEY.
+# - CV_S3_BUCKET, CV_S3_ENDPOINT_URL (R2: https://<account>.r2.cloudflarestorage.com),
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY.
+
+services:
+  - type: web
+    name: cv-engine
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: CV_PROVIDER
+        value: openai
+      - key: CV_PUBLIC_ORIGIN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CV_OBJECT_STORE
+        value: s3
+      - key: CV_S3_BUCKET
+        sync: false
+      - key: CV_S3_ENDPOINT_URL
+        sync: false
+      - key: CV_S3_REGION
+        value: auto
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Render's proxy appends the client address to X-Forwarded-For; trusting
+      # that one hop keys the sign-in rate limit per client, not per proxy.
+      - key: CV_TRUSTED_PROXY_HOPS
+        value: "1"

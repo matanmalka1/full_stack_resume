@@ -116,7 +116,7 @@ class OriginPolicyMiddleware:
     mutation without an Origin is not the browser case this product serves.
 
     `allowed` is the same-origin set plus, in development only, the single
-    configured Vite origin. There is no wildcard, and no way to configure a list.
+    configured Vite origin, and, when deployed, the single public HTTPS origin. There is no wildcard, and no way to configure a list.
     """
 
     def __init__(self, app: ASGIApp, allowed: frozenset[str]) -> None:
@@ -147,7 +147,9 @@ async def _no_more_body() -> Message:
     return {"type": "http.disconnect"}
 
 
-def allowed_origins(host: str, port: int, dev_origin: str | None) -> frozenset[str]:
+def allowed_origins(
+    host: str, port: int, dev_origin: str | None, public_origin: str | None = None
+) -> frozenset[str]:
     """The exact origins this instance answers to.
 
     Both loopback spellings are included because the browser treats
@@ -161,4 +163,6 @@ def allowed_origins(host: str, port: int, dev_origin: str | None) -> frozenset[s
     }
     if dev_origin:
         origins.add(dev_origin)
+    if public_origin:
+        origins.add(public_origin)
     return frozenset(origins)

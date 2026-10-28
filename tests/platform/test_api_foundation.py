@@ -47,6 +47,7 @@ from cv_engine.infrastructure.runtime_logging import (
     StructuredRuntimeLogger,
 )
 from cv_engine.runtime.composition import build_api_services
+from cv_engine.runtime.config import https_origin
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -403,6 +404,29 @@ def test_origin_policy_guards_mutations_only_and_admits_the_configured_dev_origi
     with TestClient(create_app(with_vite)) as client:
         accepted = client.post(f"{API_PREFIX}/does-not-exist", json={}, headers={"Origin": vite})
     assert accepted.status_code == 404
+
+
+def test_origin_policy_admits_the_configured_public_https_origin(services) -> None:
+    public = "https://cv.example.com"
+    base = build_api_services(services)
+    with TestClient(create_app(base)) as client:
+        refused = client.post(f"{API_PREFIX}/does-not-exist", json={}, headers={"Origin": public})
+    assert refused.status_code == 403
+
+    deployed = replace(base, limits=replace(base.limits, public_origin=public))
+    with TestClient(create_app(deployed)) as client:
+        accepted = client.post(f"{API_PREFIX}/does-not-exist", json={}, headers={"Origin": public})
+    assert accepted.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["http://cv.example.com", "https://cv.example.com/", "https://*.example.com", "cv.example.com"],
+)
+def test_the_public_origin_setting_refuses_anything_but_one_exact_https_origin(raw) -> None:
+    with pytest.raises(ValueError):
+        https_origin(raw)
+    assert https_origin("https://cv.example.com:8443") == "https://cv.example.com:8443"
 
 
 # --- production frontend ---------------------------------------------------
