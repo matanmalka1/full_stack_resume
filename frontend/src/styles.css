@@ -38,6 +38,14 @@
   }
 }
 
+/* A step of the CV wizard has no bottom bar on a phone either (AppLayout drops the shell
+   there), so its own action bar stands on the home indicator's inset alone. */
+@media (max-width: 63.999rem) {
+  [data-route-density="focus"] {
+    --cv-bottom-nav-height: env(safe-area-inset-bottom, 0px);
+  }
+}
+
 :root[data-theme="light"] {
   color-scheme: light;
 }

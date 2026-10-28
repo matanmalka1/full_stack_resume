@@ -64,11 +64,25 @@ const SidebarToggle = ({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
    rail classes below never reach the narrow masthead. Where a rail class replaces an
    expanded `lg:` one it replaces it outright, rather than being added beside it: two
    utilities for the same property at the same breakpoint resolve by stylesheet order,
-   not by the order they are written in. */
-export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean; onToggleCollapsed: () => void }) => {
+   not by the order they are written in.
+
+   `hiddenOnPhone` drops the whole header - masthead and bottom navigation, which lives
+   inside it - below the large breakpoint, for a screen that brings its own. */
+export const AppHeader = ({
+  collapsed,
+  hiddenOnPhone = false,
+  onToggleCollapsed,
+}: {
+  collapsed: boolean;
+  hiddenOnPhone?: boolean;
+  onToggleCollapsed: () => void;
+}) => {
   return (
     <header
-      className="sticky top-0 z-(--cv-z-navigation) bg-cv-canvas lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-e lg:border-cv-hairline"
+      className={cx(
+        "sticky top-0 z-(--cv-z-navigation) bg-cv-canvas lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-e lg:border-cv-hairline",
+        hiddenOnPhone && "max-lg:hidden",
+      )}
       id={SIDEBAR_ID}
     >
       {/* The rail drops `page-gutter`: that class is unlayered CSS, so its 2rem inline

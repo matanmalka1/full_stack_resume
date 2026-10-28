@@ -44,7 +44,10 @@ export const AppLayout = () => {
     >
       <RouteFocusManager />
       <DisplaySettingsPreviewProvider onPreview={setDisplayPreview}>
-        <AppHeader collapsed={sidebar.collapsed} onToggleCollapsed={sidebar.toggle} />
+        {/* Inside a wizard step a phone gives the whole screen to the step: its compact
+            header carries the way back and its action bar the way on, so the masthead and
+            the bottom navigation fold away below the large breakpoint. */}
+        <AppHeader collapsed={sidebar.collapsed} hiddenOnPhone={inWorkflow} onToggleCollapsed={sidebar.toggle} />
         {/* The page's end clears the bottom navigation bar a narrow screen pins over it. */}
         <main className="page-gutter min-w-0 pt-5 pb-[calc(var(--cv-bottom-nav-height)+1.5rem)] sm:pt-6 lg:col-start-2 lg:row-start-1">
           <Outlet />
