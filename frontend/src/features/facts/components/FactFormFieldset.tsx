@@ -130,18 +130,25 @@ export const FactSourceField = ({ register }: Pick<FactFormControl, "register">)
   </Field>
 );
 
+/* Six short answers, all visible at once: native radios in a fieldset, drawn as chips.
+   A select hid five of them behind a tap, which on a phone opened the system picker for a
+   choice that fits on two lines. The radios are registered under the same field, so the
+   value submitted is unchanged. */
 export const FactStyleField = ({ register }: Pick<FactFormControl, "register">) => (
-  <Field label="סוג הצגה">
-    {(control) => (
-      <Select {...control} {...register("style")}>
-        {Object.entries(factStyleLabels).map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </Select>
-    )}
-  </Field>
+  <fieldset className="flex min-w-0 flex-col gap-1.5">
+    <legend className="mb-1.5 text-support font-medium text-cv-text">סוג הצגה</legend>
+    <div className="flex flex-wrap gap-2">
+      {Object.entries(factStyleLabels).map(([value, label]) => (
+        <label
+          className="inline-flex min-h-11 cursor-pointer items-center rounded-pill border border-cv-border bg-cv-surface px-4 text-support font-semibold text-cv-text transition-colors hover:border-cv-border-strong has-checked:border-cv-accent has-checked:bg-cv-accent has-checked:text-cv-on-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-cv-focus"
+          key={value}
+        >
+          <input className="sr-only" type="radio" value={value} {...register("style")} />
+          {label}
+        </label>
+      ))}
+    </div>
+  </fieldset>
 );
 
 export const FactHebrewRenderingField = ({ register }: Pick<FactFormControl, "register">) => (

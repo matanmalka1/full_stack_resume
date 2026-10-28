@@ -23,9 +23,18 @@ export const FactConfirmationControl = ({ fact }: { fact: Fact }) => {
       <Checkbox checked={attested} onChange={(event) => setAttested(event.currentTarget.checked)}>
         בדקתי את תוכן העובדה והמקור ואני מאשר את שינוי המעמד
       </Checkbox>
-      <Button disabled={!attested} onClick={() => confirmation.mutate()} pending={confirmation.isPending}>
-        אישור העובדה כמקור אמת
-      </Button>
+      {/* On a phone the step is the screen's one command, pinned above the bottom bar where
+          a thumb finds it; the attestation it waits on stays here in the body. */}
+      <div className="max-lg:fixed max-lg:inset-x-0 max-lg:bottom-(--cv-bottom-nav-height) max-lg:z-(--cv-z-sticky) max-lg:border-t max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-4">
+        <Button
+          className="w-full max-lg:min-h-12 max-lg:rounded-surface max-lg:text-body"
+          disabled={!attested}
+          onClick={() => confirmation.mutate()}
+          pending={confirmation.isPending}
+        >
+          אישור העובדה כמקור אמת
+        </Button>
+      </div>
       {confirmation.error === null ? null : (
         <ErrorCallout
           error={confirmation.error}
