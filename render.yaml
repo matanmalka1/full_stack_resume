@@ -47,6 +47,9 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
+      # One render's Chromium already peaks near the free plan's 512 MB.
+      - key: CV_WORKER_CONCURRENCY
+        value: "1"
       # Render's proxy appends the client address to X-Forwarded-For; trusting
       # that one hop keys the sign-in rate limit per client, not per proxy.
       - key: CV_TRUSTED_PROXY_HOPS

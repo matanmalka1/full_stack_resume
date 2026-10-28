@@ -69,6 +69,15 @@ def test_config_precedence_secret_exclusion_and_parsing(tmp_path: Path) -> None:
     )
     with pytest.raises(ConfigError, match="CV_TRUSTED_PROXY_HOPS.*at least 0"):
         resolve_config(env={"CV_TRUSTED_PROXY_HOPS": "-1"}, project_root=tmp_path)
+    assert resolve_config(env={}, project_root=tmp_path).get("worker_concurrency") == 2
+    assert (
+        resolve_config(env={"CV_WORKER_CONCURRENCY": "1"}, project_root=tmp_path).get(
+            "worker_concurrency"
+        )
+        == 1
+    )
+    with pytest.raises(ConfigError, match="CV_WORKER_CONCURRENCY.*at least 1"):
+        resolve_config(env={"CV_WORKER_CONCURRENCY": "0"}, project_root=tmp_path)
 
     env_root = tmp_path / "env-only"
     env_root.mkdir()

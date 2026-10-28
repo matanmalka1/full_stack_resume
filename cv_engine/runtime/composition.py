@@ -357,6 +357,7 @@ def build_services(
         runner,
         request_cancellation=cancel_for_its_owner,
         exclusive=lambda: worker_exclusivity(engine),
+        concurrency=int(resolved_config.get("worker_concurrency")),
         maintenance=account_service.cleanup_rate_limits,
     )
     knowledge_service = FactLifecycleService(

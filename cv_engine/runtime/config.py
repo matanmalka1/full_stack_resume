@@ -146,6 +146,9 @@ SETTINGS: dict[str, Setting] = {
         # (architecture §18.4).
         # A session of zero days would sign every user out as they sign in.
         Setting("session_days", "CV_SESSION_DAYS", default=30, cast=positive_int),
+        # How many Operations the worker runs at once. Each render launches its
+        # own Chromium, so a small instance (512 MB) wants 1.
+        Setting("worker_concurrency", "CV_WORKER_CONCURRENCY", default=2, cast=positive_int),
         Setting(
             "trusted_proxy_hops",
             "CV_TRUSTED_PROXY_HOPS",
