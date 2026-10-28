@@ -101,7 +101,10 @@ const PreparationTrack = ({ state }: { state: ApplicationListItem["preparation_s
         max={total}
         value={step}
       />
-      <span aria-hidden="true" className="flex h-1.5 w-full overflow-hidden rounded-pill bg-cv-surface-muted max-lg:hidden">
+      <span
+        aria-hidden="true"
+        className="flex h-1.5 w-full overflow-hidden rounded-pill bg-cv-surface-muted max-lg:hidden"
+      >
         <span className="h-full rounded-pill bg-cv-accent" style={{ width: `${(step / total) * 100}%` }} />
       </span>
       <span aria-hidden="true" className="grid min-w-0 flex-1 auto-cols-fr grid-flow-col gap-0.75 lg:hidden">
