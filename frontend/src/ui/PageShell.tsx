@@ -57,9 +57,11 @@ export const PageShell = ({
       )}
     >
       <div>
-        {landmark === undefined ? null : <aside className="mb-5">{landmark}</aside>}
+        {landmark === undefined ? null : <aside className="mb-5 max-lg:mb-3">{landmark}</aside>}
         <div className="min-w-0">
-          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-hairline pb-2">
+          {/* A phone's heading stands on the canvas without a rule under it: the design
+              separates the masthead from the body by space alone there. */}
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-hairline pb-2 max-lg:border-b-0 max-lg:pb-0">
             <div className="min-w-0">
               <PageHeading description={description} eyebrow={eyebrow} eyebrowTone={eyebrowTone} id="route-heading">
                 {title}

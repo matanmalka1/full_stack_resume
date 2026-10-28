@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Button, type ButtonVariant } from "./Button";
+import { cx } from "./cx";
 import { Dialog } from "./Dialog";
 
 interface ConfirmDialogProps {
@@ -12,7 +13,14 @@ interface ConfirmDialogProps {
   confirmVariant?: Extract<ButtonVariant, "primary" | "destructive">;
   /* Passed through to `Dialog`: false where Escape must not stand for either answer. */
   dismissible?: boolean;
+  /* Passed through to `Dialog`: "stack" puts the two answers one per line on a phone, for
+     answers whose labels are too long to share a row. */
+  footerLayout?: "row" | "stack";
   headingId: string;
+  /* The question's subject as an icon, shown in a tile over the title on a phone. A
+     destructive question draws its tile filled, so the one that cannot be undone does not
+     look like the one that can. */
+  icon?: ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
   open: boolean;
@@ -24,14 +32,19 @@ interface ConfirmDialogProps {
 /* A question with exactly two answers: go back, or do the one thing the title names. The
    dialog never sends the command - the screen that opened it does, from `onConfirm` - so
    what the caller owns is the copy, and what this owns is the shape every such question
-   takes. A dialog that collects input is a form dialog and stays on `Dialog` itself. */
+   takes. A dialog that collects input is a form dialog and stays on `Dialog` itself.
+
+   On a phone it is the one dialog that does not become a bottom sheet: an interruption
+   with two answers stays a centred card, its answers side by side across its width. */
 export const ConfirmDialog = ({
   children,
   confirmDisabled = false,
   confirmLabel,
   confirmVariant = "primary",
   dismissible,
+  footerLayout,
   headingId,
+  icon,
   onCancel,
   onConfirm,
   open,
@@ -41,6 +54,7 @@ export const ConfirmDialog = ({
 }: ConfirmDialogProps) => (
   <Dialog
     dismissible={dismissible}
+    footerLayout={footerLayout}
     footer={
       <>
         <Button onClick={onCancel} variant="secondary">
@@ -58,8 +72,21 @@ export const ConfirmDialog = ({
       </>
     }
     headingId={headingId}
+    icon={
+      icon === undefined ? undefined : (
+        <span
+          className={cx(
+            "flex size-12 items-center justify-center rounded-surface [&_svg]:size-icon-lg",
+            confirmVariant === "destructive" ? "bg-cv-accent text-cv-on-accent" : "bg-cv-surface-muted text-cv-text",
+          )}
+        >
+          {icon}
+        </span>
+      )
+    }
     onClose={onCancel}
     open={open}
+    presentation="alert"
     title={title}
   >
     {children}

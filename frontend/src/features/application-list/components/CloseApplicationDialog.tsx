@@ -1,3 +1,5 @@
+import { Archive } from "lucide-react";
+
 import type { ApplicationListItem } from "@/api/contracts";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { applicationLabel } from "@/features/application-detail";
@@ -12,6 +14,7 @@ interface CloseApplicationDialogProps {
 export const CloseApplicationDialog = ({ application, pending, onCancel, onConfirm }: CloseApplicationDialogProps) => (
   <ConfirmDialog
     confirmLabel="סגירת המועמדות"
+    icon={<Archive />}
     headingId="close-application-heading"
     onCancel={onCancel}
     onConfirm={onConfirm}

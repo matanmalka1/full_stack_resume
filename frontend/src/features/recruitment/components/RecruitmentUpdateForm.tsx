@@ -1,4 +1,4 @@
-import { ListTodo, type LucideIcon, Milestone, NotebookPen } from "lucide-react";
+import { Check, ListTodo, type LucideIcon, Milestone, NotebookPen } from "lucide-react";
 import type { FormEventHandler, ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 
@@ -10,7 +10,7 @@ import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { Input, Textarea } from "@/ui/Input";
 import { cx } from "@/ui/cx";
-import { recruitmentStatusLabel } from "../model/recruitmentStatus";
+import { recruitmentStatusLabel, recruitmentStatuses } from "../model/recruitmentStatus";
 import type { RecruitmentUpdateFields } from "../model/recruitment.types";
 
 interface RecruitmentUpdateFormProps {
@@ -25,7 +25,82 @@ interface RecruitmentUpdateFormProps {
   visible: boolean;
 }
 
-/* One group of the update form: what it changes, under its icon, and its fields. */
+/* The statuses that end a process without an offer. On a phone they sit in a row of
+   their own under a rule, drawn dashed, so ending the process is not one more step in
+   the line of steps forward. */
+const endingStatuses: ReadonlySet<string> = new Set(["rejected", "withdrawn", "closed"]);
+
+const chipClasses = (selected: boolean, ending: boolean) =>
+  cx(
+    "inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-pill border px-3.5 text-support transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-cv-focus",
+    selected
+      ? "border-cv-accent bg-cv-accent font-bold text-cv-on-accent"
+      : cx(
+          "text-cv-text-muted hover:bg-cv-surface-muted",
+          ending ? "border-dashed border-cv-border-strong" : "border-cv-border",
+        ),
+  );
+
+/* The phone's form of the stage select: every stage the reader can move to as a chip,
+   after the current one, which stands for "no change" - the select's empty option - and
+   is the one chosen until another is. Native radios underneath, so the group is one tab
+   stop with arrow keys between chips. It writes the same form field the select does;
+   the select is the control from the large breakpoint. */
+const StatusChips = ({
+  current,
+  onChange,
+  options,
+  value,
+}: {
+  current: string;
+  onChange: (status: string) => void;
+  options: readonly string[];
+  value: string;
+}) => {
+  const order = (status: string) => recruitmentStatuses.indexOf(status as (typeof recruitmentStatuses)[number]);
+  // ES2022 has no toSorted; this array is newly created and belongs only to this call.
+  // oxlint-disable-next-line unicorn/no-array-sort
+  const sorted = [...options].sort((left, right) => order(left) - order(right));
+  const chip = (status: string, chipValue: string) => {
+    const selected = value === chipValue;
+    return (
+      <label className={chipClasses(selected, endingStatuses.has(status))} key={chipValue || "current"}>
+        <input
+          checked={selected}
+          className="sr-only"
+          name="recruitment-status-chip"
+          onChange={() => onChange(chipValue)}
+          type="radio"
+          value={chipValue}
+        />
+        {selected ? <Check aria-hidden="true" className="size-icon-sm" /> : null}
+        {recruitmentStatusLabel(status)}
+        {chipValue === "" ? <span className="sr-only"> · המצב הנוכחי, ללא שינוי</span> : null}
+      </label>
+    );
+  };
+  const forward = sorted.filter((status) => !endingStatuses.has(status));
+  const ending = sorted.filter((status) => endingStatuses.has(status));
+
+  return (
+    <fieldset className="flex flex-col gap-2.5 lg:hidden">
+      <legend className="mb-2.5 text-support font-bold text-cv-text">מצב המועמדות</legend>
+      <div className="flex flex-wrap gap-2">
+        {chip(current, "")}
+        {forward.map((status) => chip(status, status))}
+      </div>
+      {ending.length === 0 ? null : (
+        <div className="flex flex-wrap gap-2 border-t border-cv-hairline pt-2.5">
+          {ending.map((status) => chip(status, status))}
+        </div>
+      )}
+    </fieldset>
+  );
+};
+
+/* One group of the update form: what it changes, under its icon, and its fields. On a
+   phone the groups lose their cards and icon tiles - inside a sheet they were boxes
+   inside a box - and keep only their titles. */
 const UpdateSection = ({
   children,
   description,
@@ -37,9 +112,9 @@ const UpdateSection = ({
   icon: LucideIcon;
   title: string;
 }) => (
-  <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
-    <div className="mb-4 flex items-start gap-3">
-      <span className={iconTileClasses}>
+  <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none">
+    <div className="mb-4 flex items-start gap-3 max-lg:mb-3">
+      <span className={cx(iconTileClasses, "max-lg:hidden")}>
         <Icon aria-hidden="true" className="size-icon-md" />
       </span>
       <div>
@@ -84,7 +159,24 @@ export const RecruitmentUpdateForm = ({
 
       <UpdateSection description="עדכון ההתקדמות מול המעסיק." icon={Milestone} title="שלב בתהליך">
         <div className="flex flex-col gap-4">
-          <Field error={errors.targetStatus?.message} label="עדכון שלב">
+          {detail.allowed_recruitment_transitions.length === 0 ? null : (
+            <StatusChips
+              current={detail.recruitment_status}
+              onChange={(status) =>
+                form.setValue("targetStatus", status as RecruitmentUpdateFields["targetStatus"], {
+                  shouldDirty: true,
+                  shouldValidate: errors.targetStatus !== undefined,
+                })
+              }
+              options={statusOptions}
+              value={fields.targetStatus}
+            />
+          )}
+          <Field
+            className={detail.allowed_recruitment_transitions.length === 0 ? undefined : "max-lg:hidden"}
+            error={errors.targetStatus?.message}
+            label="עדכון שלב"
+          >
             {(control) => (
               <Select
                 {...control}
