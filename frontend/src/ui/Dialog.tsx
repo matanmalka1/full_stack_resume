@@ -40,9 +40,10 @@ interface DialogProps {
      container either way, so a caller may still reorder a command with `order-*`. */
   footerLayout?: "row" | "stack";
   headingId: string;
-  /* A mark over the title naming what the dialog is about - archive, delete, rebuild.
-     Drawn below the large breakpoint only, where a centred confirmation leads with it;
-     the desktop dialog's header has no place for it. Decorative: the title says it. */
+  /* A mark naming what the dialog is about - archive, delete, rebuild, a conflict. An
+     "alert" draws it over the title at every width; a "sheet" draws it over the title on
+     a phone and beside it from the large breakpoint, as the desktop conflict dialog does.
+     Decorative: the title says it. */
   icon?: ReactNode;
   onClose: () => void;
   open: boolean;
@@ -52,6 +53,11 @@ interface DialogProps {
      commands there. An "alert" stays a centred card - a two-answer question that should
      interrupt, as `ConfirmDialog` asks it. */
   presentation?: "sheet" | "alert";
+  /* How the dialog stands from the large breakpoint. "modal" (the default) is the centred
+     card. "drawer" docks it to the inline-end edge at the viewport's full height - a
+     record looked at beside the list it came from (the board's job details), whose one
+     command sits at the drawer's foot. Below the breakpoint `presentation` decides alone. */
+  widePresentation?: "modal" | "drawer";
   /* Where focus goes once the dialog closes, for a dialog that is not always opened by
      the control that reopens it. Native restoration returns focus to whatever held it at
      `showModal()`, which for a dialog the screen opened by itself is an unrelated control,
@@ -77,12 +83,14 @@ export const Dialog = ({
   restoreFocusTo,
   size = "default",
   title,
+  widePresentation = "modal",
 }: DialogProps) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const openedWith = useRef("");
   const heightClass = size === "wide" ? "max-h-[85dvh]" : "max-h-[calc(100dvh-2rem)]";
   const sheet = presentation === "sheet";
+  const drawer = widePresentation === "drawer";
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -112,6 +120,11 @@ export const Dialog = ({
           `${heightClass} m-auto w-full ${
             size === "wide" ? "max-w-3xl" : "max-w-xl"
           } overflow-hidden bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:transition-opacity`,
+          /* The desktop dialog is a borderless card with the sheet's large radius, its
+             parts divided by space rather than rules; a confirmation is narrower. */
+          "lg:rounded-sheet lg:border-0",
+          !sheet && "lg:max-w-lg",
+          drawer && "lg:me-0 lg:h-dvh lg:max-h-dvh lg:max-w-[28.75rem] lg:rounded-none",
           /* The sheet drops to the bottom edge - a modal dialog is fixed to the viewport,
              so a zero bottom margin under an auto top one is the whole anchoring - and
              spans the width with only its top corners rounded. Below `sm` the UA's own
@@ -152,7 +165,15 @@ export const Dialog = ({
     >
       {/* The bottom padding keeps a sheet's last control above the home indicator. It is
           zero wherever the device has no such inset, and a centred dialog never meets it. */}
-      <div className={cx("flex flex-col", heightClass, sheet && "max-lg:pb-[env(safe-area-inset-bottom)]")} dir="rtl">
+      <div
+        className={cx(
+          "flex flex-col",
+          heightClass,
+          sheet && "max-lg:pb-[env(safe-area-inset-bottom)]",
+          drawer && "lg:h-dvh lg:max-h-dvh",
+        )}
+        dir="rtl"
+      >
         {/* Drawn, not a control: a sheet is closed by its X, Escape or the backdrop. The
             handle only says what kind of surface this is. */}
         {sheet ? (
@@ -160,38 +181,40 @@ export const Dialog = ({
         ) : null}
         <div
           className={cx(
-            "flex shrink-0 items-start justify-between gap-4 border-b border-cv-border px-6 py-5",
+            "flex shrink-0 items-start justify-between gap-4 border-b border-cv-border px-6 py-5 lg:border-b-0 lg:px-7 lg:pt-7 lg:pb-0",
             sheet
               ? "max-lg:border-b-0 max-lg:px-4 max-lg:pt-2.5 max-lg:pb-3"
               : "max-lg:border-b-0 max-lg:px-5 max-lg:pt-5 max-lg:pb-3",
           )}
         >
-          <div className="min-w-0">
+          <div className={cx("min-w-0", sheet && icon !== undefined && "lg:flex lg:items-center lg:gap-3.5")}>
             {icon === undefined ? null : (
-              <div aria-hidden="true" className="mb-3.5 lg:hidden">
+              <div aria-hidden="true" className={cx("mb-3.5", sheet && "lg:mb-0 lg:shrink-0")}>
                 {icon}
               </div>
             )}
-            <h2
-              className="text-heading-md font-semibold tracking-tight text-cv-text max-lg:font-extrabold"
-              id={headingId}
-              ref={headingRef}
-              tabIndex={-1}
-            >
-              {title}
-            </h2>
-            {description === undefined ? null : (
-              <p className="mt-1 text-support text-cv-text-muted" id={`${headingId}-description`}>
-                {description}
-              </p>
-            )}
+            <div className="min-w-0">
+              <h2
+                className="text-heading-md font-extrabold tracking-tight text-cv-text"
+                id={headingId}
+                ref={headingRef}
+                tabIndex={-1}
+              >
+                {title}
+              </h2>
+              {description === undefined ? null : (
+                <p className="mt-1 text-support text-cv-text-muted" id={`${headingId}-description`}>
+                  {description}
+                </p>
+              )}
+            </div>
           </div>
-          {/* A phone's confirmation is closed by its own two answers, as the design draws
-              it; Escape still cancels it. */}
-          {dismissible ? (
+          {/* A confirmation is closed by its own two answers at every width, as both
+              designs draw it; Escape still cancels it. */}
+          {dismissible && sheet ? (
             <IconButton
               aria-label="סגירה"
-              className={cx("-me-2 -mt-1 text-cv-text-muted hover:text-cv-text", !sheet && "max-lg:hidden")}
+              className="-me-2 -mt-1 text-cv-text-muted hover:text-cv-text"
               onClick={onClose}
             >
               <svg aria-hidden="true" className="size-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -202,7 +225,8 @@ export const Dialog = ({
         </div>
         <div
           className={cx(
-            "min-h-0 overflow-y-auto px-6 py-5 text-body leading-7",
+            "min-h-0 overflow-y-auto px-6 py-5 text-body leading-7 lg:px-7",
+            drawer && "lg:flex-1",
             sheet ? "max-lg:px-4 max-lg:pt-1 max-lg:pb-4" : "max-lg:px-5 max-lg:pt-0 max-lg:pb-2",
           )}
         >
@@ -214,8 +238,11 @@ export const Dialog = ({
         {footer === undefined ? null : (
           <div
             className={cx(
-              "flex shrink-0 flex-wrap justify-end gap-3 border-t border-cv-border px-6 py-4",
+              "flex shrink-0 flex-wrap justify-end gap-3 border-t border-cv-border px-6 py-4 lg:border-t-0 lg:px-7 lg:pt-0 lg:pb-7",
               "max-lg:gap-2 max-lg:text-body max-lg:*:min-h-12",
+              /* The desktop footer's commands are the design's 44px buttons, whatever size
+                 the caller asked for: they close the dialog's one decision. */
+              "lg:gap-2.5 lg:*:min-h-11 lg:*:px-5",
               footerLayout === "stack" ? "max-lg:flex-col max-lg:*:w-full" : "max-lg:*:flex-1",
               sheet ? "max-lg:px-4 max-lg:pt-3" : "max-lg:border-t-0 max-lg:px-5 max-lg:pt-3 max-lg:pb-5",
             )}
