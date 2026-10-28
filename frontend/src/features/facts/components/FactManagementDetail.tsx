@@ -106,6 +106,8 @@ export const FactManagementDetail = ({
           key={selectedEventId ?? "closed"}
           initiallyOpen={selectedEventId != null}
           summary="היסטוריית העובדה"
+          /* A phone draws it as a card row, like the record's other blocks there. */
+          variant="card"
         >
           {detail.events.length === 0 ? (
             <Callout title="לא נמצאה היסטוריית lifecycle" tone="blocker">
