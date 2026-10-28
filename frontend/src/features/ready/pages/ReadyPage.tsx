@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Download, FileCheck2, PencilLine, Send, ShieldCheck } from "lucide-react";
+import { Check, ChevronLeft, Download, FileCheck2, PencilLine, Send, ShieldCheck } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -14,6 +14,7 @@ import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
+import { cx } from "@/ui/cx";
 import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { Disclosure } from "@/ui/Disclosure";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -23,6 +24,7 @@ import { Skeleton } from "@/ui/Skeleton";
 import { SuccessNotice } from "@/ui/SuccessNotice";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { DecisionDocument } from "../components/DecisionDocument";
+import { ReadyDocumentSummary } from "../components/ReadyDocumentSummary";
 import { SubmissionDialog } from "../components/SubmissionDialog";
 
 const readyLoading = (
@@ -33,14 +35,18 @@ const readyLoading = (
   </div>
 );
 
-/* On a phone each folded extra is a card row of its own - a full-width, thumb-height
-   summary on the surface - the way the step's other sections sit on a phone's canvas.
-   From the large breakpoint it is the plain disclosure line it always was. */
-const phoneRowDisclosure =
-  "max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:[&>summary]:min-h-14 max-lg:[&>summary]:px-4 max-lg:[&>summary]:text-body max-lg:[&>summary]:font-bold max-lg:[&>summary]:text-cv-text";
-
-const CardHeading = ({ children, icon: Icon, id }: { children: ReactNode; icon: typeof FileCheck2; id: string }) => (
-  <h2 className="flex items-center gap-2 font-semibold text-cv-text" id={id}>
+const CardHeading = ({
+  children,
+  className,
+  icon: Icon,
+  id,
+}: {
+  children: ReactNode;
+  className?: string;
+  icon: typeof FileCheck2;
+  id: string;
+}) => (
+  <h2 className={cx("flex items-center gap-2 font-semibold text-cv-text", className)} id={id}>
     <Icon aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
     {children}
   </h2>
@@ -87,6 +93,9 @@ export const ReadyPage = () => {
     enabled: ready && documentHash !== null,
   });
   const document = documentQuery.data?.document;
+  /* A fact is listed by its own words; one the read carries without them has nothing
+     to show the reader but an identifier, so it is left out. */
+  const chosenFacts = (document?.facts ?? []).filter((fact) => fact.text != null && fact.text.trim() !== "");
 
   /* Submissions of this exact document, read from the recruitment history the projection
      already carries. The hash is the document's identity, so a submission of an earlier
@@ -103,10 +112,21 @@ export const ReadyPage = () => {
   const canSubmit = ready && detail?.available_actions.includes("submit") === true && documentHash !== null;
   const canDownload = ready && documentHash !== null;
 
+  /* The way back to the editor is one of the ways into the document, listed with the
+     decision and the facts behind it, rather than the bar's opening edge: the bar keeps
+     the two things done with the file - download it, record the send - and on a phone the
+     three together left none of them room to read. */
   const backLink = (
-    <Link className={buttonClasses("ghost")} to={routePaths.draft(applicationId)}>
-      <ArrowRight aria-hidden="true" className="size-icon-md" />
-      חזרה לעריכת הטיוטה
+    <Link
+      className={buttonClasses(
+        "ghost",
+        "w-fit max-lg:min-h-14 max-lg:w-full max-lg:justify-start max-lg:gap-2.5 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:px-4 max-lg:text-body max-lg:font-bold",
+      )}
+      to={routePaths.draft(applicationId)}
+    >
+      <PencilLine aria-hidden="true" className="size-icon-md" />
+      <span className="max-lg:flex-1">חזרה לעריכת הטיוטה</span>
+      <ChevronLeft aria-hidden="true" className="size-icon-md lg:hidden" />
     </Link>
   );
 
@@ -159,6 +179,9 @@ export const ReadyPage = () => {
         )
       }
       measure="wide"
+      /* The design keeps this step's own title and line under the phone header: the
+         finished document is the step's statement, not just its position. */
+      phoneHeading="full"
       queryError={applicationQuery.error}
       stage="ready"
       title={detail !== undefined && !ready ? "קורות החיים אינם מוכנים כרגע" : undefined}
@@ -172,6 +195,15 @@ export const ReadyPage = () => {
       >
         {detail === undefined ? null : (
           <>
+            {/* A phone's mark that the step is done, at the top of the body: the wide
+                screen's spine shows it as its last step filled. */}
+            {ready ? (
+              <p className="-mb-3 flex w-fit items-center gap-1 rounded-pill bg-cv-surface-muted px-2.5 py-0.5 text-caption font-bold text-cv-text lg:hidden">
+                <Check aria-hidden="true" className="size-icon-sm" />
+                מוכן
+              </p>
+            ) : null}
+
             <PreparationAlerts detail={detail} screen="ready" />
 
             {/* The end of the flow, at the top of the step where the eye lands after the
@@ -207,10 +239,15 @@ export const ReadyPage = () => {
                   aria-labelledby="ready-file-heading"
                   className="flex min-w-0 flex-col gap-4 rounded-surface bg-cv-surface p-5 max-lg:p-4"
                 >
-                  <CardHeading icon={FileCheck2} id="ready-file-heading">
+                  {/* On a phone the file speaks through its summary below; the heading stays
+                      for assistive tech, which reads the card by it. */}
+                  <CardHeading className="max-lg:sr-only" icon={FileCheck2} id="ready-file-heading">
                     קובץ קורות החיים
                   </CardHeading>
-                  <p className="text-support leading-6 text-cv-text-muted">
+                  {document === undefined ? null : (
+                    <ReadyDocumentSummary approvedAt={detail.approved_at ?? null} language={document.language} />
+                  )}
+                  <p className="text-support leading-6 text-cv-text-muted max-lg:hidden">
                     הקובץ נוצר מהמסמך כפי שאושר
                     {detail.approved_at == null ? "" : ` ב־${formatDateTime(detail.approved_at)}`}. השרת בודק בעת ההורדה
                     שהמסמך עדיין מוכן, ולכן הקובץ שיורד הוא תמיד זה שמתאים לו.
@@ -219,13 +256,6 @@ export const ReadyPage = () => {
                     <p className="text-support text-cv-text-muted">
                       ההגשה האחרונה של המסמך הזה נרשמה ב־{formatDateTime(submittedAt)}.
                     </p>
-                  )}
-                  {/* A phone's download is the card's full width, the one thing the reader
-                      does with this card there. */}
-                  {downloadButton === null ? null : (
-                    <div className="flex flex-wrap gap-3 max-lg:[&>*]:min-h-11 max-lg:[&>*]:flex-1">
-                      {downloadButton}
-                    </div>
                   )}
                 </Card>
 
@@ -245,8 +275,8 @@ export const ReadyPage = () => {
                   </Card>
 
                   {submittedAt === null ? null : (
-                    <Disclosure className={phoneRowDisclosure} summary="אפשרויות נוספות">
-                      <div className="pt-2 max-lg:px-4 max-lg:pb-4">
+                    <Disclosure summary="אפשרויות נוספות" variant="card">
+                      <div className="pt-2">
                         <p className="mb-3 text-support text-cv-text-muted">
                           הפעולות כאן אינן חלק מהשלמת המסירה הנוכחית ואינן משנות את המסמך.
                         </p>
@@ -258,8 +288,8 @@ export const ReadyPage = () => {
                     </Disclosure>
                   )}
 
-                  <Disclosure className={phoneRowDisclosure} flush summary="הסבר ההחלטות">
-                    <Card className="rounded-surface bg-cv-surface p-4 max-lg:border-0 max-lg:pt-1">
+                  <Disclosure flush summary="הסבר ההחלטות" variant="card">
+                    <Card className="rounded-surface bg-cv-surface p-4 max-lg:border-0 max-lg:p-0 max-lg:pt-1">
                       {decisionQuery.error === null ? (
                         <DecisionDocument
                           decision={decisionQuery.data}
@@ -279,6 +309,21 @@ export const ReadyPage = () => {
                       )}
                     </Card>
                   </Disclosure>
+
+                  {/* The facts the document was built from, by their own words. */}
+                  {chosenFacts.length === 0 ? null : (
+                    <Disclosure summary={`העובדות שנבחרו לקורות החיים (${chosenFacts.length})`} variant="card">
+                      <ul className="flex list-disc flex-col gap-1.5 ps-4 text-support text-cv-text">
+                        {chosenFacts.map((fact) => (
+                          <li dir="auto" key={fact.fact_id}>
+                            {fact.text}
+                          </li>
+                        ))}
+                      </ul>
+                    </Disclosure>
+                  )}
+
+                  {backLink}
                 </aside>
               </div>
             )}
@@ -286,16 +331,17 @@ export const ReadyPage = () => {
         )}
       </QueryState>
 
-      {/* The ready step's own bar, the same surface the two steps before it close with: the
-          way back to editing on one edge, what to do with the finished CV on the other. */}
+      {/* The ready step's own bar, the same surface the two steps before it close with:
+          what to do with the finished CV. */}
       {detail === undefined ? null : (
         <CommitBar
-          back={backLink}
           label={NEXT_STEP_LABEL}
-          /* The step's one command. The download sat here too, beside the same button in
-             the file card just above it - two equal buttons for one action - and on a
-             phone the pair left the way back to the editor too little room to be read. */
+          /* The step's one command, with the download as its secondary beside it - the
+             two things done with the finished file, in one place. The download once sat
+             here beside the same button in the file card - two equal buttons for one
+             action - so the card no longer carries one. */
           primary={nextStep === null ? undefined : nextStep.primary}
+          {...(downloadButton === null ? {} : { secondary: downloadButton })}
         >
           {nextStep === null ? undefined : (
             <p className="text-support leading-6 text-cv-text-muted" dir="auto">
