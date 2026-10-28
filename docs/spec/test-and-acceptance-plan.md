@@ -136,7 +136,7 @@ paging.
 `frontend/src/` tests cover the RTL shell, intake, analysis decisions, the editor
 (autosave, history, conflicts), validation, approval, Operation progress, Ready,
 recruitment, the list, facts, settings, and routing. `frontend/e2e/` covers focus,
-dialogs, search palette, sidebar, theme, and axe scans; `accessibility.spec.ts` scans
+dialogs, search palette, theme, and axe scans; `accessibility.spec.ts` scans
 the main screens. Every new screen gets an axe scan.
 
 `frontend/e2e/integration/intake.spec.ts`: intake through the real API, no provider or
