@@ -22,10 +22,12 @@ interface ApplicationDetailsDialogProps {
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
+/* On a phone each fact is a tile of its own in a two-by-two grid, its value a step
+   larger: the sheet is narrow, and four tiles read faster there than one box of pairs. */
 const Fact = ({ children, detail, label }: { children: ReactNode; detail?: ReactNode; label: string }) => (
-  <div className="flex min-w-0 flex-col items-start gap-1">
+  <div className="flex min-w-0 flex-col items-start gap-1 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-canvas max-lg:px-3.5 max-lg:py-3">
     <span className="text-support text-cv-text-muted">{label}</span>
-    <span className="text-support font-semibold text-cv-text">{children}</span>
+    <span className="text-support font-semibold text-cv-text max-lg:text-body max-lg:font-bold">{children}</span>
     {detail === undefined ? null : <span className="text-support text-cv-text-muted tabular-nums">{detail}</span>}
   </div>
 );
@@ -155,7 +157,7 @@ export const ApplicationDetailsDialog = ({
       title={<span dir="auto">פרטי משרה: {application.company}</span>}
     >
       <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-4 rounded-control border border-cv-border bg-cv-canvas p-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 rounded-control border border-cv-border bg-cv-canvas p-4 max-lg:gap-2 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 lg:grid-cols-4">
           <Fact label="סטטוס משרה">{application.is_closed ? "סגורה" : "פתוחה"}</Fact>
           <Fact detail={`שלב ${step} מתוך ${total}`} label="הכנת קו״ח">
             {preparationStateLabels[application.preparation_state]}
