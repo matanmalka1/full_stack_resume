@@ -10,26 +10,28 @@ import { boardPath } from "@/navigation/boardReturn";
 
    On a phone the miss is the whole screen: the code drawn large and muted, then the
    heading, the explanation and the way back, centred between the masthead and the
-   bottom bar, the button across the width where a thumb finds it. A wide screen gets the
-   wrapper as a plain block and the page exactly as before. */
+   bottom bar, the button across the width where a thumb finds it. A wide screen draws the
+   same statement centred in the page, the code larger still, and the way back as a
+   button of its own width under it. */
 export const NotFoundPage = () => (
-  <div className="max-lg:flex max-lg:min-h-[70dvh] max-lg:items-center max-lg:text-center max-lg:[&>section]:w-full">
+  <div className="flex min-h-[70dvh] items-center text-center [&>section]:w-full">
     <PageShell
       phoneMasthead="centered"
+      wideMasthead="centered"
       description="ייתכן שהכתובת השתנתה או שהרשומה נסגרה. אפשר לחזור ללוח המועמדויות ולהמשיך משם."
       eyebrow={
-        <span className="max-lg:mb-4 max-lg:block max-lg:text-[5.5rem] max-lg:leading-none max-lg:font-extrabold max-lg:text-cv-text-muted">
+        <span className="max-lg:mb-4 max-lg:block max-lg:text-[5.5rem] max-lg:leading-none max-lg:font-extrabold max-lg:text-cv-text-muted lg:mb-8 lg:block lg:text-[8.5rem] lg:leading-none lg:font-extrabold lg:tracking-tight lg:text-cv-text-muted">
           404
         </span>
       }
       measure="form"
       title="העמוד לא נמצא"
     >
-      <div>
+      <div className="lg:flex lg:justify-center">
         <Link
           className={buttonClasses(
             "primary",
-            "max-lg:min-h-13 max-lg:w-full max-lg:rounded-surface max-lg:text-body max-lg:shadow-floating",
+            "max-lg:min-h-13 max-lg:w-full max-lg:rounded-surface max-lg:text-body max-lg:shadow-floating lg:min-h-13 lg:rounded-surface lg:px-6 lg:text-body lg:shadow-floating",
           )}
           to={boardPath()}
         >
