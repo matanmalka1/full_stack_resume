@@ -39,6 +39,12 @@ export const ActionBar = ({ align = "end", className, primary, secondary, sticky
      than `flex-row-reverse`: the shell is RTL, so the row already runs right-to-left, and
      reversing it would flip the group to the wrong edge as well as reorder it. */
   const primaryLeads = !split && secondary !== undefined;
+  /* Pinned on a phone, the bar is the screen's bottom edge, as `CommitBar` is: its groups
+     share the width and every command is a 48px target with its label a step larger. */
+  const group = cx(
+    "flex flex-wrap gap-3",
+    sticky && "max-lg:flex-1 max-lg:flex-nowrap max-lg:*:min-h-12 max-lg:*:flex-1",
+  );
 
   return (
     <div
@@ -50,14 +56,14 @@ export const ActionBar = ({ align = "end", className, primary, secondary, sticky
             ? "justify-start"
             : "justify-end",
         sticky && !split
-          ? "sticky bottom-(--cv-bottom-nav-height) z-(--cv-z-sticky) -mx-4 mt-1 border-t border-cv-border bg-cv-surface/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
+          ? "sticky bottom-(--cv-bottom-nav-height) z-(--cv-z-sticky) -mx-4 mt-1 border-t border-cv-border bg-cv-surface/90 px-4 py-3 backdrop-blur-xl max-lg:flex-nowrap max-lg:gap-2 max-lg:text-body sm:-mx-6 sm:px-6"
           : undefined,
         className,
       )}
     >
-      {primaryLeads ? <div className="flex flex-wrap gap-3">{primary}</div> : null}
-      {secondary === undefined ? null : <div className="flex flex-wrap gap-3">{secondary}</div>}
-      {primaryLeads ? null : <div className="flex flex-wrap gap-3">{primary}</div>}
+      {primaryLeads ? <div className={group}>{primary}</div> : null}
+      {secondary === undefined ? null : <div className={group}>{secondary}</div>}
+      {primaryLeads ? null : <div className={group}>{primary}</div>}
     </div>
   );
 };
