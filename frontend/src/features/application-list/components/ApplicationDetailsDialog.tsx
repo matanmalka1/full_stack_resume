@@ -130,8 +130,11 @@ export const ApplicationDetailsDialog = ({
     </>
   );
 
+  /* On a wide screen the details slide in beside the board rather than over it, so the
+     card the reader opened stays in view; on a phone they are the usual bottom sheet. */
   return (
     <Dialog
+      widePresentation="drawer"
       footer={
         <>
           <Button
