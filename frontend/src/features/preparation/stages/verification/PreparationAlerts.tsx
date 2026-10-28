@@ -5,6 +5,7 @@ import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
+import { cx } from "@/ui/cx";
 import { ReasonCallout } from "../../components/ReasonCallout";
 import { type PreparationScreen, actionDestination, screenPath } from "../../model/actionDestinations";
 import {
@@ -73,10 +74,15 @@ const ResolvableReasonCallout = ({
    Keeping this region visually quiet lets the action surface beside it remain the clear
    place to continue the workflow. */
 export const PreparationAlerts = ({
+  aside = false,
   detail,
   screen = "preparation",
   showReviewReasons = true,
 }: {
+  /* Whether the region is the preparation step's desktop aside: from the large breakpoint
+     it then takes the grid's end column beside the work and names itself in view. The
+     editor and the ready screen place it in their own flow and leave this off. */
+  aside?: boolean;
   detail: ApplicationDetail;
   /* The current screen decides whether a reason's resolution is already beside it. */
   screen?: PreparationScreen;
@@ -110,10 +116,22 @@ export const PreparationAlerts = ({
     /* On a phone the backdrop is a rounded, borderless block like the cards around it:
        there the step is a column of cards on the canvas, and a square hairline box read
        as a different kind of thing. */
+    /* From the large breakpoint the alerts are the step's aside: the column on the end
+       side beside the work, spanning its rows, as the desktop design draws "התראות". */
     <Card
       aria-label="התראות"
-      className="flex flex-col gap-3 bg-cv-surface-muted p-3 max-lg:rounded-surface max-lg:border-0 max-lg:p-3.5"
+      className={cx(
+        "flex flex-col gap-3 bg-cv-surface-muted p-3 max-lg:rounded-surface max-lg:border-0 max-lg:p-3.5",
+        aside && "lg:col-start-2! lg:row-span-3 lg:row-start-1 lg:ms-5 lg:w-80 lg:rounded-surface lg:border-0 lg:p-4",
+      )}
     >
+      {/* The aside's name, drawn where it stands apart from the work; on a phone the
+          backdrop reads as part of the column and the region's label is enough. */}
+      {aside ? (
+        <h2 aria-hidden="true" className="text-support font-bold text-cv-text max-lg:hidden">
+          התראות
+        </h2>
+      ) : null}
       {reviewReasons.map((reason) => (
         <ResolvableReasonCallout
           applicationId={detail.application.id}

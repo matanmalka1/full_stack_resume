@@ -39,9 +39,10 @@ export const BuildFromAnalysisDialog = ({
     title="בניית המסמך מחדש מהניתוח החדש"
   >
     <div className="flex flex-col gap-3">
-      {/* On a phone what the rebuild loses is set apart on a muted ground, the one block
-          of the sheet to read before either button. */}
-      <p className="max-lg:rounded-control max-lg:bg-cv-surface-muted max-lg:p-3 max-lg:text-support max-lg:leading-6">
+      {/* What the rebuild loses is set apart on a muted ground, the one block of the
+          dialog to read before either button - on a phone's sheet and, as the desktop
+          design draws it, in the centred dialog. */}
+      <p className="rounded-control bg-cv-surface-muted p-3 text-support leading-6">
         המסמך יעבור לניתוח החדש, וטיוטה חדשה תיווצר ממנו. תוכן הטיוטה הנוכחית יימחק, וכל אישור או קובץ שהופק ממנה לא
         יחולו עוד.
       </p>
