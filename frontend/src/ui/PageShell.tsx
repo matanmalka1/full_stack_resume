@@ -69,8 +69,9 @@ interface PageShellProps {
   phoneMasthead?: "visible" | "hidden" | "centered";
   /* `phoneMasthead`'s counterpart from the large breakpoint. "hidden" keeps the heading in
      the document for assistive tech but gives the body the page - a record chosen by the
-     URL (the fact detail) replaces its list's masthead with its own trail at every width. */
-  wideMasthead?: "visible" | "hidden";
+     URL (the fact detail) replaces its list's masthead with its own trail at every width.
+     "centered" centres it, for a page that is only a statement and its way out (the 404). */
+  wideMasthead?: "visible" | "hidden" | "centered";
   title: ReactNode;
 }
 
@@ -153,6 +154,7 @@ export const PageShell = ({
               phoneMasthead === "hidden" && "max-lg:sr-only",
               phoneMasthead === "centered" && "max-lg:justify-center max-lg:text-center",
               wideMasthead === "hidden" && "lg:sr-only",
+              wideMasthead === "centered" && "lg:justify-center lg:text-center",
             )}
           >
             <div className="flex min-w-0 items-center gap-4 max-lg:contents">
