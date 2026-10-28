@@ -77,11 +77,13 @@ On desktop the application uses a text-first navigation sidebar on the RTL inlin
 edge. Active navigation there is a flat background step, a heavier label and a 2px edge
 indicator.
 
-Below the large breakpoint the masthead keeps only the wordmark and the new-job command,
-and the three destinations move to a bar pinned to the bottom of the viewport: icon over
-a short visible label, the active one marked by a pill behind its icon and a heavier
-label. The quick switcher's trigger and sign-out appear in the sidebar only; the ⌘K
-shortcut stays live everywhere and sign-out moves to the Settings account card. The bar's
+Below the large breakpoint the masthead keeps only the wordmark, led by an accent app
+mark, and the quick switcher as an icon button. The three destinations move to a bar
+pinned to the bottom of the viewport: icon over a short visible label, the active one
+marked by a pill behind its icon and a heavier label. The new-job command becomes a
+floating button over the board, above the bottom bar; sign-out moves to the Settings
+account card. The board's own search field folds away there, and its action hub becomes
+a dark accent frame around a light list. The bar's
 height is `--cv-bottom-nav-height` (zero at the large breakpoint), and every other
 bottom-pinned surface - `CommitBar`, a sticky `ActionBar`, the Settings save row, the
 page's own bottom padding and scroll padding - stands on top of it by that height.

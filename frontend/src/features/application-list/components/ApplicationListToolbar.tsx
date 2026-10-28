@@ -78,13 +78,15 @@ export const ApplicationListToolbar = ({
 
   return (
     <div className="flex flex-col gap-3">
+      {/* On a phone the masthead's search icon finds a job, so the board's own field
+          folds away there and the bar keeps only the filter toggle, drawn bare. */}
       <search
         aria-label="סינון וחיפוש מועמדויות"
         className={flatSurfaceClasses(
-          "cv-fields-compact flex flex-wrap items-center gap-2 rounded-control bg-cv-surface px-3 py-2.5",
+          "cv-fields-compact flex flex-wrap items-center gap-2 rounded-control bg-cv-surface px-3 py-2.5 max-sm:border-0 max-sm:bg-transparent max-sm:p-0",
         )}
       >
-        <Field className="w-full sm:w-72 md:min-w-56 md:max-w-2xl md:flex-1" label="חיפוש במועמדויות">
+        <Field className="w-full max-sm:hidden sm:w-72 md:min-w-56 md:max-w-2xl md:flex-1" label="חיפוש במועמדויות">
           {(control) => (
             <SearchInput
               {...control}

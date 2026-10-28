@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem, RecruitmentStatus } from "@/api/contracts";
@@ -41,13 +41,33 @@ interface ClosedResult {
   previousStatus: RecruitmentStatus;
 }
 
+/* A phone's masthead has no room for the new-job command, so below the large breakpoint
+   it floats over the board, above the bottom navigation, where a thumb reaches it. */
+const NewApplicationFab = () => (
+  <>
+    {/* Room under the last card, so the floating button never covers it. */}
+    <div aria-hidden="true" className="h-16 lg:hidden" />
+    <div className="fixed end-4 bottom-[calc(var(--cv-bottom-nav-height)+1rem)] z-(--cv-z-sticky) lg:hidden">
+      <Link
+        aria-label="קליטת משרה חדשה"
+        className={buttonClasses("primary", "h-14 rounded-surface px-5 text-body shadow-floating")}
+        to={routePaths.newApplication}
+      >
+        <Plus aria-hidden="true" className="size-icon-lg" />
+        משרה חדשה
+      </Link>
+    </div>
+  </>
+);
+
 /* The board reads top to bottom as four answers: where the reader is, what is waiting
    for them, which slice of the work they are looking at, and the work itself.
 
    The one action that starts something - a new Application - is the shell's, not this
    screen's, and is on screen already; repeating it here would give the reader two
-   buttons for one thing. The empty database is the exception: there is no board to act
-   on yet, so the offer is the only thing on the page. */
+   buttons for one thing. On a phone the shell has no room for it and the board carries
+   it instead (`NewApplicationFab`). The empty database is the exception: there is no
+   board to act on yet, so the offer is the only thing on the page. */
 export const ApplicationListPage = () => {
   const { listQuery, query, searchInput, setSearchInput, updateQuery } = useApplicationListQuery();
   const [viewMode, setViewModeState] = useState<ViewMode>(initialViewMode);
@@ -291,6 +311,7 @@ export const ApplicationListPage = () => {
               returnedId={returnedId}
               viewMode={viewMode}
             />
+            <NewApplicationFab />
           </div>
         )}
       </QueryState>

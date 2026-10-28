@@ -92,7 +92,7 @@ const ApplicationCard = ({
       aria-label={`${item.target_role} אצל ${item.company}`}
       className={surfaceClasses(
         cx(
-          "group flex h-full min-w-0 cursor-pointer flex-col gap-4 p-5 transition-all hover:border-cv-border-strong focus-visible:border-cv-border-strong",
+          "group flex h-full min-w-0 cursor-pointer flex-col gap-3 p-3.5 transition-all hover:border-cv-border-strong focus-visible:border-cv-border-strong lg:gap-4 lg:p-5",
           /* A closed Application is history: it sits flat and quiet so the open work
              around it is what the eye lands on. Its text keeps full contrast. */
           item.is_closed
@@ -133,21 +133,24 @@ const ApplicationCard = ({
 
       <ApplicationProgress item={item} />
 
+      {/* A phone's card stops at who and how far along: what to do next is the action
+          hub's above the list and the details sheet's a tap away, and repeated on every
+          card it pushed the second card off the screen. */}
       {hasNext ? (
-        <div>
+        <div className="max-lg:hidden">
           {/* Named for assistive tech only: drawn on every card it said nothing the
               action under it does not already say. */}
           <p className="sr-only">פעולה מומלצת הבאה</p>
           <ApplicationCardNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
         </div>
       ) : (
-        <p className="text-support text-cv-text-muted">אין פעולה מתוזמנת כעת</p>
+        <p className="text-support text-cv-text-muted max-lg:hidden">אין פעולה מתוזמנת כעת</p>
       )}
 
-      <div className="mt-auto flex items-center justify-between gap-3 border-t border-cv-border pt-3 text-support text-cv-text-muted">
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-cv-border pt-3 text-support text-cv-text-muted max-lg:border-t-0 max-lg:pt-0">
         <UpdatedAt item={item} />
         <button
-          className="shrink-0 font-semibold text-cv-accent hover:underline"
+          className="shrink-0 font-semibold text-cv-accent hover:underline max-lg:hidden"
           onClick={() => onRequestUpdate(item)}
           type="button"
         >

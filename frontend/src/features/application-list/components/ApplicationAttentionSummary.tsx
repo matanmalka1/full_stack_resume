@@ -60,20 +60,29 @@ export const ApplicationAttentionSummary = ({
     );
   }
 
+  /* Below the large breakpoint the hub is the board's one dark block: an accent frame
+     whose heading sits on the accent and whose rows sit on a light card inside it, so
+     what is waiting is the first thing a phone's reader sees under the slices. */
   return (
-    <section aria-labelledby="urgent-action-heading" className="rounded-surface border border-cv-border bg-cv-surface">
+    <section
+      aria-labelledby="urgent-action-heading"
+      className="rounded-surface border border-cv-border bg-cv-surface max-lg:border-cv-accent max-lg:bg-cv-accent max-lg:p-1 max-lg:shadow-floating"
+    >
       <details className="group/attention" open>
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 hover:bg-cv-surface-muted">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 lg:hover:bg-cv-surface-muted">
           <span className="flex min-w-0 items-baseline gap-2">
-            <Sparkles aria-hidden="true" className="size-icon-md shrink-0 self-center text-cv-warning" />
-            <h2 className="text-support font-bold text-cv-text" id="urgent-action-heading">
+            <Sparkles
+              aria-hidden="true"
+              className="size-icon-md shrink-0 self-center text-cv-warning max-lg:text-cv-on-accent"
+            />
+            <h2 className="text-support font-bold text-cv-text max-lg:text-cv-on-accent" id="urgent-action-heading">
               מוקד פעולות
             </h2>
-            <span className="shrink-0 self-center rounded-pill bg-cv-accent px-2 text-support font-bold text-cv-on-accent tabular-nums">
+            <span className="shrink-0 self-center rounded-pill bg-cv-accent px-2 text-support font-bold text-cv-on-accent tabular-nums max-lg:bg-cv-on-accent max-lg:text-cv-accent">
               {waitingCount}
               <span className="sr-only"> ממתינות</span>
             </span>
-            <span className="truncate text-support text-cv-text-muted">
+            <span className="truncate text-support text-cv-text-muted max-lg:text-cv-on-accent">
               {waitingCount > displayItems.length
                 ? `${displayItems.length} הראשונות מוצגות`
                 : displayItems.length === 1
@@ -83,14 +92,14 @@ export const ApplicationAttentionSummary = ({
           </span>
           <ChevronDown
             aria-hidden="true"
-            className="size-icon-md shrink-0 text-cv-text-muted transition-transform group-open/attention:rotate-180"
+            className="size-icon-md shrink-0 text-cv-text-muted transition-transform group-open/attention:rotate-180 max-lg:text-cv-on-accent"
           />
         </summary>
 
         {/* The first column is a fixed width rather than `auto`: each row is its own
             grid, so a badge-width column let every title start at a different x and the
             three rows read as unrelated blocks. */}
-        <div className="divide-y divide-cv-border border-t border-cv-border">
+        <div className="divide-y divide-cv-border border-t border-cv-border max-lg:overflow-hidden max-lg:rounded-control max-lg:border-t-0 max-lg:bg-cv-surface">
           {displayItems.map((item) => (
             <article
               className="grid gap-x-3 gap-y-2 px-3 py-2.5 transition-colors hover:bg-cv-surface-muted sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:items-center"
@@ -155,8 +164,13 @@ export const ApplicationAttentionSummary = ({
           ))}
         </div>
         {filterActive ? null : (
-          <div className="flex justify-end border-t border-cv-border px-3 py-2">
-            <Button className="gap-1" onClick={onShowAll} size="compact" variant="ghost">
+          <div className="flex justify-end border-t border-cv-border px-3 py-2 max-lg:border-t-0 max-lg:px-2 max-lg:py-1">
+            <Button
+              className="gap-1 max-lg:text-cv-on-accent max-lg:hover:bg-transparent max-lg:hover:underline"
+              onClick={onShowAll}
+              size="compact"
+              variant="ghost"
+            >
               הצגת כל הדורשות טיפול בלוח
               <ChevronLeft aria-hidden="true" className="size-icon-sm" />
             </Button>
