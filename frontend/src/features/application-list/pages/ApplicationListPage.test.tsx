@@ -725,11 +725,11 @@ describe("ApplicationListPage", () => {
     expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
     /* The dialog opens before its own detail fetch settles - it shows a loading line
        until then - so the form's fields exist only once that resolves. */
-    const status = await screen.findByLabelText("עדכון שלב");
-    expect(within(status).getByRole("option", { name: "סגור" })).toBeInTheDocument();
-    expect(within(status).queryByRole("option", { name: "הוגשה מועמדות" })).not.toBeInTheDocument();
+    const status = await screen.findByRole("group", { name: "מצב המועמדות" });
+    expect(within(status).getByRole("radio", { name: "סגור" })).toBeInTheDocument();
+    expect(within(status).queryByRole("radio", { name: "הוגשה מועמדות" })).not.toBeInTheDocument();
 
-    fireEvent.change(status, { target: { value: "closed" } });
+    fireEvent.click(within(status).getByRole("radio", { name: "סגור" }));
     fireEvent.change(screen.getByLabelText("הפעולה הבאה"), { target: { value: "Send follow-up" } });
     fireEvent.change(screen.getByLabelText(/תאריך יעד/), { target: { value: "2026-09-10" } });
     fireEvent.change(screen.getByLabelText("תוכן ההערה"), { target: { value: "Interview notes" } });
