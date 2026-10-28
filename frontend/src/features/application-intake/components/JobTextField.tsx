@@ -10,6 +10,7 @@ import { cx } from "@/ui/cx";
 import { formatBytes } from "@/utils/formatBytes";
 import { isJobTextWithinBudget, JOB_TEXT_REQUIRED_MESSAGE, jobTextByteLength } from "@/features/application-detail";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
+import { intakeSectionClasses } from "./intakeSection";
 
 const NOTICE_RATIO = 0.8;
 
@@ -40,6 +41,7 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
 
   return (
     <FormSection
+      className={intakeSectionClasses}
       description="הטקסט יישמר בדיוק כפי שהוזן."
       divided={false}
       title={
@@ -67,7 +69,9 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
                     isJobTextWithinBudget(value) || "טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת המועמדות.",
                 },
               })}
-              className="rtl-placeholder h-64 max-h-[55vh]"
+              /* A phone draws the empty field as a paste target: dashed, and short
+                 enough that the details below it start on the first screen. */
+              className="rtl-placeholder h-64 max-h-[55vh] max-lg:h-48 max-lg:border-dashed"
               dir="auto"
               placeholder="הדבק כאן את תיאור המשרה…"
             />

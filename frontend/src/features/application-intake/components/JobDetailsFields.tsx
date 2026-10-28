@@ -7,6 +7,7 @@ import { FormSection } from "@/ui/FormSection";
 import { Input } from "@/ui/Input";
 import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS, validateSourceUrl } from "@/features/application-detail";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
+import { intakeSectionClasses } from "./intakeSection";
 
 const examplePlaceholder = (example: string) => `לדוגמה: \u2066${example}\u2069`;
 
@@ -27,7 +28,7 @@ interface JobDetailsFieldsProps {
 }
 
 export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetailsFieldsProps) => (
-  <FormSection divided={false} title="פרטי המשרה">
+  <FormSection className={intakeSectionClasses} divided={false} title="פרטי המשרה">
     <div className="grid gap-4 md:grid-cols-2">
       <Field error={errors.company?.message} label="שם החברה">
         {(control) => (
