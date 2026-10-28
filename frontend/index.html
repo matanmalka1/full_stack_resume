@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
+    <!-- Home Screen: without a manifest declaring `standalone`, iOS opens the icon with
+         Safari's address bar and toolbar. The Apple tag covers iOS before 16.4. The PNGs
+         are rendered from favicon-source.svg; the touch icon is full-bleed because iOS
+         rounds its own corners. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="קורות חיים" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#29323a" media="(prefers-color-scheme: dark)" />
     <script>
       // A startup cache only; the server replaces it after Settings loads.
       try {
