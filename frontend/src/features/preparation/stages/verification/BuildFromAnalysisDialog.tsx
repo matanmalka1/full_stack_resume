@@ -27,6 +27,8 @@ export const BuildFromAnalysisDialog = ({
     confirmDisabled={commandsBlocked}
     confirmLabel="בנייה מחדש מהניתוח החדש"
     dismissible={false}
+    /* The design stacks the two answers full-width on a phone: the rebuild over the way out. */
+    footerLayout="stack"
     headingId="build-from-analysis-heading"
     icon={<RefreshCw aria-hidden="true" />}
     onCancel={onClose}
