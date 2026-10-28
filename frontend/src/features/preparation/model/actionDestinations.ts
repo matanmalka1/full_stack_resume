@@ -19,6 +19,9 @@ const destinations: Record<string, (applicationId: string) => string> = {
   /* `MatchingConfigurationEditor` is a control inside `PreparationView`, which this screen
      renders, so the action resolves to the screen already holding it. */
   edit_matching_configuration: routePaths.application,
+  /* Gap questions are asked and answered under the analysis whose requirements they are
+     about. */
+  ask_gap_questions: routePaths.application,
   /* Re-pinning the document to a newer analysis sits beside the analysis it is decided
      against. */
   build_from_analysis: routePaths.application,
@@ -65,6 +68,9 @@ const operationActions: Record<OperationType, string> = {
   regenerate_section: "regenerate_section",
   regenerate_claim: "regenerate_claim",
   render_document: "render",
+  ask_gap_questions: "ask_gap_questions",
+  /* An answer is drafted on the screen that asked the question. */
+  draft_gap_fact: "ask_gap_questions",
 };
 
 const resumeDestination = (application: ResumeProjection): string => {

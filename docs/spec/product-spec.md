@@ -86,13 +86,15 @@ and tracking all work without a provider.
 - Editable job text, locked by the first Submission (§8).
 - AI job analysis with requirements, coverage, gaps, Fit, and issues; a form to change
   Track, Profile, language, and Emphasis.
+- Gap questions: one AI question per unmet requirement, answered in the user's own
+  words; each answer becomes a pending fact the user edits and confirms (§9.1).
 - One mutable CV document per Application: AI drafting, a section/claim editor with
   autosave, reordering within a section, undo/redo, section and claim regeneration,
   review of a user-written line, and HTML and draft-PDF previews.
 - Content check, explicit approval, rendering with PDF/ATS validation, and Ready.
-- Facts screen ("מאגר העובדות"): list, inspect, create pending, confirm, delete, attach
-  to Profile sections; create a fact from a claim; `Confirm and use`. *Not built:*
-  editing a fact in place (§17).
+- Facts screen ("מאגר העובדות"): list, inspect, create pending, edit pending, confirm,
+  delete, attach to Profile sections; create a fact from a claim; `Confirm and use`.
+  *Not built:* editing a canonical fact in place (§17).
 - Dashboard with search, filters, presets, facets, and sorting; Application Detail with
   preparation state, blockers, next action, notes, timeline, and submissions.
 - Recruitment status, corrections, one next action with overdue warning, internal and
@@ -110,7 +112,9 @@ and tracking all work without a provider.
 - Fetching jobs from URLs or LinkedIn, parsing job PDFs, arbitrary uploads or imports.
 - Rules-based analysis, other AI providers, arbitrary model IDs, or user prompts.
 - Cover letters, messages, emails, or other document types.
-- AI extracting facts from edited text on its own.
+- AI extracting facts from edited text, a posting, or anything else on its own. The one
+  exception: AI drafts a fact from the user's own explicit answer to a gap question
+  (§9.1), saved as `pending`, and it counts only once the user confirms it (§17).
 - Web editing of Profiles, policies, prompts, or rules.
 - Archive or retirement states for facts.
 - WYSIWYG editing, section reordering, drag-and-drop.
@@ -125,8 +129,8 @@ and tracking all work without a provider.
 2. Every record belongs to exactly one user, directly or through its Application.
    Another user's record behaves exactly like a missing one (§22).
 3. Each Application has exactly one `CVDocument`, created with its first analysis.
-4. JobAnalysis, AI call records, Submissions, recruitment/audit/fact events, and
-   finished Operations are immutable, and job text is locked once submitted. Database
+4. JobAnalysis, AI call records, Submissions, recruitment/audit/fact events, gap
+   questions and their answers, and finished Operations are immutable, and job text is locked once submitted. Database
    triggers enforce this.
 5. Editing an approved or Ready document is always allowed and returns it to draft.
 6. Approval and Ready are derived on read by comparing `approved_basis` and
@@ -221,6 +225,35 @@ Review reasons — a fact the document uses that is pending or deleted
 When automatic generation is on (off by default), the analysis that creates the
 document also queues `create_draft`, with the model and effort fixed at submission.
 The Web client follows it into the editor.
+
+### 9.1 Gap questions
+
+The newest analysis's `unsupported` and `partial` requirements - mandatory first, then
+preferred, then unknown importance, at most six - can each get one question
+(`ask_gap_questions`, an Operation). The AI writes it in the analysis language, asks
+whether the user has real experience that would answer that requirement (for a
+partial one, the missing part), and never suggests an answer. The questions are an
+immutable record of that analysis; asking again records a new set and the newest set
+is the one shown. `unknown` coverage is not asked about.
+
+The user answers each question in free text or skips it; either is final for that
+question. An answer queues `draft_gap_fact`: the AI words one fact from the answer
+alone - meaning, an English rendering, a Hebrew one when the language is Hebrew or the
+answer is, tags from the user's existing tag vocabulary, style `bullet` or `item` - in
+the shape of the user's existing facts. The engine refuses the draft (nothing is saved,
+the question stays open, the Operation can be retried) when its wording carries a
+number, or a named term (a word with an inner capital, a digit, or `+`, `#`, `.` -
+`HubSpot`, `AWS`, `S3`, `Node.js`), that the answer does not contain, or when a Hebrew
+analysis gets no Hebrew rendering. A plain capitalized word (`Salesforce`) is not
+checked; that, and everything else the answer does not say, is the prompt's rule and
+the user's confirmation.
+
+A passing draft is saved as a `pending` fact in `situational_skills.json`, tagged with
+the track and `situational` plus the known tags it chose, with the user's question and
+answer, verbatim, as its provenance; the answer is also kept on the question. A pending
+fact reaches no CV: the user edits it (`edit_pending_fact`) and confirms it, or
+`Confirm and use`s it into a Profile section, before the next draft can choose it
+(§17).
 
 ## 10. Drafting and editing
 
@@ -410,6 +443,8 @@ prompt `ai/prompts/system.md`:
 - `draft_resume` — facts chosen per section and their wording.
 - `regenerate_section`, `regenerate_claim` — targeted rewording.
 - `assess_claim_support` — the reviewer for every writing Operation.
+- `propose_gap_questions` — one question per unmet requirement (§9.1).
+- `draft_fact_from_answer` — one pending fact worded from the user's answer only (§9.1).
 
 **Tolerant reading.** A flawed part of an analysis is narrowed and recorded as an
 issue; only an unparseable response fails. A quotation the engine cannot locate is kept
@@ -523,22 +558,27 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
 - **Create.** New facts are `pending` with a generated ID. `en` rendering is required,
   `he` optional.
 - **Confirm.** `pending -> canonical` on explicit confirmation.
-- **Edit.** *Not built:* editing a fact in place. Today a correction is a new
-  fact with `replaces`; confirming it raises `FACT_SUPERSEDED` on documents using the
-  original.
+- **Edit.** A `pending` fact's meaning, renderings, tags, and dates can be edited in
+  place before it is confirmed (`edit_pending_fact`); its identity, source, style, and
+  provenance cannot. *Not built:* editing a canonical fact in place. Today a correction
+  is a new fact with `replaces`; confirming it raises `FACT_SUPERSEDED` on documents
+  using the original.
 - **Delete.** Confirmed soft delete, allowed even when in use; affected documents
   report `FACT_DELETED_REQUIRES_RESOLUTION`. Submissions are unaffected.
 - **Attach.** Adds a canonical fact to a Profile section's pool, optionally pinned.
 - **Confirm and use.** Confirms and attaches in one command; the next draft can use it.
 - **From a claim.** Creates a pending fact from a claim's exact text.
+- **From a gap answer.** AI drafts a pending fact from the user's answer to a gap
+  question; the answer is its provenance (§9.1).
 
 A fact change moves the basis of documents that use it; a change during a running
 analysis fails it with `SOURCE_CHANGED`.
 
 ## 18. Operations and failure behavior
 
-`analyze_job`, `create_draft`, `regenerate_section`, `regenerate_claim`, and
-`render_document` run as Operations in the worker. Everything else is synchronous.
+`analyze_job`, `create_draft`, `regenerate_section`, `regenerate_claim`,
+`render_document`, `ask_gap_questions`, and `draft_gap_fact` run as Operations in the
+worker. Everything else is synchronous.
 
 A failed Operation carries a structured reason code the UI explains. The UI polls and
 shows the backend's status and phase.
@@ -563,9 +603,11 @@ state-and-use-cases.md §22.
 
 - **Built:** the full workflow from intake through submission and tracking; AI
   analysis and drafting with writer/reviewer; rejected-wording guidance; check →
-  approve → render in the Web client; user accounts and per-user isolation.
+  approve → render in the Web client; user accounts and per-user isolation; gap
+  questions and editing a pending fact (backend and API; the Web screens are not built
+  yet).
 - **Not built:** hosted deployment (public origin, Host allowlist, HSTS) and editing a
-  fact in place.
+  canonical fact in place.
 
 ## 21. Changing this document
 

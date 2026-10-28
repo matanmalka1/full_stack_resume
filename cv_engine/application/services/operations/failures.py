@@ -7,6 +7,7 @@ from ...errors import (
     ClaimReviewUncertain,
     ClaimReviewUnsupported,
     ExecutionStopped,
+    FactDraftRejected,
     InfrastructureFailure,
     LineageBroken,
     MissingFactRendering,
@@ -104,6 +105,8 @@ def failure_reason_for(error: ApplicationError) -> FailureReason | None:
     """
     if isinstance(error, MissingFactRendering):
         return MissingFactRenderingReason(fact_id=error.fact_id, language=error.language)
+    if isinstance(error, FactDraftRejected):
+        return error.fact_draft_reason
     if isinstance(error, ProposalRejected):
         # Set only by semantic review: an unsupported or uncertain line, or one whose
         # supporting evidence failed the deterministic check. Other refusals carry none.

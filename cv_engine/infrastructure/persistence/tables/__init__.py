@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from ._metadata import metadata
 from .accounts import rate_limit_buckets, user_sessions, users
+from .gap_questions import gap_answers, gap_questions
 from .knowledge import (
     candidate_contexts,
     fact_events,
@@ -50,4 +51,6 @@ __all__ = [
     "candidate_contexts",
     "profile_bindings",
     "user_settings",
+    "gap_questions",
+    "gap_answers",
 ]

@@ -32,6 +32,8 @@ from cv_engine.application.ports import (
     AnalysisContext,
     AssessClaimSupportContext,
     DraftResumeContext,
+    FactFromAnswerContext,
+    GapQuestionsContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
 )
@@ -41,7 +43,10 @@ from cv_engine.domain.contracts.providers import (
     ClaimSupportAssessment,
     ClaimSupportProposal,
     DraftProposal,
+    FactDraftProposal,
+    GapQuestionsProposal,
     ProposedClaim,
+    ProposedGapQuestion,
     SectionProposal,
 )
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
@@ -83,6 +88,20 @@ CLAIM_CONTEXT = RegenerateClaimContext(
     allowed_facts=[{"fact_id": "a.b"}],
 )
 
+GAP_QUESTIONS_CONTEXT = GapQuestionsContext(
+    language="en",
+    track="sales",
+    requirements=[{"requirement_id": "r1", "text": "SaaS sales", "coverage": "unsupported"}],
+)
+FACT_FROM_ANSWER_CONTEXT = FactFromAnswerContext(
+    language="en",
+    track="sales",
+    requirement="SaaS sales",
+    question="Have you sold SaaS?",
+    answer="I sold SaaS subscriptions.",
+    tag_vocabulary=["sales"],
+)
+
 ANALYSIS = AnalysisProposal(
     track=Track.SALES,
     profile=ProfileName.ACCOUNT_MANAGER,
@@ -108,6 +127,17 @@ REVIEW = ClaimSupportProposal(
     ]
 )
 
+GAP_QUESTIONS = GapQuestionsProposal(
+    questions=[ProposedGapQuestion(requirement_id="r1", question="Have you sold SaaS?")]
+)
+FACT_DRAFT = FactDraftProposal(
+    meaning="Sold SaaS subscriptions.",
+    english="Sold SaaS subscriptions.",
+    hebrew=None,
+    tags=["sales"],
+    resume_style="bullet",
+)
+
 #: Every contracted task, its port method, its context, and its Proposal.
 #: Read as a table so a new task cannot be added without appearing here -
 #: coverage of every task §6 asks for is then structural rather than
@@ -118,6 +148,8 @@ TASKS = [
     ("assess_claim_support", REVIEW_CONTEXT, REVIEW),
     ("regenerate_section", SECTION_CONTEXT, SECTION),
     ("regenerate_claim", CLAIM_CONTEXT, CLAIM),
+    ("propose_gap_questions", GAP_QUESTIONS_CONTEXT, GAP_QUESTIONS),
+    ("draft_fact_from_answer", FACT_FROM_ANSWER_CONTEXT, FACT_DRAFT),
 ]
 
 

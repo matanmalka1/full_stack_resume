@@ -84,14 +84,19 @@ _NUMBER = re.compile(
 )
 
 
-def _protected_numbers(value: str) -> set[str]:
-    """Each number in `value` by what it states, not how it is written.
+def protected_numbers(value: str) -> dict[str, str]:
+    """Each number in `value` by what it states, mapped to how it is first written.
+
+    A number in new wording must already be in its source. Shared by claim review
+    (the source is the linked facts) and by a fact drafted from a gap answer (the
+    source is the user's own answer, `domain/gap_questions.py`).
 
     `1,000` and `1000`, `40%` and `40 percent` / `40 אחוז`, `2M` and `2 million` and
     `2,000,000` all state the same value, so a reformat is not a new number. A changed
-    value, a changed scale, or a plain number becoming a percentage still is.
+    value, a changed scale, or a plain number becoming a percentage still is. Compare
+    the keys; the values are for telling the user which number is new.
     """
-    found: set[str] = set()
+    found: dict[str, str] = {}
     for match in _NUMBER.finditer(value):
         amount = Decimal(match["number"].replace(",", "") + (match["fraction"] or ""))
         # A digit inside a Latin word ("B2B", "S3") is part of a name, so a letter after
@@ -102,7 +107,7 @@ def _protected_numbers(value: str) -> set[str]:
         unit = "" if inside_word else (match["unit"] or "").casefold()
         amount *= _SCALES.get(unit, 1)
         kind = "%" if unit in _PERCENT else ""
-        found.add(f"{kind}{format(amount.normalize(), 'f')}")
+        found.setdefault(f"{kind}{format(amount.normalize(), 'f')}", match[0].strip())
     return found
 
 
@@ -222,7 +227,7 @@ def review_problems(
                 f"claim {claim_id} evidence does not cover exactly its linked facts",
             )
         )
-    if _protected_numbers(text) - _protected_numbers(" ".join(source_texts)):
+    if protected_numbers(text).keys() - protected_numbers(" ".join(source_texts)).keys():
         problems.append(
             ReviewProblem(
                 "unsupported-review-number",

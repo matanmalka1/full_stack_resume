@@ -57,6 +57,8 @@ OPERATION_TYPES = (
     "regenerate_section",
     "regenerate_claim",
     "render_document",
+    "ask_gap_questions",
+    "draft_gap_fact",
 )
 OPERATION_STATUSES = (
     "queued",
@@ -313,6 +315,8 @@ AI_CALL_TASKS = (
     "assess_claim_support",
     "regenerate_section",
     "regenerate_claim",
+    "propose_gap_questions",
+    "draft_fact_from_answer",
 )
 AI_CALL_OUTCOMES = (
     "succeeded",

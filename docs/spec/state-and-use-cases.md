@@ -28,6 +28,7 @@ Immutable or append-only:
 
 - the job text once the Application has a Submission
 - JobAnalysis
+- gap questions and each one's outcome (an answer and its fact, or a skip) (§13a)
 - Submission, with its content and copied files
 - the AI call log (one row per provider call attempt)
 - recruitment, status, audit, and fact lifecycle events
@@ -218,6 +219,7 @@ allows none.
 | --- | --- |
 | `analyze` | no JobAnalysis exists for the current `job_text_hash` |
 | `edit_matching_configuration` | a JobAnalysis exists |
+| `ask_gap_questions` | the newest JobAnalysis has an `unsupported` or `partial` requirement (§13a) |
 | `build_from_analysis` | a document exists and a newer analysis than its own exists |
 | `create_draft` | a document exists and `content IS NULL` |
 | `confirm_and_use_fact` | a review reason names it |
@@ -240,6 +242,7 @@ An allowed action is available unless a blocker withholds it:
 | --- | --- |
 | `ANALYSIS_IN_PROGRESS` | `analyze`, while an `analyze_job` is queued or running |
 | `MATCHING_CONTEXT_OPERATION_IN_PROGRESS` | `edit_matching_configuration`, while an `analyze_job` is queued or running |
+| `GAP_QUESTIONS_IN_PROGRESS` | `ask_gap_questions`, while an `ask_gap_questions` is the active Operation |
 | `DOCUMENT_OPERATION_IN_PROGRESS` | `build_from_analysis`, `confirm_and_use_fact`, `create_draft`, `edit`, `regenerate_section`, `regenerate_claim`, `check`, `approve`, `render`, while a `create_draft`, `regenerate_section`, `regenerate_claim`, or `render_document` is queued or running |
 | any review reason code (§7) | `approve`, `render`, `submit` |
 | `VALIDATION_FAILED` | `approve`, while `content_check = failed` |
@@ -300,6 +303,8 @@ derived on read (architecture.md §10).
 | `regenerate_section` | `expected_document_hash` | required |
 | `regenerate_claim` | `expected_document_hash` | required |
 | `render_document` | `expected_document_hash` | none (Playwright) |
+| `ask_gap_questions` | `job_analysis_id` | required |
+| `draft_gap_fact` | `job_analysis_id` of its question; the question having no outcome | required |
 
 Everything else is synchronous. No provider call happens inside an HTTP request.
 
@@ -335,8 +340,9 @@ safe (architecture.md §11); a browser that fails to start is started once more.
   the schema refuses. A writing Operation fails with these only when every line was
   withheld; otherwise it succeeds with `withheld_claims`.
 
-An Operation's output is what it activated (`job_analysis` or `cv_document`); failed
-and cancelled Operations have none. Every provider attempt is in the AI call log, keyed
+An Operation's output is what it activated (`job_analysis`, `cv_document`, one
+`gap_question` per question asked, or the `fact` a gap answer became); failed and
+cancelled Operations have none. Every provider attempt is in the AI call log, keyed
 by Operation.
 
 The Operation read returns status, phase, message, timestamps, failure code, failure
@@ -354,6 +360,11 @@ meaning, and rendering as read, the reviewer's `rationale` (nullable), and `prob
 outside the pool, no linked fact, edit-path refusal) has verdict `refused`. This is
 recorded at the time and never reconstructed. `withheld_claims` is NULL except on
 succeeded writing Operations.
+
+**Fact draft reason.** A `draft_gap_fact` whose wording adds to the answer fails with
+`INVALID_OUTPUT` and `failure_reason` `code=fact_draft`: `problems` (`unsupported-number`,
+`unsupported-term`, `missing-rendering`, `empty-wording`) and `unsupported`, the numbers
+and named terms the wording carried and the answer did not (§13a).
 
 **Page fit.** A succeeded `create_draft` records `page_fit` (`code=page_fit`): `status`
 (`fits`, `trimmed`, `over`, or `unavailable`), the last page count measured (`pages`,
@@ -444,6 +455,67 @@ document exists), and any of `track_override`, `profile_override`, `language_ove
 - **No change:** 412.
 
 Returns the analysis ID, whether one was created, and the document ID and hash.
+
+## 13a. Gap question commands
+
+Product behavior: product-spec §9.1. Routes are under
+`/applications/{application_id}/gap-questions`. Every command resolves its Application
+as §12 says (404 missing or another user's, 409 deleted); a question is reached only
+through its Application, so another user's question is 404.
+
+### `ask_gap_questions(application_id, job_analysis_id)`
+
+`POST /gap-questions` with `{job_analysis_id}`; Operation (`202`), requires a provider;
+model and effort from Settings, frozen when queued.
+
+- 404: the analysis is unknown or not this Application's; 409: it is not the
+  Application's newest analysis (`STATE_CONFLICT`); 412: it has no `unsupported` or
+  `partial` requirement (`PRECONDITION_FAILED`).
+- Picks those requirements, mandatory first, then preferred, then unknown importance,
+  analysis order within each, at most six; sends each with its shortfall reason and the
+  meanings of the canonical facts the analysis cited for it to `propose_gap_questions`,
+  in the analysis language.
+- Keeps one non-empty question per requirement it sent (at most 500 characters); none
+  is `INVALID_OUTPUT`.
+- Activation records the questions (`gap_questions`, immutable) with the requirement
+  text, importance, coverage, and language, and outputs one `gap_question` each.
+  `SOURCE_CHANGED` if the Application was deleted meanwhile.
+
+### `draft_gap_fact(application_id, gap_question_id, answer)`
+
+`POST /gap-questions/{question_id}/answer` with `{answer}` (1-2000 characters, not
+blank); Operation (`202`), requires a provider.
+
+- 404 unknown question; 409 if the question already has an outcome (answered or
+  skipped).
+- Sends the question, the requirement text, the answer, the user's canonical tag
+  vocabulary, and up to three canonical `situational_skills` facts as wording examples
+  to `draft_fact_from_answer`.
+- Refuses the proposal (`INVALID_OUTPUT`, `failure_reason.code = fact_draft`, §11) when
+  its meaning or renderings carry a number or a named term the answer lacks, are empty,
+  or, for a Hebrew analysis, have no Hebrew rendering. Nothing is written; the question
+  stays `open` and the Operation can be retried.
+- Activation, in one transaction under the Application lock: the question still has no
+  outcome (else `SOURCE_CHANGED`); creates a `pending` fact in `situational_skills.json`
+  (§17 `create_pending_fact` rules, a `fact_created` event naming the Application) with
+  tags `[track, "situational", ...known proposed tags]` and the question and answer as
+  provenance; records the outcome `answered` with the answer and the fact ID; outputs the
+  `fact`.
+
+### `skip_gap_question(application_id, gap_question_id)`
+
+`POST /gap-questions/{question_id}/skip`, synchronous (`200`). Records the outcome
+`skipped`; 409 if the question already has one. Returns the question set (below).
+
+### `read_gap_questions(application_id)`
+
+`GET /gap-questions`: the newest set asked about the Application's newest analysis -
+`job_analysis_id`, `operation_id`, `language`, `asked_at`, and per question its ID,
+ordinal, requirement ID and text, importance, coverage, question, `state` (`open`,
+`drafting` while a `draft_gap_fact` for it is queued or running, `answered`,
+`skipped`), the answer, the fact as it is now (any status), and `draft_operation`, the
+newest `draft_gap_fact` for it, live or terminal. No set yet: empty `questions` and
+null `operation_id`. Works on deleted Applications, like every read.
 
 ## 14. Document commands
 
@@ -584,9 +656,18 @@ optional dates, optional `replaces`, reason. With `replaces` it is a pending cor
 source file's version. Confirming a replacement raises `FACT_SUPERSEDED` (§8) on
 documents using the original.
 
+### `edit_pending_fact(fact_id, changes)`
+
+`PATCH /facts/{fact_id}` with any of `meaning`, `renderings` (`en` required), `tags`
+(non-empty), `effective_dates`, and an optional `reason`. Changes a `pending` fact in
+place and appends a `fact_edited` event carrying the fact as it now reads. Identity,
+source, style, provenance, and status are unchanged. A canonical or deleted fact, an
+empty edit, or an edit that changes nothing is `KNOWLEDGE_REJECTED` (412); another
+user's fact is 404. A document that links the fact sees its basis move (§6).
+
 ### `edit_fact(fact_id, changes, confirm)`
 
-*Not built.* Changes meaning, renderings, tags,
+*Not built* for a canonical fact. Changes meaning, renderings, tags,
 provenance, dates, `resume_style`, or link target in place; not the ID or source. A
 canonical fact needs `confirm: true` and stays canonical. Deleted facts and empty edits
 are refused. Appends a `fact_edited` event; dependent documents' basis moves.
@@ -722,6 +803,7 @@ there is no reclaim command.
   `preparation_state`, `approved_at`, `last_render_error`, timestamps.
 - **Document previews** (§14).
 - **Operation** (§11).
+- **Gap questions** (§13a).
 - **Facts** (§17).
 - **Settings** (§19a) and **health** (liveness and versions only for anonymous callers).
 
