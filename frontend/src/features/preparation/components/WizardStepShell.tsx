@@ -141,6 +141,26 @@ export const WizardStepShell = ({
         {description === undefined ? null : <span className="block lg:mt-2">{description}</span>}
       </>
     );
+  /* The phone's heading: the step's own title, or the stage's name - in view only where
+     the phone header does not already name it. */
+  const phoneTitle =
+    title ??
+    (intake || phoneHeading === "full" ? (
+      workflowStageLabels[stage]
+    ) : (
+      <span className="max-lg:sr-only">{workflowStageLabels[stage]}</span>
+    ));
+  /* A desktop title replaces it from the large breakpoint only, so a phone keeps the
+     heading it had; each half is display:none at the other's width. */
+  const pageTitle =
+    desktopHeader.title === undefined ? (
+      phoneTitle
+    ) : (
+      <>
+        <span className="lg:hidden">{phoneTitle}</span>
+        <span className="max-lg:hidden">{desktopHeader.title}</span>
+      </>
+    );
   const stageTitle = desktopHeader.title ?? title;
   /* The way back. A phone draws it in its compact header (the spine's own link); from the
      large breakpoint it is the header's bordered chevron, or the first step of the trail.
@@ -215,12 +235,7 @@ export const WizardStepShell = ({
              heading stays for assistive tech and route focus only. A page's own title - a
              stage its record does not actually meet - says something the bar does not,
              and stays in view. */
-          stageTitle ??
-          (intake || phoneHeading === "full" ? (
-            workflowStageLabels[stage]
-          ) : (
-            <span className="max-lg:sr-only">{workflowStageLabels[stage]}</span>
-          ))
+          pageTitle
         }
       >
         <div className={cx("flex flex-col gap-6", bodyClassName)}>
