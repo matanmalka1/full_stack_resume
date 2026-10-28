@@ -527,6 +527,12 @@ describe("ApplicationListPage", () => {
     /* Each stage card's main control is the step to take, named for its company. */
     expect(within(pipeline).getAllByRole("link", { name: /^ניתוח המשרה · / })).toHaveLength(4);
     expect(within(pipeline).getByRole("button", { name: "עדכון שלב הגיוס של Binat" })).toBeInTheDocument();
+    /* A stage card carries the record's menu too, so closing or deleting from the stages
+       view is as near as from a card. */
+    fireEvent.click(within(pipeline).getByRole("button", { name: "פעולות נוספות עבור Binat" }));
+    expect(screen.getByRole("menuitem", { name: "סגירת המועמדות Binat" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "מחיקת המועמדות Binat" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
     fireEvent.click(within(pipeline).getByRole("button", { name: "פרטי המשרה של Binat" }));
     expect(screen.getByRole("dialog", { name: "פרטי משרה: Binat" })).toBeInTheDocument();
     expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();

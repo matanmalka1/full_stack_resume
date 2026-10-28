@@ -89,6 +89,8 @@ export const ApplicationListResults = ({
       {viewMode === "pipeline" ? (
         <ApplicationPipelineView
           items={items}
+          onRequestClose={onRequestClose}
+          onRequestDelete={onRequestDelete}
           onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
           recruitmentStatusCounts={recruitmentStatusCounts}
