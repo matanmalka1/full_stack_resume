@@ -113,8 +113,8 @@ describe("FactsPage", () => {
     expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();
   });
 
-  /* The phone's forms of the filters - the pending banner and the source chips - drive the
-     same filters as the wide screen's selects. */
+  /* The pending banner and the source chips, drawn at every width, drive the same filters
+     as the selects folded behind "סינון". */
   it("narrows the pool from the pending banner and the source chips", async () => {
     const backend = fact();
     const sales = fact({

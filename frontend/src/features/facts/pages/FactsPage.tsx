@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { routePaths } from "@/navigation/routePaths";
@@ -49,10 +49,6 @@ const factDetailLoading = (
   </div>
 );
 
-/* Below the large breakpoint, the width at which the pool and the fact stop standing side
-   by side. Mirrors Tailwind's `lg`. */
-const PHONE_QUERY = "(width < 64rem)";
-
 export const FactsPage = () => {
   const [filters, setFilters] = useState(emptyFactFilters);
   const [creating, setCreating] = useState(false);
@@ -62,17 +58,17 @@ export const FactsPage = () => {
   const mutationsBlocked = (poolQuery.data?.outOfSyncCount ?? 0) > 0;
   const requestedId = searchParams.get("fact");
   const requestedEventId = searchParams.get("event");
-  const selectedId = requestedId ?? entries[0]?.fact.fact_id ?? null;
+  const selectedId = requestedId;
   const detailQuery = useFactDetail(selectedId);
   const visible = filterFactEntries(entries, filters);
   const poolEmpty = poolQuery.isSuccess && entries.length === 0;
   const sources = [...new Set(entries.map(({ fact }) => fact.source))];
   const tags = [...new Set(entries.flatMap(({ fact }) => fact.tags))];
   const pendingCount = entries.filter(({ fact }) => fact.status === "pending").length;
-  /* On a phone the pool and the fact are two views of one screen, chosen by the address:
-     a `fact` in it shows that fact, none shows the pool. A wide screen draws both, and
-     opens the first fact when none is asked for; a phone opens nothing it was not asked
-     to. Only the layout differs - the address, the reads and the selection are the same. */
+  /* The pool and the fact are two views of one screen, chosen by the address: a `fact` in
+     it shows that fact, none shows the pool. That holds at every width. A wide screen used
+     to draw both side by side and open the first fact unasked; the pool is a full-width
+     table there now, and a record read beside a table half its width was neither. */
   const factOpen = requestedId !== null;
   const poolHref = (() => {
     const next = new URLSearchParams(searchParams);
@@ -83,9 +79,9 @@ export const FactsPage = () => {
   })();
 
   /* Opening a fact from far down the pool would otherwise show it scrolled as far down
-     as the row was. A wide screen keeps its place: both halves are already in view. */
+     as the row was. */
   useEffect(() => {
-    if (globalThis.matchMedia?.(PHONE_QUERY).matches) globalThis.scrollTo?.({ top: 0 });
+    document.scrollingElement?.scrollTo?.({ top: 0 });
     /* The effect reads nothing from the fact: it runs because the open fact changed. */
     // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [requestedId]);
@@ -96,14 +92,17 @@ export const FactsPage = () => {
     setSearchParams(next);
   };
 
-  /* An open fact is the phone's whole screen, as a record opened from a list is: the
-     pool's masthead - its title, its line and its add command - belongs to the pool view,
-     so it folds away there, still in the document for the route heading the shell focuses. */
+  /* An open fact is the whole screen, as a record opened from a list is: the pool's
+     masthead - its title, its line and its add command - belongs to the pool view, so it
+     folds away, still in the document for the route heading the shell focuses. A wide
+     screen leads the fact with the trail back to the pool instead; a phone has its chevron. */
   return (
     <div>
       <PageShell
         measure="wide"
+        breadcrumb={factOpen ? [{ label: "מאגר העובדות", to: poolHref }, { label: "פרטי עובדה" }] : undefined}
         phoneMasthead={factOpen ? "hidden" : "visible"}
+        wideMasthead={factOpen ? "hidden" : "visible"}
         /* A phone's heading row has room for the title and one square: the command keeps
          its name for assistive tech and draws only its mark, and the description gives way
          to one line, so the two still stand side by side. */
@@ -118,17 +117,12 @@ export const FactsPage = () => {
         description={
           <>
             <span className="max-lg:hidden">
-              יצירה, אישור, קידום ושיוך של עובדות המועמד. עובדה קנונית מתוקנת באמצעות עובדה מחליפה ואינה נערכת במקום.
+              מה שקורות החיים נבנים ממנו. רק עובדות שאושרו נכנסות כמקור אמת לטיוטות.
             </span>
             <span className="lg:hidden">מה שקורות החיים נבנים ממנו</span>
           </>
         }
-        title={
-          <span className="inline-flex items-center gap-2">
-            <BookOpen aria-hidden="true" className="size-6 text-cv-accent max-lg:hidden" />
-            מאגר העובדות
-          </span>
-        }
+        title="מאגר העובדות"
       >
         {poolQuery.data?.outOfSyncCount ? (
           <Callout role="alert" title="נמצאה אי־התאמה ביומן העובדות" tone="blocker">
@@ -178,9 +172,9 @@ export const FactsPage = () => {
             {/* The count reads under the bar rather than inside it, as it does on the board.
               Sitting in the filter row it was the one thing there with no label above it and
               no control below it, so it took a field's slot while looking like neither. */}
-            <div className={cx("flex flex-col gap-2", factOpen && "max-lg:hidden")}>
-              {/* On a phone the bar is not a panel: its field and chips sit on the canvas. */}
-              <Card className="cv-fields-compact rounded-control bg-cv-surface p-3 shadow-surface max-lg:border-0 max-lg:bg-transparent max-lg:p-0 sm:p-4">
+            <div className={cx("flex flex-col gap-2", factOpen && "hidden")}>
+              {/* The bar is not a panel: its field and chips sit on the canvas. */}
+              <Card className="cv-fields-compact rounded-control bg-cv-surface p-3 shadow-surface max-lg:border-0 max-lg:bg-transparent max-lg:p-0 sm:p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
                 <FactPoolFilters
                   filters={filters}
                   onChange={setFilters}
@@ -201,8 +195,8 @@ export const FactsPage = () => {
               )}
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-              <div className={cx("lg:sticky lg:top-20 lg:self-start", factOpen && "max-lg:hidden")}>
+            <div className="grid gap-4">
+              <div className={cx(factOpen && "hidden")}>
                 <QueryState
                   empty={!poolQuery.isPending && poolQuery.error === null && visible.length === 0}
                   emptyState={
@@ -234,13 +228,13 @@ export const FactsPage = () => {
               <Card
                 aria-live="polite"
                 className={cx(
-                  "rounded-control bg-cv-surface p-4 shadow-surface max-lg:border-0 max-lg:bg-transparent max-lg:p-0 sm:p-5 lg:sticky lg:top-20 lg:h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-9rem)] lg:self-start lg:overflow-y-auto",
-                  !factOpen && "max-lg:hidden",
+                  "rounded-control bg-cv-surface p-4 shadow-surface max-lg:border-0 max-lg:bg-transparent max-lg:p-0 sm:p-5 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none",
+                  !factOpen && "hidden",
                 )}
                 dir="ltr"
               >
                 <div dir="rtl">
-                  {/* The phone's way back to the pool; a wide screen has the pool beside it. */}
+                  {/* The phone's way back to the pool; a wide screen has the trail above. */}
                   <Link
                     aria-label="חזרה למאגר העובדות"
                     className="-ms-2.5 mb-2 inline-flex size-11 items-center justify-center rounded-control text-cv-text hover:bg-cv-surface-muted lg:hidden"

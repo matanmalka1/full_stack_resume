@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 
+import { cx } from "@/ui/cx";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { Input, Textarea } from "@/ui/Input";
@@ -134,8 +135,8 @@ export const FactSourceField = ({ register }: Pick<FactFormControl, "register">)
    A select hid five of them behind a tap, which on a phone opened the system picker for a
    choice that fits on two lines. The radios are registered under the same field, so the
    value submitted is unchanged. */
-export const FactStyleField = ({ register }: Pick<FactFormControl, "register">) => (
-  <fieldset className="flex min-w-0 flex-col gap-1.5">
+export const FactStyleField = ({ className, register }: Pick<FactFormControl, "register"> & { className?: string }) => (
+  <fieldset className={cx("flex min-w-0 flex-col gap-1.5", className)}>
     <legend className="mb-1.5 text-support font-medium text-cv-text">סוג הצגה</legend>
     <div className="flex flex-wrap gap-2">
       {Object.entries(factStyleLabels).map(([value, label]) => (

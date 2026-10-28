@@ -27,9 +27,13 @@ const statuses: FactStatus[] = ["pending", "canonical"];
    scrolling. Status and tag are not lost: they fold behind "סינון", whose count says
    when either is set, so a narrowed list never looks like the whole pool.
 
-   The pending banner is the phone's way into the facts that still wait: one tap narrows
-   the list to them, a second gives the pool back. On a wide screen the status select
-   beside the list already does this, so the banner is not drawn there. */
+   The pending banner is the way into the facts that still wait: one tap narrows the list
+   to them, a second gives the pool back.
+
+   A wide screen draws the same bar on one line, as the desktop design does: the banner
+   across the top, then the search field beside the chips and "סינון". Behind "סינון"
+   there are the status, source and tag selects - the source select repeats the chips,
+   but it is the one control that names the source filter as a field, so it stays. */
 export const FactPoolFilters = ({ filters, onChange, pendingCount, sources, tags }: FactPoolFiltersProps) => {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreId = useId();
@@ -41,8 +45,8 @@ export const FactPoolFilters = ({ filters, onChange, pendingCount, sources, tags
   ];
 
   return (
-    <div className="grid gap-3 max-lg:flex max-lg:flex-col sm:grid-cols-2 xl:grid-cols-4">
-      <Field label={<span className="max-lg:sr-only">חיפוש</span>}>
+    <div className="grid gap-3 max-lg:flex max-lg:flex-col lg:flex lg:flex-wrap lg:items-center">
+      <Field className="lg:min-w-72 lg:flex-1" label={<span className="sr-only">חיפוש</span>}>
         {(control) => (
           <SearchInput
             {...control}
@@ -56,7 +60,7 @@ export const FactPoolFilters = ({ filters, onChange, pendingCount, sources, tags
       {pendingCount === 0 ? null : (
         <button
           aria-pressed={pendingOnly}
-          className="flex min-h-11 items-center gap-3 rounded-surface bg-cv-accent px-3.5 py-3 text-start text-cv-on-accent shadow-floating lg:hidden"
+          className="flex min-h-11 items-center gap-3 rounded-surface bg-cv-accent px-3.5 py-3 text-start text-cv-on-accent shadow-floating lg:order-first lg:basis-full lg:px-4.5 lg:shadow-none"
           onClick={() => onChange({ ...filters, status: pendingOnly ? "all" : "pending" })}
           type="button"
         >
@@ -70,20 +74,23 @@ export const FactPoolFilters = ({ filters, onChange, pendingCount, sources, tags
             <span className="block text-body font-bold">
               {pendingCount === 1 ? "עובדה אחת ממתינה לאישורך" : `${pendingCount} עובדות ממתינות לאישורך`}
             </span>
-            <span className="block text-support">
+            <span className="block text-support lg:hidden">
               {pendingOnly ? "מוצגות רק הממתינות. נגיעה נוספת מחזירה את כל המאגר." : "רק עובדות מאושרות נכנסות לטיוטות"}
             </span>
           </span>
-          <ChevronLeft aria-hidden="true" className="size-icon-md shrink-0" />
+          <ChevronLeft aria-hidden="true" className="size-icon-md shrink-0 lg:hidden" />
+          <span className="shrink-0 text-support font-bold underline underline-offset-2 max-lg:hidden">
+            {pendingOnly ? "הצגת כל המאגר" : "לבדיקה"}
+          </span>
         </button>
       )}
 
       {/* The chips scroll sideways; the toggle stays put at the row's end so the other
           filters are never scrolled out of reach. */}
-      <div className="flex items-center gap-2 lg:hidden">
+      <div className="flex items-center gap-2">
         <div
           aria-label="סינון לפי מאגר מקור"
-          className="-my-1 flex min-w-0 flex-1 gap-2 overflow-x-auto py-1"
+          className="-my-1 flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 lg:flex-wrap"
           // A set of toggles under one name; there is no native grouping element for it.
           // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
           role="group"
@@ -129,10 +136,12 @@ export const FactPoolFilters = ({ filters, onChange, pendingCount, sources, tags
         </button>
       </div>
 
-      {/* `lg:contents` hands the three selects back to the grid on a wide screen, exactly
-          where they always stood; below it they are the folded panel. The source select
-          stays a wide-screen control - the chips are its phone form. */}
-      <div className={cx("flex flex-col gap-3 lg:contents", !moreOpen && "max-lg:hidden")} id={moreId}>
+      {/* The folded panel. A wide screen sets its three selects in a row under the bar;
+          the source select is drawn there only - the chips are its phone form. */}
+      <div
+        className={cx("flex-col gap-3 lg:basis-full lg:grid-cols-3", moreOpen ? "flex lg:grid" : "hidden")}
+        id={moreId}
+      >
         <Field label="מעמד">
           {(control) => (
             <Select
