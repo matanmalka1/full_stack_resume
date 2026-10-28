@@ -4,7 +4,13 @@
 export { useCaptureClaimFact } from "./api/mutations";
 export { useFactDetail } from "./api/queries";
 export { FactEventHistory } from "./components/FactEventHistory";
-export { FactCoreFields, FactProvenanceField, FactSourceField, FactTagsField } from "./components/FactFormFieldset";
+export {
+  FactCoreFields,
+  FactHebrewRenderingField,
+  FactProvenanceField,
+  FactSourceField,
+  FactTagsField,
+} from "./components/FactFormFieldset";
 export { emptyFactForm, parseFactTags, type FactFormFields } from "./model/factForm";
 export { factSearchText } from "./model/factFilters";
 export { factLabel, factLabelInLanguage, factSourceLabel, factStatusLabel } from "./model/factLabels";
