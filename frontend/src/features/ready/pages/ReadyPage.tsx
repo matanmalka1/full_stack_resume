@@ -33,6 +33,12 @@ const readyLoading = (
   </div>
 );
 
+/* On a phone each folded extra is a card row of its own - a full-width, thumb-height
+   summary on the surface - the way the step's other sections sit on a phone's canvas.
+   From the large breakpoint it is the plain disclosure line it always was. */
+const phoneRowDisclosure =
+  "max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:[&>summary]:min-h-14 max-lg:[&>summary]:px-4 max-lg:[&>summary]:text-body max-lg:[&>summary]:font-bold max-lg:[&>summary]:text-cv-text";
+
 const CardHeading = ({ children, icon: Icon, id }: { children: ReactNode; icon: typeof FileCheck2; id: string }) => (
   <h2 className="flex items-center gap-2 font-semibold text-cv-text" id={id}>
     <Icon aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
@@ -199,7 +205,7 @@ export const ReadyPage = () => {
               <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(19rem,1fr)]">
                 <Card
                   aria-labelledby="ready-file-heading"
-                  className="flex min-w-0 flex-col gap-4 rounded-surface bg-cv-surface p-5"
+                  className="flex min-w-0 flex-col gap-4 rounded-surface bg-cv-surface p-5 max-lg:p-4"
                 >
                   <CardHeading icon={FileCheck2} id="ready-file-heading">
                     קובץ קורות החיים
@@ -214,7 +220,13 @@ export const ReadyPage = () => {
                       ההגשה האחרונה של המסמך הזה נרשמה ב־{formatDateTime(submittedAt)}.
                     </p>
                   )}
-                  {downloadButton === null ? null : <div className="flex flex-wrap gap-3">{downloadButton}</div>}
+                  {/* A phone's download is the card's full width, the one thing the reader
+                      does with this card there. */}
+                  {downloadButton === null ? null : (
+                    <div className="flex flex-wrap gap-3 max-lg:[&>*]:min-h-11 max-lg:[&>*]:flex-1">
+                      {downloadButton}
+                    </div>
+                  )}
                 </Card>
 
                 <aside aria-label="פרטי המסמך והבדיקה" className="flex min-w-0 flex-col gap-4">
@@ -233,8 +245,8 @@ export const ReadyPage = () => {
                   </Card>
 
                   {submittedAt === null ? null : (
-                    <Disclosure summary="אפשרויות נוספות">
-                      <div className="pt-2">
+                    <Disclosure className={phoneRowDisclosure} summary="אפשרויות נוספות">
+                      <div className="pt-2 max-lg:px-4 max-lg:pb-4">
                         <p className="mb-3 text-support text-cv-text-muted">
                           הפעולות כאן אינן חלק מהשלמת המסירה הנוכחית ואינן משנות את המסמך.
                         </p>
@@ -246,8 +258,8 @@ export const ReadyPage = () => {
                     </Disclosure>
                   )}
 
-                  <Disclosure flush summary="הסבר ההחלטות">
-                    <Card className="rounded-surface bg-cv-surface p-4">
+                  <Disclosure className={phoneRowDisclosure} flush summary="הסבר ההחלטות">
+                    <Card className="rounded-surface bg-cv-surface p-4 max-lg:border-0 max-lg:pt-1">
                       {decisionQuery.error === null ? (
                         <DecisionDocument
                           decision={decisionQuery.data}
