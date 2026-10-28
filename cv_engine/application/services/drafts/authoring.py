@@ -79,7 +79,8 @@ from .inputs import PreparedDraft, PreparedRegeneration
 ProposalT = TypeVar("ProposalT", bound=StrictModel)
 
 #: How many times one draft's pages are measured while it is fitted: the first count
-#: and up to five more, one after each line dropped. Each one starts a browser.
+#: and up to five more, each one step of the search for the fewest lines to drop. Each
+#: one starts a browser.
 MAX_PAGE_MEASUREMENTS = 6
 
 
@@ -375,21 +376,25 @@ class DraftAuthoringService:
         knowledge: Knowledge,
         template: str | None,
     ) -> tuple[DraftDocument, ClaimReviewReason | None, PageFitReport]:
-        """Measure the draft and drop lines until it fits its Profile's page limit.
+        """Measure the draft and drop the fewest lines that make it fit its page limit.
 
         Measured in the document's template, the one its render will use.
 
         Section budgets are guidance the writer weighs; the page limit is enforced here,
         before anything is written, so approval does not discover an overflow only when
-        the PDF is rendered. `next_trim` names each line to drop (domain/page_fit.py),
-        and the draft is measured again after each one, up to `MAX_PAGE_MEASUREMENTS`.
+        the PDF is rendered. `next_trim` names each line to drop (domain/page_fit.py) and
+        needs no measurement, so the whole drop order is known up front. The number of
+        lines to drop is then binary-searched, assuming the page count never rises as
+        more lines go, within `MAX_PAGE_MEASUREMENTS` in all; the draft written is the
+        one dropping the fewest lines found to fit.
 
         Nothing changes silently: the report lists every dropped line. A draft still
-        over the limit with nothing left to drop - or when the measurements run out -
-        is written as trimmed as it got, and reported `over`. A measurement that fails
-        (no browser, say) never fails the draft: it is written untrimmed and reported
-        `unavailable`. A dropped line is no longer in the document, so it leaves the
-        withheld lines too.
+        over the limit with nothing left to drop - or when the measurements run out
+        before any trim was found to fit - is written as the most trimmed draft measured,
+        and reported `over`. A measurement that fails (no browser, say) never fails the
+        draft: a trim already found to fit is kept; otherwise the draft is written
+        untrimmed and reported `unavailable`. A dropped line is no longer in the document,
+        so it leaves the withheld lines too.
         """
         assert_external_io_allowed("draft page measurement")
         maximum = page_limit(profile)
@@ -405,15 +410,16 @@ class DraftAuthoringService:
         first = measure(draft)
         if first is None:
             return draft, withheld, PageFitReport(status="unavailable", maximum=maximum)
-        pages, measurements = first, 1
-        fitted = draft
-        trimmed: list[TrimmedClaim] = []
-        while pages > maximum and measurements < MAX_PAGE_MEASUREMENTS:
-            claim_id = next_trim(fitted, profile, knowledge.facts)
-            if claim_id is None:
-                break
-            line = trimmed_line(fitted, claim_id)
-            trimmed.append(
+        if first <= maximum:
+            return draft, withheld, PageFitReport(status="fits", pages=first, maximum=maximum)
+
+        # The whole drop order: `trims[k - 1]` is the draft with `order[:k]` dropped.
+        order: list[TrimmedClaim] = []
+        trims: list[DraftDocument] = []
+        current = draft
+        while (claim_id := next_trim(current, profile, knowledge.facts)) is not None:
+            line = trimmed_line(current, claim_id)
+            order.append(
                 TrimmedClaim(
                     claim_id=line.claim_id,
                     section=line.section,
@@ -421,23 +427,48 @@ class DraftAuthoringService:
                     text=line.text,
                 )
             )
-            fitted = drop_claims(fitted, profile, {claim_id})
-            remeasured = measure(fitted)
+            current = drop_claims(current, profile, {claim_id})
+            trims.append(current)
+
+        # `over` is the most lines dropped and measured still over the limit; `fit` the
+        # fewest dropped and measured within it. The answer lies in (over, fit], or in
+        # (over, len(order)] while no trim has been found to fit.
+        over, over_pages = 0, first
+        fit: tuple[int, int] | None = None
+        measurements = 1
+        while measurements < MAX_PAGE_MEASUREMENTS:
+            if fit is None:
+                if over == len(order):
+                    break
+                # The upper end is unproven, so the midpoint rounds up and the search
+                # measures it last rather than not at all.
+                k = (over + len(order) + 1) // 2
+            else:
+                if fit[0] - over <= 1:
+                    break
+                k = (over + fit[0]) // 2
+            pages = measure(trims[k - 1])
             measurements += 1
-            if remeasured is None:
-                return (
-                    draft,
-                    withheld,
-                    PageFitReport(status="unavailable", pages=first, maximum=maximum),
-                )
-            pages = remeasured
+            if pages is None:
+                if fit is None:
+                    return (
+                        draft,
+                        withheld,
+                        PageFitReport(status="unavailable", pages=first, maximum=maximum),
+                    )
+                break
+            if pages <= maximum:
+                fit = (k, pages)
+            else:
+                over, over_pages = k, pages
+
         status: PageFitStatus
-        if pages > maximum:
-            status = "over"
-        elif trimmed:
-            status = "trimmed"
+        if fit is None:
+            status, count, pages = "over", over, over_pages
         else:
-            status = "fits"
+            status, (count, pages) = "trimmed", fit
+        fitted = trims[count - 1] if count else draft
+        trimmed = order[:count]
         report = PageFitReport(status=status, pages=pages, maximum=maximum, trimmed=trimmed)
         dropped = {item.claim_id for item in trimmed}
         if withheld is not None and dropped:
