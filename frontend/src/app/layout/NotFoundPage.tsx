@@ -10,13 +10,12 @@ import { boardPath } from "@/navigation/boardReturn";
 
    On a phone the miss is the whole screen: the code drawn large and muted, then the
    heading, the explanation and the way back, centred between the masthead and the
-   bottom bar, the button across the width where a thumb finds it. `PageShell` draws the
-   same parts at every width, so the wrapper reaches into its masthead row - centring it
-   and dropping its rule - rather than this page drawing a second heading of its own. A
-   wide screen gets the wrapper as a plain block and the page exactly as before. */
+   bottom bar, the button across the width where a thumb finds it. A wide screen gets the
+   wrapper as a plain block and the page exactly as before. */
 export const NotFoundPage = () => (
-  <div className="max-lg:flex max-lg:min-h-[70dvh] max-lg:items-center max-lg:text-center max-lg:[&_.border-b]:border-b-0 max-lg:[&_.justify-between]:justify-center max-lg:[&>section]:w-full">
+  <div className="max-lg:flex max-lg:min-h-[70dvh] max-lg:items-center max-lg:text-center max-lg:[&>section]:w-full">
     <PageShell
+      phoneMasthead="centered"
       description="ייתכן שהכתובת השתנתה או שהרשומה נסגרה. אפשר לחזור ללוח המועמדויות ולהמשיך משם."
       eyebrow={
         <span className="max-lg:mb-4 max-lg:block max-lg:text-[5.5rem] max-lg:leading-none max-lg:font-extrabold max-lg:text-cv-text-muted">

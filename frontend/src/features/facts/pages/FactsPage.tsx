@@ -98,13 +98,12 @@ export const FactsPage = () => {
 
   /* An open fact is the phone's whole screen, as a record opened from a list is: the
      pool's masthead - its title, its line and its add command - belongs to the pool view,
-     so it folds away there. It stays in the document for assistive tech, `sr-only` rather
-     than hidden, so the route heading the shell focuses still exists. `PageShell` draws the
-     masthead at every width, hence the reach into it by the heading it holds. */
+     so it folds away there, still in the document for the route heading the shell focuses. */
   return (
-    <div className={cx(factOpen && "max-lg:[&_div:has(>div>h1[data-route-heading])]:sr-only")}>
+    <div>
       <PageShell
         measure="wide"
+        phoneMasthead={factOpen ? "hidden" : "visible"}
         /* A phone's heading row has room for the title and one square: the command keeps
          its name for assistive tech and draws only its mark, and the description gives way
          to one line, so the two still stand side by side. */

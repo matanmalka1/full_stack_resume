@@ -30,6 +30,11 @@ interface PageShellProps {
      a document beside the evidence for each of its lines, and a split of two readable
      columns needs the room. */
   measure?: "wide" | "wizard" | "form";
+  /* How the masthead row stands below the large breakpoint. "hidden" keeps it in the
+     document for assistive tech - the route heading the shell focuses must exist - but
+     gives a record opened from a list the whole screen. "centered" centres it, for a page
+     that is nothing but a statement and its way out. */
+  phoneMasthead?: "visible" | "hidden" | "centered";
   title: ReactNode;
 }
 
@@ -45,6 +50,7 @@ export const PageShell = ({
   eyebrowTone,
   landmark,
   measure = "wide",
+  phoneMasthead = "visible",
   title,
 }: PageShellProps) => {
   return (
@@ -61,7 +67,13 @@ export const PageShell = ({
         <div className="min-w-0">
           {/* A phone's heading stands on the canvas without a rule under it: the design
               separates the masthead from the body by space alone there. */}
-          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-hairline pb-2 max-lg:border-b-0 max-lg:pb-0">
+          <div
+            className={cx(
+              "flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-hairline pb-2 max-lg:border-b-0 max-lg:pb-0",
+              phoneMasthead === "hidden" && "max-lg:sr-only",
+              phoneMasthead === "centered" && "max-lg:justify-center max-lg:text-center",
+            )}
+          >
             <div className="min-w-0">
               <PageHeading description={description} eyebrow={eyebrow} eyebrowTone={eyebrowTone} id="route-heading">
                 {title}
