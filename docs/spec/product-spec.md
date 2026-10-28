@@ -300,6 +300,13 @@ accepted only when every assertion is `supported` and the evidence passes the
 deterministic check (`cv_engine/domain/claim_review.py`). Accepted wording needs no
 per-line user confirmation.
 
+The number check compares what a number states, not how it is written: thousands
+separators, a scale word or suffix (K, M, B, thousand, million, billion, אלף, מיליון,
+מיליארד), a percent word (`%`, percent, אחוז, אחוזים), and a currency mark do not make a
+number new, so `1,000` and `1000`, `40%` and `40 אחוז`, `$2M` and `2,000,000` agree. A
+changed value, a changed scale, or a plain number turned into a percentage still fails
+(`unsupported-review-number`). A currency is not compared; the review judges it.
+
 Writer and reviewer run in one Operation, judged line by line. A line that fails is
 *withheld*: it keeps the wording it had before (for a first draft, its frame line built
 from canonical facts). Passing lines are written and the Operation lists the withheld
