@@ -42,7 +42,11 @@ export const ApplicationIntakeForm = ({
 }: ApplicationIntakeFormProps) => (
   <form
     className={surfaceClasses(
-      "flex flex-col gap-6 bg-cv-surface p-5 shadow-surface sm:p-7 max-lg:gap-4 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none",
+      /* From the large breakpoint the two groups trade places (see each one); everything
+         else - the draft status above them, the duplicates and the feedback after - is
+         placed around them by order, so the reading order follows the drawn one only on
+         the screen that draws it. */
+      "flex flex-col gap-6 bg-cv-surface p-5 shadow-surface sm:p-7 max-lg:gap-4 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none lg:*:order-3 lg:*:first:order-0",
     )}
     id={formId}
     noValidate

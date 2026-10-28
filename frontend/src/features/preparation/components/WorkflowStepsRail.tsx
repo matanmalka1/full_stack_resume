@@ -32,7 +32,7 @@ interface WorkflowStepsRailProps {
    widths this screen is read at. Nothing here is positioned outside the box, so the corners
    survive without it. */
 const railClasses =
-  "w-full min-w-0 rounded-control border border-cv-border bg-cv-surface px-3 py-3 shadow-surface sm:px-4";
+  "w-full min-w-0 rounded-control border border-cv-border bg-cv-surface px-3 py-3 shadow-surface sm:px-4 lg:rounded-surface lg:py-1.5 lg:shadow-none";
 
 /* On a phone the rail drops its frame: it is part of the page's header there, not a card
    above it, and a framed band ate a sixth of the screen before the step began. */
@@ -43,10 +43,13 @@ const phoneRailClasses = "max-lg:rounded-none max-lg:border-0 max-lg:bg-transpar
    used to sit in a pale outline hardly different from an upcoming one, so only the tick
    told them apart, while the open step was the one filled solid - the spine read heaviest
    at the step not yet done. */
+/* From the large breakpoint the desktop design's thin stepper: the open step's mark is
+   filled too, numbered rather than ticked, so the two filled shapes still differ in what
+   they carry while the row reads as one quiet band under the page's own header. */
 const stepMarkClasses: Record<WorkflowStepState, string> = {
   complete: "border-cv-accent bg-cv-accent text-cv-on-accent",
-  current: "border-2 border-cv-accent bg-cv-surface text-cv-accent",
-  upcoming: "border-cv-border bg-cv-surface text-cv-text-muted",
+  current: "border-2 border-cv-accent bg-cv-surface text-cv-accent lg:border lg:bg-cv-accent lg:text-cv-on-accent",
+  upcoming: "border-cv-border bg-cv-surface text-cv-text-muted lg:border-cv-border-strong",
 };
 
 const stepLabelClasses: Record<WorkflowStepState, string> = {
@@ -55,10 +58,11 @@ const stepLabelClasses: Record<WorkflowStepState, string> = {
   upcoming: "font-medium text-cv-text-muted",
 };
 
+/* The design's connectors are solid hairlines: dark up to the open step, light after it. */
 const connectorClasses: Record<WorkflowStepState, string> = {
   complete: "bg-cv-success",
   current: "bg-cv-accent",
-  upcoming: "workflow-track-upcoming",
+  upcoming: "workflow-track-upcoming lg:bg-none! lg:bg-cv-border-strong",
 };
 
 const StepMark = ({ index, phone, state }: { index: number; phone: PhoneLayout; state: WorkflowStepState }) => (
@@ -68,6 +72,7 @@ const StepMark = ({ index, phone, state }: { index: number; phone: PhoneLayout; 
       "relative z-(--cv-z-content-raised) flex size-8 shrink-0 items-center justify-center rounded-pill border",
       "text-support font-bold transition-[background-color,border-color,color] duration-200",
       phone === "segments" ? "max-lg:hidden" : "max-lg:size-6 max-lg:text-caption",
+      "lg:size-6 lg:text-caption",
       stepMarkClasses[state],
     )}
   >
@@ -91,7 +96,7 @@ const StepBody = ({ index, phone, step }: { index: number; phone: PhoneLayout; s
       /* Tightens rather than truncates: below the wide breakpoints the padding and the gap
          between mark and label give up their room first, so the words themselves never
          have to. */
-      "relative flex min-w-0 flex-1 items-center gap-2 p-1 text-heading-sm transition-colors duration-200 lg:gap-3 lg:px-2 lg:py-2",
+      "relative flex min-w-0 flex-1 items-center gap-2 p-1 text-heading-sm transition-colors duration-200 lg:gap-2.5 lg:px-2 lg:py-1.5 lg:text-support",
       /* Unpositioned on a phone's bar, so the open stage's name below can hang from the
          rail's own corner rather than from its segment. */
       phone === "segments" && "max-lg:static max-lg:w-full max-lg:p-0",
@@ -192,6 +197,10 @@ export const WorkflowStepsRail = ({ label, phone = "segments", steps }: Workflow
         className={cx(
           "flex shrink-0 flex-wrap items-baseline gap-x-2",
           phone === "segments" ? "max-lg:min-h-5" : "max-lg:hidden",
+          /* From the large breakpoint the page's own header names the step and the marks
+             count it, so the rail is the design's bare stepper. The nav's label still
+             says the position in words. */
+          "lg:hidden",
         )}
       >
         <span className={cx("text-heading-sm font-bold text-cv-text", phone === "segments" && "max-lg:hidden")}>
@@ -236,7 +245,10 @@ export const WorkflowStepsRail = ({ label, phone = "segments", steps }: Workflow
             const body = <StepBody index={index} phone={phone} step={step} />;
             /* The open screen's tint marks a chip; a segment is marked by its fill. */
             const segment = phone === "segments" && "max-lg:min-w-0 max-lg:flex-1 max-lg:shrink";
-            const hereTint = step.here === true && "border-cv-accent/25 bg-cv-accent-soft";
+            /* The open screen's tint is the phone's and the narrow window's: on the desktop
+               stepper the filled, numbered mark and the bold label already say it. */
+            const hereTint =
+              step.here === true && "border-cv-accent/25 bg-cv-accent-soft lg:border-transparent lg:bg-transparent";
             const next = steps[index + 1];
 
             return (
@@ -279,7 +291,7 @@ export const WorkflowStepsRail = ({ label, phone = "segments", steps }: Workflow
                   <span
                     aria-hidden="true"
                     className={cx(
-                      "h-px min-w-3 flex-1",
+                      "h-px min-w-3 flex-1 lg:mx-2",
                       phone === "segments" && "max-lg:hidden",
                       connectorClasses[next.state],
                     )}

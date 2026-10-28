@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
 
 import type { ApplicationDetail } from "@/api/contracts";
+import { boardPath, boardReturnState } from "@/navigation/boardReturn";
+import { cx } from "@/ui/cx";
 import { PageShell } from "@/ui/PageShell";
 import { CommitBarTargetContext } from "@/ui/CommitBar";
 import { StatusSlotTargetContext } from "@/ui/StatusSlot";
@@ -8,7 +10,37 @@ import { WideRowTargetContext } from "@/ui/WideRow";
 import { type WorkflowStage, workflowStageLabels } from "../model/workflowStages";
 import { type PhoneHeader, PreparationWorkflowSteps } from "./PreparationWorkflowSteps";
 
+/* What a step changes about its header from the large breakpoint. The desktop design gives
+   every step a page header - a way back, the title, who the CV is for under it, and the
+   step's commands at the row's end - with the stepper under it rather than a framed rail
+   above. Every part is optional: a step that passes nothing gets the bordered back
+   chevron, the stage's name, "role · company" and the stepper. */
+interface DesktopHeader {
+  /* The step's commands at the masthead row's end. Rendered as given AT EVERY WIDTH, so a
+     command that has another home on a phone takes `max-lg:hidden` from its caller - and a
+     command must never also render somewhere else, or its name is on the page twice. */
+  actions?: ReactNode;
+  /* The trail "לוח המועמדויות / [title]" above the heading instead of the back chevron. */
+  breadcrumb?: boolean;
+  /* The company's initial in a tile before the title. */
+  mark?: boolean;
+  /* Whether the stepper is drawn under the header. Default true; false hides it from the
+     large breakpoint only - a phone's header keeps whatever `phoneHeader.bar` says. */
+  spine?: boolean;
+  /* The muted line under the title. Defaults to "role · company" once the record is read. */
+  subtitle?: ReactNode;
+  /* The h1's content in place of the stage's name. A phone keeps the h1 for assistive tech
+     only on a compact header, so there it becomes the heading's accessible name too. */
+  title?: ReactNode;
+}
+
+const NO_DESKTOP_HEADER: DesktopHeader = {};
+
 interface WizardStepShellProps {
+  /* Classes added to the body's column - the step's own `children` - so a step can lay
+     them out as a grid from the large breakpoint without wrapping each one. */
+  bodyClassName?: string;
+  desktopHeader?: DesktopHeader;
   /* Absent on intake, where the Application does not exist yet, and while the record
      naming it has not loaded. */
   applicationId?: string;
@@ -71,8 +103,10 @@ interface WizardStepShellProps {
    marks it with, so that agreement holds by construction rather than by review. */
 export const WizardStepShell = ({
   applicationId,
+  bodyClassName,
   children,
   description,
+  desktopHeader = NO_DESKTOP_HEADER,
   detail,
   eyebrow,
   measure = "wide",
@@ -88,6 +122,51 @@ export const WizardStepShell = ({
   const [statusTarget, setStatusTarget] = useState<HTMLDivElement | null>(null);
 
   const intake = stage === "intake";
+  const company = detail?.application.company;
+  const role = detail?.application.target_role;
+  const initial = company?.trim().charAt(0);
+
+  /* The desktop header's sub-line: who the CV is for. The phone's header already says it,
+     so it is drawn from the large breakpoint only, where the eyebrow saying the same thing
+     above the title gives way to it. */
+  const subtitle =
+    desktopHeader.subtitle ??
+    (role === undefined || company === undefined ? undefined : <span dir="auto">{`${role} · ${company}`}</span>);
+  const pageDescription =
+    subtitle === undefined ? (
+      description
+    ) : (
+      <>
+        <span className="block max-lg:hidden">{subtitle}</span>
+        {description === undefined ? null : <span className="block lg:mt-2">{description}</span>}
+      </>
+    );
+  /* The phone's heading: the step's own title, or the stage's name - in view only where
+     the phone header does not already name it. */
+  const phoneTitle =
+    title ??
+    (intake || phoneHeading === "full" ? (
+      workflowStageLabels[stage]
+    ) : (
+      <span className="max-lg:sr-only">{workflowStageLabels[stage]}</span>
+    ));
+  /* A desktop title replaces it from the large breakpoint only, so a phone keeps the
+     heading it had; each half is display:none at the other's width. */
+  const pageTitle =
+    desktopHeader.title === undefined ? (
+      phoneTitle
+    ) : (
+      <>
+        <span className="lg:hidden">{phoneTitle}</span>
+        <span className="max-lg:hidden">{desktopHeader.title}</span>
+      </>
+    );
+  const stageTitle = desktopHeader.title ?? title;
+  /* The way back. A phone draws it in its compact header (the spine's own link); from the
+     large breakpoint it is the header's bordered chevron, or the first step of the trail.
+     Named apart from the phone's link, which is display:none here and the only one there,
+     so the page never holds two links of one name. */
+  const boardLink = { state: boardReturnState(applicationId), to: boardPath() };
 
   if (queryError !== null && queryError !== undefined) {
     return children;
@@ -112,17 +191,43 @@ export const WizardStepShell = ({
             </div>
           ) : undefined
         }
-        description={description}
+        actions={desktopHeader.actions}
+        back={desktopHeader.breadcrumb === true ? undefined : { label: "חזרה ללוח", ...boardLink }}
+        breadcrumb={
+          desktopHeader.breadcrumb === true
+            ? [{ label: "לוח המועמדויות", ...boardLink }, { label: stageTitle ?? workflowStageLabels[stage] }]
+            : undefined
+        }
+        description={pageDescription}
         /* The phone header names who the CV is for, so the eyebrow saying it again stays
-           for assistive tech only there. */
-        eyebrow={eyebrow === undefined || intake ? eyebrow : <span className="max-lg:sr-only">{eyebrow}</span>}
+           for assistive tech only there; from the large breakpoint the sub-line under the
+           title says it instead. */
+        eyebrow={
+          eyebrow === undefined || intake ? (
+            eyebrow
+          ) : (
+            <span className={cx("max-lg:sr-only", subtitle !== undefined && "lg:hidden")}>{eyebrow}</span>
+          )
+        }
         landmark={
           <PreparationWorkflowSteps
             applicationId={applicationId}
+            desktopSpine={desktopHeader.spine !== false}
             detail={detail}
             phoneHeader={phoneHeader}
             stage={stage}
           />
+        }
+        landmarkPlacement="below-masthead"
+        leading={
+          desktopHeader.mark === true && initial !== undefined && initial !== "" ? (
+            <span
+              className="flex size-12 items-center justify-center rounded-surface border border-cv-border bg-cv-surface text-heading-sm font-extrabold text-cv-text"
+              dir="auto"
+            >
+              {initial}
+            </span>
+          ) : undefined
         }
         measure={measure}
         title={
@@ -130,15 +235,10 @@ export const WizardStepShell = ({
              heading stays for assistive tech and route focus only. A page's own title - a
              stage its record does not actually meet - says something the bar does not,
              and stays in view. */
-          title ??
-          (intake || phoneHeading === "full" ? (
-            workflowStageLabels[stage]
-          ) : (
-            <span className="max-lg:sr-only">{workflowStageLabels[stage]}</span>
-          ))
+          pageTitle
         }
       >
-        <div className="flex flex-col gap-6">
+        <div className={cx("flex flex-col gap-6", bodyClassName)}>
           {/* The step's Operation status, first on every step - see `StatusSlot`. */}
           <div className="contents" ref={setStatusTarget} />
           {children}

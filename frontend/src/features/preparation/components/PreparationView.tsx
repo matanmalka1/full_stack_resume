@@ -43,8 +43,13 @@ export const PreparationView = ({
       <WideRow>
         {/* One column: what needs deciding first, then the analysis at the full width
             of the row. The step's action is not here - its commit bar
-            portals to the shell's action slot. */}
-        <div className="flex min-w-0 flex-col gap-6">
+            portals to the shell's action slot.
+
+            From the large breakpoint the desktop design's two columns: the step's work -
+            the recommended action, then the requirements - on the start side, and an aside
+            on the end side holding the alerts. Placed by grid lines rather than wrapped in
+            columns, so the phone's single column keeps its order and its boxes exactly. */}
+        <div className="flex min-w-0 flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-0 lg:*:col-start-1">
           <VerificationStage
             detail={detail}
             hasRecommendation={hasRecommendation}
