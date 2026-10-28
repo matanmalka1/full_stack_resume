@@ -217,6 +217,21 @@ class CaptureClaimFactRequest(HttpSchema):
     reason: str = ""
 
 
+class EditPendingFactRequest(HttpSchema):
+    """What a pending fact says, changed before it is confirmed (§17 `edit_pending_fact`).
+
+    Only the fields sent change. Identity, source, style, and provenance are not
+    editable: provenance records where the fact came from (for a gap answer, the
+    user's own answer), and an edit does not change that.
+    """
+
+    meaning: str | None = Field(default=None, min_length=1)
+    renderings: dict[str, str] | None = None
+    tags: list[str] | None = Field(default=None, min_length=1)
+    effective_dates: str | None = None
+    reason: str = ""
+
+
 class FactTransitionRequest(HttpSchema):
     """The one lifecycle step, `pending -> canonical`.
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from .operations import ClaimReviewReason
+from .operations import ClaimReviewReason, FactDraftReason
 
 _CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
 
@@ -234,6 +234,14 @@ class ClaimReviewUncertain(ProposalRejected):
 
 class ClaimReviewUnsupported(ProposalRejected):
     """The semantic reviewer found that a proposed claim exceeds its sources."""
+
+
+class FactDraftRejected(ProposalRejected):
+    """A fact drafted from a gap answer adds a number or a name the answer lacks."""
+
+    def __init__(self, message: str, *, reason: FactDraftReason):
+        super().__init__(message)
+        self.fact_draft_reason = reason
 
 
 # Codes the specification names directly (`state-and-use-cases.md` §22). They are

@@ -18,8 +18,10 @@ from ...ai_configuration import (
 )
 from ...commands import (
     AnalyzeCommand,
+    AskGapQuestionsCommand,
     DraftCommand,
     DraftContinuation,
+    DraftGapFactCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
@@ -38,6 +40,7 @@ from ...ports.transactions import TransactionManager
 from ..analysis.service import AnalysisService
 from ..documents import DocumentSource, refuse_deleted, require_hash
 from ..drafts import DraftAuthoringService
+from ..gap_questions import GapQuestionService
 from ..rendering import RenderingService
 
 
@@ -274,5 +277,57 @@ class OperationSubmissionService:
             sources=OperationSources(expected_document_hash=command.expected_document_hash),
             provider="deterministic",
             model="playwright",
+        )
+        return self._enqueue(actor, request)
+
+    def submit_gap_questions(
+        self,
+        actor: Actor,
+        command: AskGapQuestionsCommand,
+        *,
+        idempotency_key: str,
+        gap_questions: GapQuestionService,
+    ) -> OperationView:
+        """§13a: queue one question per unmet requirement of the newest analysis."""
+        self._load_active_application(actor, command.application_id)
+        command = self._freeze_ai_execution(actor, command)
+        gap_questions.question_targets(actor, command.application_id, command.job_analysis_id)
+        request = CreateOperation(
+            application_id=command.application_id,
+            operation_type=OperationType.ASK_GAP_QUESTIONS,
+            payload=command.model_dump(mode="json"),
+            idempotency_key=idempotency_key,
+            sources=OperationSources(job_analysis_id=command.job_analysis_id),
+            provider=command.provider,
+            model=command.model,
+            reasoning_effort=validated_reasoning_effort(command.reasoning_effort),
+        )
+        return self._enqueue(actor, request)
+
+    def submit_gap_answer(
+        self,
+        actor: Actor,
+        command: DraftGapFactCommand,
+        *,
+        idempotency_key: str,
+        gap_questions: GapQuestionService,
+    ) -> OperationView:
+        """§13a: queue drafting one pending fact from the user's answer to one question."""
+        self._load_active_application(actor, command.application_id)
+        if not command.answer.strip():
+            raise PreconditionFailed("an answer must say something")
+        command = self._freeze_ai_execution(actor, command)
+        question = gap_questions.question_source(
+            actor, command.application_id, command.gap_question_id
+        )
+        request = CreateOperation(
+            application_id=command.application_id,
+            operation_type=OperationType.DRAFT_GAP_FACT,
+            payload=command.model_dump(mode="json"),
+            idempotency_key=idempotency_key,
+            sources=OperationSources(job_analysis_id=question.job_analysis_id),
+            provider=command.provider,
+            model=command.model,
+            reasoning_effort=validated_reasoning_effort(command.reasoning_effort),
         )
         return self._enqueue(actor, request)

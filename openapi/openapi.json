@@ -129,6 +129,23 @@
         "title": "AnalysisDecisionsResponse",
         "type": "object"
       },
+      "AnswerGapQuestionRequest": {
+        "additionalProperties": false,
+        "description": "The user's own answer, in their words; it is the only source of the fact.",
+        "properties": {
+          "answer": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Answer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer"
+        ],
+        "title": "AnswerGapQuestionRequest",
+        "type": "object"
+      },
       "ApplicationDetailResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1279,6 +1296,22 @@
           "expected_analysis_id"
         ],
         "title": "ApplyAnalysisDecisionsRequest",
+        "type": "object"
+      },
+      "AskGapQuestionsRequest": {
+        "additionalProperties": false,
+        "description": "Ask about the unmet requirements of this analysis, the Application's newest.",
+        "properties": {
+          "job_analysis_id": {
+            "minLength": 1,
+            "title": "Job Analysis Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_analysis_id"
+        ],
+        "title": "AskGapQuestionsRequest",
         "type": "object"
       },
       "AttachFactRequest": {
@@ -2731,6 +2764,71 @@
         "title": "DuplicateMatchResponse",
         "type": "object"
       },
+      "EditPendingFactRequest": {
+        "additionalProperties": false,
+        "description": "What a pending fact says, changed before it is confirmed (§17 `edit_pending_fact`).\n\nOnly the fields sent change. Identity, source, style, and provenance are not\neditable: provenance records where the fact came from (for a gap answer, the\nuser's own answer), and an edit does not change that.",
+        "properties": {
+          "effective_dates": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Dates"
+          },
+          "meaning": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meaning"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "renderings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renderings"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "title": "EditPendingFactRequest",
+        "type": "object"
+      },
       "Emphasis": {
         "enum": [
           "development-balanced",
@@ -2997,6 +3095,43 @@
           "events"
         ],
         "title": "FactDetailResponse",
+        "type": "object"
+      },
+      "FactDraftReason": {
+        "additionalProperties": false,
+        "description": "A fact drafted from a gap answer said something the answer does not.\n\n`problems` are the failed checks (`domain/gap_questions.py`); `unsupported` the\nnumbers and named terms the wording carried and the answer did not. Nothing was\nsaved; the answer is kept in the Operation, so a retry asks again.",
+        "properties": {
+          "code": {
+            "const": "fact_draft",
+            "default": "fact_draft",
+            "title": "Code",
+            "type": "string"
+          },
+          "problems": {
+            "items": {
+              "enum": [
+                "unsupported-number",
+                "unsupported-term",
+                "missing-rendering",
+                "empty-wording"
+              ],
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "unsupported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported",
+            "type": "array"
+          }
+        },
+        "required": [
+          "problems"
+        ],
+        "title": "FactDraftReason",
         "type": "object"
       },
       "FactEventResponse": {
@@ -3307,6 +3442,173 @@
           }
         },
         "title": "FactTransitionRequest",
+        "type": "object"
+      },
+      "GapQuestionResponse": {
+        "additionalProperties": false,
+        "description": "One question and its outcome.\n\n`state`: `open` (unanswered), `drafting` (a `draft_gap_fact` is queued or\nrunning), `answered` (`fact` holds the drafted fact; `fact.status` is `pending`\nuntil confirmed), `skipped`. `draft_operation` is the newest `draft_gap_fact`\nfor this question, live or terminal.",
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "coverage": {
+            "enum": [
+              "partial",
+              "unsupported"
+            ],
+            "title": "Coverage",
+            "type": "string"
+          },
+          "draft_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FactResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "importance": {
+            "enum": [
+              "mandatory",
+              "preferred",
+              "unknown"
+            ],
+            "title": "Importance",
+            "type": "string"
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "requirement_id": {
+            "title": "Requirement Id",
+            "type": "string"
+          },
+          "requirement_text": {
+            "title": "Requirement Text",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "drafting",
+              "answered",
+              "skipped"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ordinal",
+          "requirement_id",
+          "requirement_text",
+          "importance",
+          "coverage",
+          "question",
+          "state"
+        ],
+        "title": "GapQuestionResponse",
+        "type": "object"
+      },
+      "GapQuestionSetResponse": {
+        "additionalProperties": false,
+        "description": "The newest question set of the Application's newest analysis.\n\nNo set asked yet: `questions` is empty and `operation_id` is null.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "asked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asked At"
+          },
+          "job_analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Analysis Id"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "he"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/GapQuestionResponse"
+            },
+            "title": "Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "application_id",
+          "questions"
+        ],
+        "title": "GapQuestionSetResponse",
         "type": "object"
       },
       "GapResponse": {
@@ -3641,7 +3943,9 @@
           "output_type": {
             "enum": [
               "job_analysis",
-              "cv_document"
+              "cv_document",
+              "gap_question",
+              "fact"
             ],
             "title": "Output Type",
             "type": "string"
@@ -3749,6 +4053,7 @@
                     "content_overflow": "#/components/schemas/RenderCheckReason",
                     "direction_isolation": "#/components/schemas/RenderCheckReason",
                     "document_direction": "#/components/schemas/RenderCheckReason",
+                    "fact_draft": "#/components/schemas/FactDraftReason",
                     "html_missing": "#/components/schemas/RenderCheckReason",
                     "missing_fact_rendering": "#/components/schemas/MissingFactRenderingReason",
                     "pdf_corrupt": "#/components/schemas/RenderCheckReason",
@@ -3774,6 +4079,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ClaimReviewReason"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FactDraftReason"
                   }
                 ]
               },
@@ -3982,7 +4290,9 @@
           "create_draft",
           "regenerate_section",
           "regenerate_claim",
-          "render_document"
+          "render_document",
+          "ask_gap_questions",
+          "draft_gap_fact"
         ],
         "title": "OperationType",
         "type": "string"
@@ -6877,6 +7187,289 @@
         ]
       }
     },
+    "/api/v1/applications/{application_id}/gap-questions": {
+      "get": {
+        "operationId": "read_gap_questions_api_v1_applications__application_id__gap_questions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GapQuestionSetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Read the questions asked about the newest analysis, and their outcomes",
+        "tags": [
+          "gap-questions"
+        ]
+      },
+      "post": {
+        "description": "`202`. Refused (`412`) when the analysis has nothing to ask about, `409` when a\nnewer analysis exists.",
+        "operationId": "ask_gap_questions_api_v1_applications__application_id__gap_questions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskGapQuestionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Ask one question per unsupported or partial requirement",
+        "tags": [
+          "gap-questions"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/gap-questions/{question_id}/answer": {
+      "post": {
+        "description": "`202`. The fact it drafts is `pending`: it counts only once the user confirms it.",
+        "operationId": "answer_gap_question_api_v1_applications__application_id__gap_questions__question_id__answer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "title": "Question Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerGapQuestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Answer one question; a pending fact is drafted from the answer",
+        "tags": [
+          "gap-questions"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/gap-questions/{question_id}/skip": {
+      "post": {
+        "description": "`200` with the question set as it now reads; `409` if it already has an outcome.",
+        "operationId": "skip_gap_question_api_v1_applications__application_id__gap_questions__question_id__skip_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "title": "Question Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GapQuestionSetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Decline to answer one question",
+        "tags": [
+          "gap-questions"
+        ]
+      }
+    },
     "/api/v1/applications/{application_id}/job-text": {
       "patch": {
         "operationId": "update_job_text_api_v1_applications__application_id__job_text_patch",
@@ -7736,6 +8329,67 @@
           }
         },
         "summary": "Read one fact and its lifecycle events",
+        "tags": [
+          "facts"
+        ]
+      },
+      "patch": {
+        "description": "Pending facts only (`412` otherwise); a canonical one is corrected by a replacement.",
+        "operationId": "edit_pending_fact_api_v1_facts__fact_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditPendingFactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Edit a pending fact before it is confirmed",
         "tags": [
           "facts"
         ]
