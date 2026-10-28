@@ -18,7 +18,7 @@ interface SectionHeaderProps {
 
 /* The accent tile an icon sits in beside a heading - shared by this header and any card
    heading that draws the same mark without the header's rule and spacing. */
-export const iconTileClasses =
+const iconTileClasses =
   "flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent";
 
 const alignmentClasses: Record<NonNullable<SectionHeaderProps["align"]>, string> = {
