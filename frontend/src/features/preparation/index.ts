@@ -52,7 +52,11 @@ export {
   trackLabel,
 } from "./model/analysisLabels";
 export { ReasonCallout, ReasonDetails } from "./components/ReasonCallout";
-export {
+/* The requirements of the analysis the document is pinned to, for the editor to mark
+   against its own draft; and the one way to record a fact for a requirement nothing
+   supports, which the analysis step's rows offer too. */
+export { documentRequirements } from "./model/documentRequirements";
+export { RequirementFactAction } from "./components/RequirementFactAction";export {
   actionDescription,
   actionLabel,
   preparationStateIcons,
