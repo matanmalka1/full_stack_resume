@@ -25,6 +25,8 @@ interface ApplicationIntakeFormProps {
   register: UseFormRegister<ApplicationIntakeFields>;
 }
 
+/* On a phone the form is not one card: each group is its own card on the canvas
+   (`intakeSectionClasses`), and the form around them stays flat. */
 export const ApplicationIntakeForm = ({
   duplicates,
   draftStatus,
@@ -39,7 +41,9 @@ export const ApplicationIntakeForm = ({
   register,
 }: ApplicationIntakeFormProps) => (
   <form
-    className={surfaceClasses("flex flex-col gap-6 bg-cv-surface p-5 shadow-surface sm:p-7")}
+    className={surfaceClasses(
+      "flex flex-col gap-6 bg-cv-surface p-5 shadow-surface sm:p-7 max-lg:gap-4 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none",
+    )}
     id={formId}
     noValidate
     onSubmit={onSubmit}

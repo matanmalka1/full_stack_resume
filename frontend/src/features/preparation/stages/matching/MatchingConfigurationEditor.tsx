@@ -12,6 +12,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Select } from "@/ui/Select";
+import { cx } from "@/ui/cx";
 import {
   classificationFieldLabels,
   emphasisLabels,
@@ -163,7 +164,15 @@ export const MatchingConfigurationEditor = ({
               return (
                 <Field
                   hint={
-                    <span className={isChanged ? "font-semibold text-cv-accent" : undefined}>
+                    /* On a phone the field's provenance is a small tag under its name, as
+                       the design marks it, so a column of four fields does not read as
+                       eight lines of equal weight. */
+                    <span
+                      className={cx(
+                        isChanged && "font-semibold text-cv-accent",
+                        "max-lg:inline-block max-lg:rounded-pill max-lg:bg-cv-surface-muted max-lg:px-2 max-lg:text-caption max-lg:font-semibold",
+                      )}
+                    >
                       {isChanged
                         ? `במקום ${field.labels[current[key]] ?? current[key]} · ${field.cost}`
                         : origin === "decided"

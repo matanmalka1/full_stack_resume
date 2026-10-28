@@ -1,6 +1,8 @@
+import { Download } from "lucide-react";
 import { type ReactElement, useId, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { documentPdfHref } from "@/api/documents";
 import { aiAvailability } from "@/api/settings";
 import { routePaths } from "@/navigation/routePaths";
 import type { ApplicationDetail } from "@/api/contracts";
@@ -162,6 +164,20 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
       </p>
     );
 
+  /* The finished file, one press from the step that leads to it. On a phone it is the
+     bar's square icon beside the command; the Ready screen keeps the labelled download. */
+  const downloadHref =
+    detail.available_actions.includes("download_pdf") && detail.document_hash != null
+      ? documentPdfHref(detail.application.id, detail.document_hash)
+      : null;
+  const downloadButton =
+    downloadHref === null ? undefined : (
+      <a className={buttonClasses("secondary", "max-lg:px-0", "compact")} href={downloadHref}>
+        <Download aria-hidden="true" className="size-icon-md" />
+        <span className="max-lg:sr-only">הורדת PDF</span>
+      </a>
+    );
+
   /* Workflow order, and the same order every visit: analyze, draft, the draft screen,
      ready. The bar used to be sorted by how far along each action was, which moved a
      button to the front of the row on the visit it became available - so the control
@@ -231,6 +247,8 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
       {inWorkflowOrder.length === 0 ? null : (
         <CommitBar
           label={NEXT_STEP_LABEL}
+          secondary={downloadButton}
+          secondaryIconOnly
           primary={
             <>
               {restButtons.length === 0 ? null : <div className="flex flex-wrap gap-3">{restButtons}</div>}
