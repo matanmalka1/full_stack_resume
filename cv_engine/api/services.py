@@ -48,10 +48,13 @@ class ApiLimits:
     `dev_origin` is unset in production: the built UI is served same-origin, so
     there is no second origin to allow. When set it is exactly one origin - the
     development Vite server - never a wildcard and never a list.
+    `public_origin` is the one HTTPS origin a deployed instance answers on
+    behind its TLS proxy.
     """
 
     max_body_bytes: int
     dev_origin: str | None = None
+    public_origin: str | None = None
     trusted_proxy_hops: int = 0
 
 

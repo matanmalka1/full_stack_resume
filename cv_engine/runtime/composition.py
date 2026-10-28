@@ -357,6 +357,7 @@ def build_services(
         runner,
         request_cancellation=cancel_for_its_owner,
         exclusive=lambda: worker_exclusivity(engine),
+        concurrency=int(resolved_config.get("worker_concurrency")),
         maintenance=account_service.cleanup_rate_limits,
     )
     knowledge_service = FactLifecycleService(
@@ -434,10 +435,12 @@ def build_api_services(
     """
     max_body_bytes = API_MAX_BODY_BYTES_DEFAULT
     dev_origin: str | None = None
+    public_origin: str | None = None
     trusted_proxy_hops = 0
     if config is not None:
         max_body_bytes = config.get("api_max_body_bytes")
         dev_origin = config.get("api_dev_origin")
+        public_origin = config.get("api_public_origin")
         trusted_proxy_hops = config.get("trusted_proxy_hops")
     return ApiServices(
         applications=services.applications,
@@ -464,6 +467,7 @@ def build_api_services(
         limits=ApiLimits(
             max_body_bytes=max_body_bytes,
             dev_origin=dev_origin,
+            public_origin=public_origin,
             trusted_proxy_hops=trusted_proxy_hops,
         ),
     )

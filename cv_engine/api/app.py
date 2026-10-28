@@ -105,7 +105,7 @@ def create_app(
     app.state.event_sink = event_sink
     install_services(app, services)
 
-    origins = allowed_origins(host, port, services.limits.dev_origin)
+    origins = allowed_origins(host, port, services.limits.dev_origin, services.limits.public_origin)
     # Order matters: middleware added last runs first, so the body limit is
     # enforced before the Origin check reads a header, and both run before any
     # route. `allow_origins` is an explicit list; `allow_credentials` stays off
