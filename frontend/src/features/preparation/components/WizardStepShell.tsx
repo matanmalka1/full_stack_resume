@@ -15,7 +15,7 @@ import { type PhoneHeader, PreparationWorkflowSteps } from "./PreparationWorkflo
    step's commands at the row's end - with the stepper under it rather than a framed rail
    above. Every part is optional: a step that passes nothing gets the bordered back
    chevron, the stage's name, "role · company" and the stepper. */
-export interface DesktopHeader {
+interface DesktopHeader {
   /* The step's commands at the masthead row's end. Rendered as given AT EVERY WIDTH, so a
      command that has another home on a phone takes `max-lg:hidden` from its caller - and a
      command must never also render somewhere else, or its name is on the page twice. */

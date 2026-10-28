@@ -49,7 +49,7 @@ const phoneRailClasses = "max-lg:rounded-none max-lg:border-0 max-lg:bg-transpar
 const stepMarkClasses: Record<WorkflowStepState, string> = {
   complete: "border-cv-accent bg-cv-accent text-cv-on-accent",
   current: "border-2 border-cv-accent bg-cv-surface text-cv-accent lg:border lg:bg-cv-accent lg:text-cv-on-accent",
-  upcoming: "border-cv-border-strong bg-cv-surface text-cv-text-muted",
+  upcoming: "border-cv-border bg-cv-surface text-cv-text-muted lg:border-cv-border-strong",
 };
 
 const stepLabelClasses: Record<WorkflowStepState, string> = {
