@@ -34,16 +34,20 @@ import { DraftPreview } from "../components/DraftPreview";
 import { DraftPreviewToggle } from "../components/DraftPreviewToggle";
 import { DraftProgress } from "../components/DraftProgress";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
+import { DraftRequirementsPanel } from "../components/DraftRequirementsPanel";
+import { RegenerationDiffPanel } from "../components/RegenerationDiffPanel";
 import { DraftTemplateControl } from "../components/DraftTemplateControl";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
 import { type DraftWorkspaceMode, DraftWorkspace, DraftWorkspaceSwitch } from "../components/DraftWorkspace";
 import { useDraftDocument } from "../api/queries";
 import { useDocumentCheck } from "../hooks/useDocumentCheck";
 import { useDraftEditing } from "../hooks/useDraftEditing";
+import { useRegenerationDiff } from "../hooks/useRegenerationDiff";
 import { useRenderDocument } from "../hooks/useRenderDocument";
 import { draftFit } from "../model/draftFit";
 import { summarizeContent, summarizeSelection } from "../model/draftOverview";
 import { isEditable } from "../model/drafts.types";
+import { revertEdit } from "../model/regenerationDiff";
 
 /* The workspace's own shape, held while the document behind it is read. */
 const draftLoading = (
@@ -172,13 +176,34 @@ export const DraftEditorPage = () => {
     settled,
   });
 
+  /* The lines a regeneration is about to overwrite are captured at the press and bound to
+     the run the server accepted, so its success can be shown before and after. */
+  const regenerationDiff = useRegenerationDiff({ draft, operation });
   const editing = useDraftEditing({
     applicationId,
     draft,
     etag,
-    onOperationQueued: watch,
+    onOperationQueued: (operationId) => {
+      regenerationDiff.bind(operationId);
+      watch(operationId);
+    },
     operationLive,
   });
+  const claimActions = {
+    ...editing.claimActions,
+    onRegenerate: (claim: Parameters<typeof editing.claimActions.onRegenerate>[0]) => {
+      regenerationDiff.capture({ kind: "claim", claimId: claim.claim_id });
+      editing.claimActions.onRegenerate(claim);
+    },
+    onReview: (claim: Parameters<typeof editing.claimActions.onReview>[0]) => {
+      regenerationDiff.capture({ kind: "claim", claimId: claim.claim_id });
+      editing.claimActions.onReview(claim);
+    },
+  };
+  const regenerateSection = (section: string) => {
+    regenerationDiff.capture({ kind: "section", section });
+    editing.regenerateSection(section);
+  };
   /* What makes the document on screen something neither a check nor an approval can speak
      for: live work on it, unsaved edits, a resolution in flight or failed, an unresolved read.
      Approval adds its own two conditions below. */
@@ -491,8 +516,26 @@ export const DraftEditorPage = () => {
                     regenerationError={editing.regenerationError}
                   />
 
+                  <RegenerationDiffPanel
+                    changes={regenerationDiff.changes}
+                    locked={operationLive}
+                    onDismiss={regenerationDiff.dismiss}
+                    onRevert={(change) => {
+                      const edit = revertEdit(change, (editing.visibleDraft ?? draft).outline);
+                      if (edit === null) return;
+                      editing.claimActions.onEdit(edit.claim, edit.text);
+                      editing.claimActions.onCommit();
+                    }}
+                    outline={(editing.visibleDraft ?? draft).outline}
+                    target={regenerationDiff.target}
+                  />
+
+                  {detail === undefined ? null : (
+                    <DraftRequirementsPanel detail={detail} outline={(editing.visibleDraft ?? draft).outline} />
+                  )}
+
                   <DraftOutlineEditor
-                    actions={editing.claimActions}
+                    actions={claimActions}
                     draft={editing.visibleDraft ?? draft}
                     factContext={{
                       beforeResolve,
@@ -513,7 +556,7 @@ export const DraftEditorPage = () => {
                       />
                     }
                     onMoveClaim={editing.history.moveClaim}
-                    onRegenerateSection={editing.regenerateSection}
+                    onRegenerateSection={regenerateSection}
                   />
                 </>
               }

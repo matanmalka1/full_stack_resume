@@ -99,6 +99,7 @@ export const RequirementList = ({
                       evidence={evidence}
                       gapReason={gapReasons.get(requirement.requirementId)}
                       key={requirement.requirementId}
+                      profile={detail.application.profile ?? null}
                       requirement={requirement}
                     />
                   ))}

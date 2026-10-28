@@ -14,6 +14,7 @@ import type { Requirement, RequirementCoverage, ShortfallSeverity } from "@/api/
 import { DisclosureSummary } from "@/ui/Disclosure";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
+import { RequirementFactAction } from "../../components/RequirementFactAction";
 import { coverageLabels, coverageTones } from "../../model/analysisLabels";
 import type { RequirementEvidence } from "./useRequirementEvidence";
 
@@ -104,10 +105,14 @@ const evidenceSummary = (supporting: number, cited: number, matched: boolean) =>
 export const RequirementRow = ({
   evidence,
   gapReason,
+  profile,
   requirement,
 }: {
   evidence: RequirementEvidence;
   gapReason: string | undefined;
+  /* The Application's Profile, which picks the default knowledge file of a fact added
+     for a requirement nothing supports. */
+  profile: string | null;
   requirement: Requirement;
 }) => {
   const [open, setOpen] = useState(false);
@@ -172,6 +177,10 @@ export const RequirementRow = ({
           <bdi>{shortfall}</bdi>
         </p>
       )}
+
+      {requirement.supportingFactIds.length === 0 ? (
+        <RequirementFactAction profile={profile} requirement={requirement} />
+      ) : null}
 
       {citedCount === 0 && detailRationale === null ? null : (
         <details className="lg:col-start-4 lg:row-start-1" onToggle={(event) => setOpen(event.currentTarget.open)}>
