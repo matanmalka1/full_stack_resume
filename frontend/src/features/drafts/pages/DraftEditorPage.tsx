@@ -27,6 +27,7 @@ import { DraftConflictDialog } from "../components/DraftConflictDialog";
 import { DraftContentSummary } from "../components/DraftContentSummary";
 import { DraftEditorNotices } from "../components/DraftEditorNotices";
 import { DraftEmptyState } from "../components/DraftEmptyState";
+import { DraftFitCard } from "../components/DraftFitCard";
 import { DraftHistoryControls } from "../components/DraftHistoryControls";
 import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
@@ -39,6 +40,7 @@ import { useDraftDocument } from "../api/queries";
 import { useDocumentCheck } from "../hooks/useDocumentCheck";
 import { useDraftEditing } from "../hooks/useDraftEditing";
 import { useRenderDocument } from "../hooks/useRenderDocument";
+import { draftFit } from "../model/draftFit";
 import { summarizeContent, summarizeSelection } from "../model/draftOverview";
 import { isEditable } from "../model/drafts.types";
 
@@ -331,6 +333,9 @@ export const DraftEditorPage = () => {
     return operation.failure_reason.claims.every((refused) => current.get(refused.claim_id) !== refused.text);
   }, [draft, operation]);
   const selection = useMemo(() => (draft === undefined ? undefined : summarizeSelection(draft)), [draft]);
+  /* The posting's requirements against the facts, from the analysis the projection
+     already carries - no read of its own. */
+  const fit = useMemo(() => (detail === undefined ? null : draftFit(detail)), [detail]);
 
   return (
     <div
@@ -444,6 +449,7 @@ export const DraftEditorPage = () => {
             <DraftWorkspace
               editor={
                 <>
+                  {fit === null ? null : <DraftFitCard fit={fit} />}
                   <DraftContentSummary content={content} draft={draft} selection={selection} />
 
                   <DraftEditorNotices
