@@ -4,8 +4,14 @@ import { cx } from "./cx";
    element remains the caller's choice. This keeps articles, forms, disclosures,
    dialogs, and document previews semantically intact instead of forcing them through
    the section-based Card component. */
-export const surfaceClasses = (className?: string): string => cx("rounded-surface border border-cv-border", className);
+export const surfaceClasses = (className?: string): string =>
+  cx("rounded-surface border border-cv-hairline", className);
 
-/* The default content separator: flat, square and shadowless. Rounded surfaces are
-   reserved for controls and content that genuinely floats above the page. */
+/* The design's card: a white surface on the grey canvas, 16px corners, a hairline edge
+   and a faint shadow. `Card` draws it; a list item or a link that is a card takes the
+   same classes. */
+export const cardClasses = (className?: string): string =>
+  surfaceClasses(cx("bg-cv-surface shadow-surface", className));
+
+/* A content separator with no surface of its own: flat, square and shadowless. */
 export const flatSurfaceClasses = (className?: string): string => cx("border border-cv-hairline", className);

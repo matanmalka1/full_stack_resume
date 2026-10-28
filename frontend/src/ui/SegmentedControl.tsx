@@ -43,23 +43,23 @@ export const SegmentedControl = <TValue extends string>({
       className="min-w-0"
       disabled={disabled}
     >
-      <legend className="text-body font-medium text-cv-text">{label}</legend>
+      <legend className="text-label font-bold text-cv-text">{label}</legend>
       {description === undefined ? null : (
         <p className="mt-1 text-support leading-6 text-cv-text-muted" id={descriptionId}>
           {description}
         </p>
       )}
-      <div className="mt-2 inline-flex max-w-full gap-1 rounded-control border border-cv-border bg-cv-surface-muted p-1">
+      <div className="mt-2.5 flex w-full gap-1 rounded-control bg-cv-surface-muted p-1">
         {options.map((option) => {
           const Icon = option.icon;
           const active = option.value === value;
           return (
             <label
               className={cx(
-                "inline-flex min-h-10 min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-control px-3 text-support font-semibold transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-cv-focus has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60",
+                "inline-flex min-h-9.5 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-control-sm px-3 text-support transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-cv-focus has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60",
                 active
-                  ? "bg-cv-surface text-cv-text shadow-floating"
-                  : "text-cv-text-muted hover:bg-cv-surface hover:text-cv-text",
+                  ? "bg-cv-surface font-bold text-cv-text shadow-segment"
+                  : "font-medium text-cv-text-muted hover:text-cv-text",
               )}
               key={option.value}
             >
