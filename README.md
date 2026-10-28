@@ -44,6 +44,18 @@ Every screen but sign-in requires a session, so the first run creates the one us
 password is reset with `python -m cv_engine.admin set-password --email …`, which also
 ends every session.
 
+Every screen but sign-in also needs the user's Knowledge (facts, candidate context, and
+Profile bindings). `profiles/` holds templates only, so Knowledge comes from a directory
+that `export-knowledge` wrote from a database that already has it:
+
+```bash
+./.venv/bin/python -m cv_engine.admin export-knowledge --email you@example.com --to /tmp/knowledge
+CV_DATABASE_URL=… ./.venv/bin/python -m cv_engine.admin import-knowledge \
+  --email you@example.com --from /tmp/knowledge
+```
+
+The directory holds the candidate's personal data; delete it once imported.
+
 Multiple worktrees may share the same PostgreSQL server, but worktrees that run in
 parallel should use separate databases through `CV_DATABASE_URL`; they do not need
 separate PostgreSQL servers.
@@ -56,6 +68,30 @@ browser again without replacing the environment:
 ```bash
 ./.venv/bin/python -m playwright install chromium
 ```
+
+## Deployment
+
+[`render.yaml`](render.yaml) is a Render Blueprint for one web service built from the
+[`Dockerfile`](Dockerfile). [`scripts/serve.sh`](scripts/serve.sh) migrates, then runs
+the API, the worker, and the built UI in one container. PostgreSQL is Neon; immutable
+payloads go to an S3-compatible bucket (Cloudflare R2).
+
+- **Database:** `DATABASE_URL` is Neon's *direct* connection string (host without
+  `-pooler`). The pooler's transaction mode breaks the worker's session advisory lock
+  and Alembic's migration transaction.
+- **Bucket:** `CV_S3_BUCKET`, `CV_S3_ENDPOINT_URL` (the account endpoint, without the
+  bucket name), `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
+- **Origin:** `CV_PUBLIC_ORIGIN` is the service's exact `https://` URL, no trailing
+  slash. Without it every mutation, sign-in included, is refused with `403`.
+- **First user:** run `create-user` and `import-knowledge` (Setup) from a checkout with
+  `CV_DATABASE_URL` pointing at the deployed database, as `postgresql+psycopg://…`.
+
+On Render's free plan the service sleeps after about 15 idle minutes and the worker
+with it; rendered HTML/PDF live on the container's disk and are lost on every restart or
+deploy, while submitted files are safe in the bucket. One render's Chromium peaks near
+the plan's 512 MB, which is why the Blueprint sets `CV_WORKER_CONCURRENCY=1`. Keeping
+the service awake keeps Neon's compute awake too (the worker polls every 0.25 s), which
+spends the free plan's 100 compute hours in about two weeks.
 
 ## Architecture
 

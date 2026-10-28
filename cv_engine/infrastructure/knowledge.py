@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -21,8 +22,11 @@ from ..domain.facts import (
     FactStore,
     FactStoreError,
     parse_fact_source,
+    render_fact_source,
+    source_name_of,
 )
 from ..domain.knowledge import Knowledge
+from ..domain.knowledge_import import candidate_payload
 from ..domain.presentations import PresentationError, PresentationStore
 from ..domain.profiles import ProfileStore, ProfileStoreError
 from ..util import sha256_text
@@ -207,3 +211,50 @@ class FileKnowledge:
             presentations=load_presentations(self.knowledge_root, facts),
             requirement_concepts=load_requirement_concepts(self.knowledge_root),
         )
+
+
+#: The installation's policy files a Knowledge directory carries beside the user's own,
+#: so that `FileKnowledge` loads it on its own, wherever it is copied.
+POLICY_FILES = (
+    Path("config") / "emphasis.json",
+    Path("config") / "requirements.json",
+    Path("rendering") / "rules" / "presentations.json",
+)
+
+#: The `source_version` an exported fact file declares. Rows keep no per-file version
+#: (architecture §18.2), and an import does not store one, so any valid one will do.
+EXPORTED_SOURCE_VERSION = "1.0.0"
+
+
+def write_file_knowledge(knowledge: Knowledge, target: Path, policy_root: Path) -> FileKnowledge:
+    """Write one user's Knowledge in the installation's file layout: `export-knowledge`.
+
+    The inverse of `FileKnowledge.load`: facts by their source file, the candidate
+    context, every Profile whole (template and binding joined) at its template's path,
+    and the policy files. The target must not exist yet, so nothing is overwritten.
+    """
+    target = Path(target)
+    if target.exists():
+        raise FileExistsError(f"refusing to write Knowledge into an existing path: {target}")
+    by_source: dict[str, list] = {name: [] for name in FACT_SOURCE_NAMES}
+    for fact in knowledge.facts.facts.values():
+        by_source[source_name_of(fact)].append(fact)
+    base = target / "base"
+    base.mkdir(parents=True)
+    for name, facts in by_source.items():
+        source = FactSource(source_version=EXPORTED_SOURCE_VERSION, facts=facts)
+        (base / name).write_text(render_fact_source(source), encoding="utf-8")
+    _write_json(base / CANDIDATE_FILE, candidate_payload(knowledge.candidate))
+    for name, profile in knowledge.profiles.profiles.items():
+        path = resolve_within(target, Path(knowledge.profiles.source(name)))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(path, profile.model_dump(mode="json"))
+    for relative in POLICY_FILES:
+        destination = target / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(Path(policy_root) / relative, destination)
+    return FileKnowledge(target)
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
