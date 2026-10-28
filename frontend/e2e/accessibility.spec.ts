@@ -176,6 +176,17 @@ test.describe("accessibility", () => {
         body: '<!doctype html><html lang="en"><head><title>Preview</title></head><body><main><h1>Account Manager</h1><p>Owned the CRM migration.</p></main></body></html>',
       }),
     );
+    api.stub(
+      `GET ${documentPath}/page-count`,
+      json({
+        application_id: "app-1",
+        document_id: "doc-1",
+        document_hash: HASH,
+        template: null,
+        pages: 1,
+        maximum: 1,
+      }),
+    );
     api.stub(`POST ${documentPath}/check`, json(documentCheck()));
     api.stub("GET /api/v1/facts", json({ items: [] }));
     api.stub("GET /api/v1/facts/history", json({ events: [] }));
