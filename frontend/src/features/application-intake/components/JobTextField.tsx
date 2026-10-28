@@ -40,9 +40,8 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
     );
 
   return (
-    /* First from the large breakpoint, where the desktop design leads with the posting. */
     <FormSection
-      className={cx(intakeSectionClasses, "lg:order-1!")}
+      className={intakeSectionClasses}
       description="הטקסט יישמר בדיוק כפי שהוזן."
       divided={false}
       title={
