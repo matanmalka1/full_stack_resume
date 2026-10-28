@@ -124,7 +124,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
       // Below the large breakpoint it is the whole screen, as a phone's own search is: the
       // field pinned at the top with a cancel beside it, then the results and the new-job
       // row after them, scrolling as one column.
-      className="fixed inset-x-0 top-24 bottom-auto mx-auto my-0 hidden open:flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm max-lg:inset-0 max-lg:h-dvh max-lg:max-h-none max-lg:w-full max-lg:max-w-none max-lg:rounded-none max-lg:border-0 max-lg:pt-[env(safe-area-inset-top)] max-lg:overflow-y-auto max-lg:pb-[env(safe-area-inset-bottom)] max-lg:shadow-none"
+      className="fixed inset-x-0 top-24 bottom-auto mx-auto my-0 hidden open:flex max-h-[75vh] w-[calc(100%-2rem)] max-w-[42.5rem] flex-col overflow-hidden rounded-sheet border-0 bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm max-lg:inset-0 max-lg:h-dvh max-lg:max-h-none max-lg:w-full max-lg:max-w-none max-lg:rounded-none max-lg:border-0 max-lg:pt-[env(safe-area-inset-top)] max-lg:overflow-y-auto max-lg:pb-[env(safe-area-inset-bottom)] max-lg:shadow-none"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -141,7 +141,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
     >
       {/* On a phone the field is drawn as a rounded box of its own, with the cancel
           outside it - the box is the wrapper below, which dissolves from `lg`. */}
-      <div className="flex items-center gap-3 border-b border-cv-border px-4 py-3 max-lg:sticky max-lg:top-0 max-lg:z-(--cv-z-content-raised) max-lg:gap-2 max-lg:bg-cv-surface max-lg:py-3.5">
+      <div className="flex items-center gap-3 border-b border-cv-border px-4 py-3 lg:min-h-16 lg:ps-5 max-lg:sticky max-lg:top-0 max-lg:z-(--cv-z-content-raised) max-lg:gap-2 max-lg:bg-cv-surface max-lg:py-3.5">
         <div className="contents max-lg:flex max-lg:min-h-12 max-lg:min-w-0 max-lg:flex-1 max-lg:items-center max-lg:gap-2 max-lg:rounded-surface max-lg:border-[1.5px] max-lg:border-cv-accent max-lg:px-3">
           <Search
             aria-hidden="true"
@@ -156,7 +156,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
             aria-expanded={items.length > 0 && !results.isPending && !results.isError}
             aria-label="חיפוש מועמדות"
             autoComplete="off"
-            className="flex-1 bg-transparent text-body font-medium text-cv-text placeholder:text-cv-text-muted focus:ring-0"
+            className="flex-1 bg-transparent text-body font-medium text-cv-text placeholder:text-cv-text-muted focus:ring-0 lg:text-heading-sm lg:font-normal"
             dir="auto"
             id="global-search-input"
             name="global-search"
@@ -182,7 +182,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
             </IconButton>
           )}
         </div>
-        <Kbd className="hidden bg-cv-surface-muted text-cv-text-muted lg:inline-block">ESC</Kbd>
+        <Kbd className="hidden text-cv-text-muted lg:inline-block">Esc</Kbd>
         <button className="min-h-11 shrink-0 px-1 font-bold text-cv-text lg:hidden" onClick={onClose} type="button">
           ביטול
         </button>
@@ -255,11 +255,12 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
         </div>
       </div>
 
-      {/* On a phone the footer is no bar: "new job" becomes a dashed row at the end of the
-          results, an offer in the list's own shape, and the keyboard hints fold away. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-cv-border bg-cv-surface-muted/60 px-4 py-2.5 text-support text-cv-text-muted max-lg:border-t-0 max-lg:bg-transparent max-lg:px-3 max-lg:pt-1 max-lg:pb-4">
+      {/* "New job" is the list's last row on desktop, as the design draws it under the
+          results, and a dashed row in the list's own shape on a phone - an offer, not a
+          bar. The footer after it carries the keyboard hints, which fold away on a phone. */}
+      <div className="lg:px-3 lg:pb-3 max-lg:px-3 max-lg:pt-1">
         <button
-          className="inline-flex items-center gap-1.5 font-medium text-cv-accent hover:underline max-lg:min-h-16 max-lg:w-full max-lg:gap-3 max-lg:rounded-surface max-lg:border max-lg:border-dashed max-lg:border-cv-border-strong max-lg:px-3.5 max-lg:text-body max-lg:font-bold max-lg:text-cv-text max-lg:hover:no-underline"
+          className="inline-flex items-center gap-1.5 font-medium text-cv-accent hover:underline lg:min-h-11 lg:w-full lg:gap-3 lg:rounded-control lg:px-3 lg:font-bold lg:text-cv-text lg:hover:bg-cv-surface-muted lg:hover:no-underline max-lg:min-h-16 max-lg:w-full max-lg:gap-3 max-lg:rounded-surface max-lg:border max-lg:border-dashed max-lg:border-cv-border-strong max-lg:px-3.5 max-lg:text-body max-lg:font-bold max-lg:text-cv-text max-lg:hover:no-underline"
           onClick={() => {
             onClose();
             void navigate(routePaths.newApplication);
@@ -267,18 +268,20 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           type="button"
         >
           <span className="contents max-lg:flex max-lg:size-9 max-lg:items-center max-lg:justify-center max-lg:rounded-control max-lg:bg-cv-accent max-lg:text-cv-on-accent">
-            <Plus aria-hidden="true" className="size-icon-sm max-lg:size-icon-md" />
+            <Plus aria-hidden="true" className="size-icon-sm lg:size-icon-md max-lg:size-icon-md" />
           </span>
           משרה חדשה
         </button>
+      </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-cv-border bg-cv-surface-muted/60 px-4 py-2.5 text-support text-cv-text-muted max-lg:border-t-0 max-lg:bg-transparent max-lg:px-3 max-lg:pt-0 max-lg:pb-4">
         {search.trim() !== "" &&
         !results.isPending &&
         !results.isError &&
         !isStale &&
         results.applicationMatched > shownApplicationCount ? (
           <button
-            className="font-medium text-cv-accent hover:underline"
+            className="font-medium text-cv-accent hover:underline max-lg:mt-2"
             onClick={() => {
               const params = new URLSearchParams({ activity: "all", search: search.trim() });
               onClose();
@@ -294,7 +297,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           <span>ניווט במקשים:</span>
           <Kbd className="bg-cv-surface px-1 py-0">↑↓</Kbd>
           <span>לבחירה:</span>
-          <Kbd className="bg-cv-surface px-1 py-0">Enter</Kbd>
+          <Kbd className="bg-cv-surface px-1 py-0">↵</Kbd>
         </div>
       </div>
     </dialog>
@@ -336,12 +339,19 @@ const ResultsStatus = ({ results }: { results: ApplicationSearch }) => {
     return <p className="py-10 text-center text-cv-text-muted">מחפש…</p>;
   }
 
+  /* The listbox's own name says the same for assistive tech, so the visible label is
+     hidden from it. Search results are named on desktop only, as its design draws them;
+     the phone's list of matches stands without a label. */
   if (items.length > 0) {
-    return mode.kind === "attention" && !isStale ? (
+    return mode.kind === "attention" ? (
       <p aria-hidden="true" className="px-3 py-1.5 text-support font-semibold text-cv-text-muted">
         דורש טיפול
       </p>
-    ) : null;
+    ) : (
+      <p aria-hidden="true" className="hidden px-3 py-1.5 text-support font-semibold text-cv-text-muted lg:block">
+        תוצאות חיפוש
+      </p>
+    );
   }
 
   return (
