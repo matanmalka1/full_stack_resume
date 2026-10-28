@@ -45,7 +45,7 @@ describe("workflow shell", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter initialEntries={["/facts"]}>
-          <AppHeader collapsed={false} onToggleCollapsed={() => undefined} />
+          <AppHeader />
         </MemoryRouter>
       </QueryClientProvider>,
     );
@@ -58,7 +58,7 @@ describe("workflow shell", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter initialEntries={["/applications/app-1/draft"]}>
-          <AppHeader collapsed={false} onToggleCollapsed={() => undefined} />
+          <AppHeader />
         </MemoryRouter>
       </QueryClientProvider>,
     );

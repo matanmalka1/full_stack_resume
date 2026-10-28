@@ -2,7 +2,6 @@ import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { cx } from "@/ui/cx";
-import { Tooltip } from "@/ui/Tooltip";
 
 import { GlobalSearchDialog } from "./GlobalSearchDialog";
 
@@ -15,27 +14,13 @@ const isTypingTarget = (target: EventTarget | null): boolean => {
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 };
 
-/* The palette and the two ways in: the trigger the header shows and the shortcut that
-   works anywhere. Both live here so the header composes one element and holds no state
+/* The palette and the two ways in: the trigger the shell shows and the shortcut that
+   works anywhere. Both live here so the shell composes one element and holds no state
    about a dialog it does not otherwise know.
 
-   `compact` is the collapsed sidebar's icon-only trigger: the same button and shortcut,
-   with the visible label moved into a tooltip beside the rail.
-
-   `triggerWrapperClassName` lets the shell show the trigger at some breakpoints only. It
-   wraps the trigger alone: the dialog must stay outside a `display: none` ancestor, or
-   the shortcut would open a palette nobody can see. */
-export const GlobalSearch = ({
-  className,
-  compact = false,
-  showTrigger = true,
-  triggerWrapperClassName,
-}: {
-  className?: string;
-  compact?: boolean;
-  showTrigger?: boolean;
-  triggerWrapperClassName?: string;
-}) => {
+   The trigger takes the shell's two shapes: a round search button in a phone's top bar,
+   and from the large breakpoint a search field in the sidebar that names the shortcut. */
+export const GlobalSearch = () => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -56,43 +41,25 @@ export const GlobalSearch = ({
     };
   }, []);
 
-  const trigger = (
-    <button
-      aria-keyshortcuts="Meta+K Control+K"
-      aria-label="מעבר מהיר למועמדות"
-      className={cx(
-        "inline-flex items-center rounded-control border border-cv-border bg-cv-surface-muted text-cv-text-muted transition-colors hover:border-cv-border-strong hover:bg-cv-surface hover:text-cv-text",
-        compact ? "size-11 justify-center" : "min-h-11 gap-2 px-3 text-support",
-        className,
-      )}
-      onClick={() => setOpen(true)}
-      type="button"
-    >
-      <Search aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
-      {!compact && (
-        <>
-          <span className="hidden truncate md:inline">מעבר מהיר…</span>
-          <kbd className="hidden rounded border border-cv-border bg-cv-surface px-1.5 py-0.5 text-support font-mono text-cv-text-muted sm:inline-block">
-            ⌘K
-          </kbd>
-        </>
-      )}
-    </button>
-  );
-
   return (
     <>
-      {showTrigger && (
-        <span className={triggerWrapperClassName ?? "contents"}>
-          {compact ? (
-            <Tooltip label="מעבר מהיר (⌘K)" placement="rail">
-              {trigger}
-            </Tooltip>
-          ) : (
-            trigger
-          )}
-        </span>
-      )}
+      <button
+        aria-keyshortcuts="Meta+K Control+K"
+        aria-label="מעבר מהיר למועמדות"
+        className={cx(
+          "flex shrink-0 items-center border border-cv-border transition-colors hover:border-cv-border-strong",
+          "size-11 justify-center rounded-control bg-cv-surface text-cv-accent",
+          "lg:h-10 lg:w-full lg:justify-start lg:gap-2 lg:rounded-control-sm lg:bg-cv-field-background lg:px-3 lg:text-label lg:text-cv-text-muted lg:hover:text-cv-text",
+        )}
+        onClick={() => setOpen(true)}
+        type="button"
+      >
+        <Search aria-hidden="true" className="size-4.5 shrink-0 lg:size-icon-md" />
+        <span className="hidden flex-1 truncate text-start lg:inline">מעבר מהיר…</span>
+        <kbd className="hidden rounded-sm border border-cv-border bg-cv-surface px-1.5 font-sans text-caption text-cv-text-muted lg:inline-block">
+          ⌘K
+        </kbd>
+      </button>
 
       <GlobalSearchDialog onClose={() => setOpen(false)} open={open} />
     </>

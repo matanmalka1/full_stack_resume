@@ -1,10 +1,8 @@
 import { useIsFetching } from "@tanstack/react-query";
-import { FileText, PanelRightClose, PanelRightOpen, Plus } from "lucide-react";
+import { File, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { buttonClasses } from "@/ui/Button";
 import { cx } from "@/ui/cx";
-import { Tooltip } from "@/ui/Tooltip";
 import { SignOutButton } from "@/features/auth";
 import { GlobalSearch } from "../search/GlobalSearch";
 import { boardPath } from "@/navigation/boardReturn";
@@ -30,157 +28,60 @@ const GlobalActivityBar = () => {
   );
 };
 
-const SIDEBAR_ID = "app-sidebar";
-
-/* The one control that exists only where there is a sidebar. Its name says what a press
-   will do; `aria-expanded` says what the sidebar is now. */
-const SidebarToggle = ({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) => {
-  const label = collapsed ? "הרחבת סרגל הניווט" : "כיווץ סרגל הניווט";
-  const Icon = collapsed ? PanelRightOpen : PanelRightClose;
-  /* Wrapped in a tooltip in both states, not only on the rail: the button is icon-only
-     either way, and a tree that changed shape on each press would remount it and drop
-     the focus of the reader who just pressed it. The wrapper, not the button, carries
-     the breakpoint: the button's own `inline-flex` and a `hidden` beside it would be
-     settled by stylesheet order. */
-  return (
-    <span className="hidden lg:inline-flex">
-      <Tooltip label={label} placement="rail">
-        <button
-          aria-controls={SIDEBAR_ID}
-          aria-expanded={!collapsed}
-          aria-label={label}
-          className={buttonClasses("ghost", "shrink-0", "icon")}
-          onClick={onToggle}
-          type="button"
-        >
-          <Icon aria-hidden="true" className="size-icon-md" />
-        </button>
-      </Tooltip>
+/* The product's name, led by its mark: a page of a CV on the accent square. It links to
+   the board, the area every visit starts from. */
+const Brand = () => (
+  <Link className="flex min-w-0 items-center gap-2.5 rounded-control p-1 text-cv-text" to={boardPath()}>
+    <span
+      aria-hidden="true"
+      className="flex size-8.5 shrink-0 items-center justify-center rounded-control-sm bg-cv-accent text-cv-on-accent"
+    >
+      <File className="size-4.5" />
     </span>
-  );
-};
+    <span className="truncate text-body font-extrabold tracking-tight">סביבת קורות החיים</span>
+  </Link>
+);
 
-/* `collapsed` is only ever true at the large breakpoint (see `useSidebarCollapse`), so the
-   rail classes below never reach the narrow masthead. Where a rail class replaces an
-   expanded `lg:` one it replaces it outright, rather than being added beside it: two
-   utilities for the same property at the same breakpoint resolve by stylesheet order,
-   not by the order they are written in.
+/* One element, two shapes. From the large breakpoint it is the sidebar, top to bottom:
+   the brand, the new-job command, the quick switcher, the areas, and sign-out pinned to
+   the foot. Below it, it is a top bar of the brand and a round search button, with the
+   areas as a tab bar pinned to the bottom of the viewport (`AppNavigation`); the new-job
+   command moves to the board's floating button and sign-out to Settings.
 
-   `hiddenOnPhone` drops the whole header - masthead and bottom navigation, which lives
-   inside it - below the large breakpoint, for a screen that brings its own. */
-export const AppHeader = ({
-  collapsed,
-  hiddenOnPhone = false,
-  onToggleCollapsed,
-}: {
-  collapsed: boolean;
-  hiddenOnPhone?: boolean;
-  onToggleCollapsed: () => void;
-}) => {
+   `hiddenOnPhone` drops the whole header - top bar and tab bar, which lives inside it -
+   below the large breakpoint, for a screen that brings its own. */
+export const AppHeader = ({ hiddenOnPhone = false }: { hiddenOnPhone?: boolean }) => {
   return (
     <header
       className={cx(
-        "sticky top-0 z-(--cv-z-navigation) bg-cv-canvas lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-e lg:border-cv-hairline",
+        "sticky top-0 z-(--cv-z-navigation) bg-cv-canvas",
+        "lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-e lg:border-cv-hairline lg:bg-cv-surface",
         hiddenOnPhone && "max-lg:hidden",
       )}
-      id={SIDEBAR_ID}
     >
-      {/* The rail drops `page-gutter`: that class is unlayered CSS, so its 2rem inline
-          padding outranks any padding utility and would leave a 4.5rem column 0.5rem of
-          room. It drops `flex-wrap` too - a wrapping column sizes its line to the widest
-          control and pins that line to the inline-start edge instead of centring it. */}
-      <div className={cx("lg:flex lg:h-full lg:flex-col lg:py-5", collapsed ? "w-full px-3" : "page-gutter lg:px-4")}>
-        <div
-          className={cx(
-            "page-frame flex min-h-16 items-center justify-between gap-x-2 gap-y-2 py-2 sm:gap-x-4 lg:mx-0 lg:min-h-0 lg:w-full lg:flex-1 lg:flex-col lg:justify-start lg:gap-6 lg:py-0",
-            collapsed ? "lg:items-center" : "flex-wrap lg:items-stretch",
-          )}
-        >
-          <div
-            className={cx(
-              "flex min-w-0 items-center gap-3 sm:gap-6 lg:flex-col lg:gap-6",
-              collapsed ? "lg:items-center" : "lg:items-stretch",
-            )}
+      <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2 lg:h-full lg:flex-col lg:items-stretch lg:justify-start lg:gap-4 lg:py-5">
+        <Brand />
+
+        {/* The wrapper carries the breakpoint: the link's own `inline-flex` and a `hidden`
+            beside it would be settled by stylesheet order. */}
+        <span className="hidden lg:flex">
+          <Link
+            aria-label="קליטת משרה חדשה"
+            className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-control bg-cv-accent text-label font-bold text-cv-on-accent transition-colors hover:bg-cv-accent-hover"
+            to={routePaths.newApplication}
           >
-            {/* `contents` below the large breakpoint, so the masthead lays the wordmark out
-                exactly as before; on the sidebar it is the row the toggle shares. The
-                rail drops the wordmark - it cannot fit, and the board it links to is the
-                first navigation item anyway. */}
-            <div
-              className={cx(
-                "contents lg:flex lg:items-center lg:gap-2",
-                collapsed ? "lg:justify-center" : "lg:justify-between",
-              )}
-            >
-              {/* On a narrow screen the wordmark leads with an app mark, as an installed
-                  app's title bar does; the sidebar keeps the underlined word alone. */}
-              {!collapsed && (
-                <Link className="group flex shrink-0 items-center gap-2.5 rounded-control lg:block" to={boardPath()}>
-                  <span
-                    aria-hidden="true"
-                    className="flex size-9 items-center justify-center rounded-control bg-cv-accent text-cv-on-accent lg:hidden"
-                  >
-                    <FileText className="size-icon-md" />
-                  </span>
-                  <span className="block">
-                    <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
-                    <span className="hidden h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full lg:block" />
-                  </span>
-                </Link>
-              )}
-              <SidebarToggle collapsed={collapsed} onToggle={onToggleCollapsed} />
-            </div>
+            <Plus aria-hidden="true" className="size-4.5" strokeWidth={2.25} />
+            <span>משרה חדשה</span>
+          </Link>
+        </span>
 
-            <AppNavigation collapsed={collapsed} />
-          </div>
+        <GlobalSearch />
 
-          {/* The palette takes the expanded sidebar's full width, with the new-job
-              command below it. On the rail both controls are icons, so they stack in
-              one column. */}
-          <div
-            className={cx(
-              "flex items-center gap-2 sm:gap-3 lg:mt-auto lg:gap-2",
-              collapsed ? "lg:flex-col" : "lg:flex-wrap",
-            )}
-          >
-            {/* On a narrow screen the masthead keeps the wordmark and the quick switcher,
-                there an icon - its label and shortcut hint fold away below `md`. Sign-out
-                moves to Settings and the new-job command to the board's floating button. */}
-            <GlobalSearch
-              className={collapsed ? undefined : "max-lg:size-11 max-lg:justify-center max-lg:px-0 lg:w-full"}
-              compact={collapsed}
-              showTrigger
-              triggerWrapperClassName={cx("flex", !collapsed && "lg:w-full")}
-            />
-            <span className={cx("hidden lg:flex", !collapsed && "lg:w-full")}>
-              <SignOutButton compact={collapsed} />
-            </span>
+        <AppNavigation />
 
-            {collapsed ? (
-              <Tooltip label="משרה חדשה" placement="rail">
-                <Link
-                  aria-label="קליטת משרה חדשה"
-                  className={buttonClasses("primary", undefined, "icon")}
-                  to={routePaths.newApplication}
-                >
-                  <Plus aria-hidden="true" className="size-icon-md" />
-                </Link>
-              </Tooltip>
-            ) : (
-              /* The wrapper carries the breakpoint, for the reason `SidebarToggle` gives. */
-              <span className="hidden lg:flex lg:flex-1">
-                <Link
-                  aria-label="קליטת משרה חדשה"
-                  className={buttonClasses("primary", "whitespace-nowrap lg:flex-1 lg:px-3", "default")}
-                  to={routePaths.newApplication}
-                >
-                  <Plus aria-hidden="true" className="size-icon-md" />
-                  <span>משרה חדשה</span>
-                </Link>
-              </span>
-            )}
-          </div>
-        </div>
+        <span className="hidden lg:mt-auto lg:flex">
+          <SignOutButton className="min-h-10 flex-1 justify-start gap-2.5 rounded-item px-3 text-label font-normal text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text" />
+        </span>
       </div>
 
       <GlobalActivityBar />
