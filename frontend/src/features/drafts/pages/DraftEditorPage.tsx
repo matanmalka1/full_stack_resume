@@ -102,7 +102,7 @@ export const DraftEditorPage = () => {
     watch,
   } = useDraftDocument(applicationId);
 
-  const [mode, setMode] = useState<DraftWorkspaceMode>("read");
+  const [mode, setMode] = useState<DraftWorkspaceMode>("split");
   const [approvalOpen, setApprovalOpen] = useState(false);
   /* Set by this screen's own approval, so the render it starts is the automatic
      continuation of a press - never something a visit to an approved document starts. */
@@ -380,7 +380,8 @@ export const DraftEditorPage = () => {
         applicationId={applicationId}
         /* From the large breakpoint the step is a grid of two columns: the workspace in
            the wide one, and the fit card pinned in the narrow end column beside it, as the
-           desktop design draws them. Everything else - status, alerts, the progress line,
+           desktop design draws them - in the `read` and `document` modes. In `split` the
+           workspace needs the whole row and both span it. Everything else - status, alerts, the progress line,
            the commit bar the shell portals in - spans both, so it reads above or below the
            pair rather than squeezed beside it. The fit card comes first in the DOM (it
            opens the step on a phone); `order` places it last, and the dense flow then puts
@@ -434,7 +435,7 @@ export const DraftEditorPage = () => {
           <>
             {/* First in the step, as the design opens it: what the posting asks against
                 what the facts meet, before anything about the draft's own state. */}
-            {fit === null || draft === undefined ? null : <DraftFitCard fit={fit} />}
+            {fit === null || draft === undefined ? null : <DraftFitCard beside={mode !== "split"} fit={fit} />}
             {draft === undefined || content === undefined ? null : (
               <DraftProgress
                 content={content}
@@ -498,7 +499,8 @@ export const DraftEditorPage = () => {
                 detail={detail}
                 draft={draft}
                 onShowClaim={(claimId) => {
-                  setMode("read");
+                  /* The rows, in whichever layout already shows them. */
+                  setMode((current) => (current === "document" ? "split" : current));
                   // A fresh request also supports jumping to the same claim again.
                   setClaimTarget({ claimId });
                 }}
