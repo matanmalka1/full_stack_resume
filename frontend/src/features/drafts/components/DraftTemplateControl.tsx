@@ -74,8 +74,10 @@ export const DraftTemplateControl = ({ disabled, draft, onApply, stamped }: Draf
       <Dialog
         description="קורות החיים השמורים שלך בכל אחת מהתבניות. התוכן לא משתנה, רק העיצוב."
         dismissible={!pending}
+        /* The commands are the footer's own children, so the sheet's phone layout - two
+           equal halves - reaches them; a wrapper of its own kept them content-wide. */
         footer={
-          <div className="flex flex-wrap justify-end gap-2">
+          <>
             <Button disabled={pending} onClick={close} variant="secondary">
               ביטול
             </Button>
@@ -87,7 +89,7 @@ export const DraftTemplateControl = ({ disabled, draft, onApply, stamped }: Draf
             >
               החלת התבנית
             </Button>
-          </div>
+          </>
         }
         headingId={headingId}
         onClose={close}
