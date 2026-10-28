@@ -399,6 +399,9 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
           headingId={`remove-claim-heading-${claim.claim_id}`}
           onClose={() => setConfirmingRemoval(false)}
           open={confirmingRemoval}
+          /* A two-answer question about one line, not a sheet of content: on a phone it
+             asks in the middle of the screen, over the row it is about. */
+          presentation="alert"
           title="הסרת השורה?"
         >
           <p dir="auto">השורה תוסר מהטיוטה. אפשר לבטל את ההסרה זמן קצר לאחר מכן.</p>

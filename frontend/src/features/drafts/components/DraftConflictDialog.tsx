@@ -36,6 +36,9 @@ export const DraftConflictDialog = ({
   return (
     <Dialog
       dismissible={false}
+      /* The two outcomes are long sentences: side by side on a phone each wrapped to
+         three lines, so they stack there, one full-width command per line. */
+      footerLayout="stack"
       footer={
         <>
           {/* On a phone the two outcomes stack, and the one that keeps the reader's own
