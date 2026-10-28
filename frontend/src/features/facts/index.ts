@@ -4,6 +4,9 @@
 export { useCaptureClaimFact } from "./api/mutations";
 export { useFactDetail } from "./api/queries";
 export { FactEventHistory } from "./components/FactEventHistory";
+/* The one way a fact is written by hand, so a gap named elsewhere (a job requirement with
+   no supporting fact) opens the same form, with the same pending result, as the pool. */
+export { FactCreationDialog } from "./components/FactCreationDialog";
 export { FactCoreFields, FactProvenanceField, FactSourceField, FactTagsField } from "./components/FactFormFieldset";
 export { emptyFactForm, parseFactTags, type FactFormFields } from "./model/factForm";
 export { factSearchText } from "./model/factFilters";
