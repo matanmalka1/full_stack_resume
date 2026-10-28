@@ -20,6 +20,11 @@ import { operationPhaseStep, operationPhaseSteps } from "../model/operationPhase
    reading side and its mark on the far one, joined by a vertical line - for a host where
    the steps are the run's body rather than one line of a report.
 
+   `prominent`: from the large breakpoint each step stands as a column - a larger mark over
+   its name - and the line between two marks stretches to share the row, for the wide
+   screen's centred run card, where the steps are the card's middle rather than a line of
+   a report.
+
    `activeNote` is a line under the open step's name - how long it has run. `failedStep`
    marks the step a run that ended without a result stopped on: a filled mark with a
    cross and the word, so where it broke is a shape and a word as well as a position. */
@@ -27,11 +32,13 @@ export const OperationPhaseSteps = ({
   activeNote,
   failedStep,
   phase,
+  prominent = false,
   stackOnPhone = false,
 }: {
   activeNote?: ReactNode;
   failedStep?: number | undefined;
   phase: OperationPhase;
+  prominent?: boolean;
   stackOnPhone?: boolean;
 }) => {
   const current = failedStep ?? operationPhaseStep(phase);
@@ -42,6 +49,7 @@ export const OperationPhaseSteps = ({
       className={cx(
         "flex flex-wrap items-center gap-x-1.5 gap-y-1.5 text-caption",
         stackOnPhone && "max-lg:flex-col max-lg:flex-nowrap max-lg:items-stretch max-lg:gap-0 max-lg:text-body",
+        prominent && "lg:flex-nowrap lg:items-start lg:gap-3 lg:text-support",
       )}
     >
       {operationPhaseSteps.map((label, index) => {
@@ -53,12 +61,17 @@ export const OperationPhaseSteps = ({
             {index === 0 ? null : (
               <li
                 aria-hidden="true"
-                className={cx("flex items-center", stackOnPhone && "max-lg:me-[0.6875rem] max-lg:self-end")}
+                className={cx(
+                  "flex items-center",
+                  stackOnPhone && "max-lg:me-[0.6875rem] max-lg:self-end",
+                  prominent && "lg:mt-3.5 lg:min-w-6 lg:flex-1",
+                )}
               >
                 <span
                   className={cx(
                     "h-px w-3",
                     stackOnPhone && "max-lg:h-4 max-lg:w-px",
+                    prominent && "lg:w-full",
                     index <= current ? "bg-cv-accent" : "workflow-track-upcoming",
                   )}
                 />
@@ -69,6 +82,7 @@ export const OperationPhaseSteps = ({
               className={cx(
                 "flex items-center gap-1.5",
                 stackOnPhone && "max-lg:flex-row-reverse max-lg:justify-between max-lg:gap-3",
+                prominent && "lg:shrink-0 lg:flex-col lg:gap-2 lg:text-center",
                 active || failed ? "font-bold text-cv-text" : done ? "font-medium text-cv-text" : "text-cv-text-muted",
               )}
             >
@@ -77,6 +91,7 @@ export const OperationPhaseSteps = ({
                 className={cx(
                   "flex size-4 shrink-0 items-center justify-center rounded-pill border",
                   stackOnPhone && "max-lg:size-6 max-lg:border-2",
+                  prominent && "lg:size-7 lg:border-2",
                   done || failed
                     ? "border-cv-accent bg-cv-accent text-cv-on-accent"
                     : active
@@ -89,6 +104,7 @@ export const OperationPhaseSteps = ({
                     className={cx(
                       "size-2.5 [stroke-width:var(--stroke-icon-strong)]",
                       stackOnPhone && "max-lg:size-3.5",
+                      prominent && "lg:size-4",
                     )}
                   />
                 ) : null}
@@ -97,6 +113,7 @@ export const OperationPhaseSteps = ({
                     className={cx(
                       "size-2.5 [stroke-width:var(--stroke-icon-strong)]",
                       stackOnPhone && "max-lg:size-3.5",
+                      prominent && "lg:size-4",
                     )}
                   />
                 ) : null}
@@ -105,11 +122,12 @@ export const OperationPhaseSteps = ({
                     className={cx(
                       "size-1.5 rounded-pill bg-cv-accent motion-safe:animate-pulse",
                       stackOnPhone && "max-lg:size-2.5",
+                      prominent && "lg:size-3",
                     )}
                   />
                 ) : null}
               </span>
-              <span className="flex min-w-0 flex-col">
+              <span className={cx("flex min-w-0 flex-col", prominent && "lg:items-center")}>
                 <span>
                   {label}
                   {failed ? " · נכשל" : null}
