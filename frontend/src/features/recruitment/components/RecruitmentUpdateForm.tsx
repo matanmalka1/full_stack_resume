@@ -1,11 +1,10 @@
-import { Check, ListTodo, type LucideIcon, Milestone, NotebookPen } from "lucide-react";
-import type { FormEventHandler, ReactNode } from "react";
+import { Check } from "lucide-react";
+import { type FormEventHandler, type ReactNode, useId } from "react";
 import type { UseFormReturn } from "react-hook-form";
 
 import type { ApplicationDetail, TransitionableRecruitmentStatus } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
-import { iconTileClasses } from "@/ui/SectionHeader";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { Input, Textarea } from "@/ui/Input";
@@ -41,22 +40,31 @@ const chipClasses = (selected: boolean, ending: boolean) =>
         ),
   );
 
-/* The phone's form of the stage select: every stage the reader can move to as a chip,
-   after the current one, which stands for "no change" - the select's empty option - and
-   is the one chosen until another is. Native radios underneath, so the group is one tab
-   stop with arrow keys between chips. It writes the same form field the select does;
-   the select is the control from the large breakpoint. */
+/* The stage choice: every stage the reader can move to as a chip, after the current one,
+   which stands for "no change" and is the one chosen until another is. Native radios
+   underneath, so the group is one tab stop with arrow keys between chips.
+
+   It is the control at every width. It began as the phone's form of a select, but the
+   desktop design draws the same chips, and a select hid the choice behind a click while
+   the chips set every stage out in reading order. Nothing is lost: the options are the
+   select's own list, a choice the server no longer allows (kept after a refresh) still
+   says so, and the field's error is drawn under the group and named as its description. */
 const StatusChips = ({
+  allowed,
   current,
+  error,
   onChange,
   options,
   value,
 }: {
+  allowed: readonly string[];
   current: string;
+  error: string | undefined;
   onChange: (status: string) => void;
   options: readonly string[];
   value: string;
 }) => {
+  const errorId = useId();
   const order = (status: string) => recruitmentStatuses.indexOf(status as (typeof recruitmentStatuses)[number]);
   // ES2022 has no toSorted; this array is newly created and belongs only to this call.
   // oxlint-disable-next-line unicorn/no-array-sort
@@ -76,6 +84,7 @@ const StatusChips = ({
         {selected ? <Check aria-hidden="true" className="size-icon-sm" /> : null}
         {recruitmentStatusLabel(status)}
         {chipValue === "" ? <span className="sr-only"> · המצב הנוכחי, ללא שינוי</span> : null}
+        {chipValue !== "" && selected && !allowed.includes(chipValue) ? " · הבחירה שלך" : null}
       </label>
     );
   };
@@ -83,7 +92,7 @@ const StatusChips = ({
   const ending = sorted.filter((status) => endingStatuses.has(status));
 
   return (
-    <fieldset className="flex flex-col gap-2.5 lg:hidden">
+    <fieldset aria-describedby={error === undefined ? undefined : errorId} className="flex flex-col gap-2.5">
       <legend className="mb-2.5 text-support font-bold text-cv-text">מצב המועמדות</legend>
       <div className="flex flex-wrap gap-2">
         {chip(current, "")}
@@ -94,29 +103,29 @@ const StatusChips = ({
           {ending.map((status) => chip(status, status))}
         </div>
       )}
+      {error === undefined ? null : (
+        <p className="text-support font-medium text-cv-blocker" id={errorId}>
+          {error}
+        </p>
+      )}
     </fieldset>
   );
 };
 
-/* One group of the update form: what it changes, under its icon, and its fields. On a
-   phone the groups lose their cards and icon tiles - inside a sheet they were boxes
-   inside a box - and keep only their titles. */
+/* One group of the update form: what it changes and its fields. The groups carry no
+   cards or icon tiles at any width - inside a dialog they were boxes inside a box, which
+   neither the phone nor the desktop design draws - and keep only their titles. */
 const UpdateSection = ({
   children,
   description,
-  icon: Icon,
   title,
 }: {
   children: ReactNode;
   description: string;
-  icon: LucideIcon;
   title: string;
 }) => (
-  <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none">
-    <div className="mb-4 flex items-start gap-3 max-lg:mb-3">
-      <span className={cx(iconTileClasses, "max-lg:hidden")}>
-        <Icon aria-hidden="true" className="size-icon-md" />
-      </span>
+  <section>
+    <div className="mb-3 flex items-start gap-3">
       <div>
         <h3 className="font-semibold text-cv-text">{title}</h3>
         <p className="text-support text-cv-text-muted">{description}</p>
@@ -157,11 +166,13 @@ export const RecruitmentUpdateForm = ({
 
       <p className="text-support text-cv-text-muted">אפשר לעדכן רק את הפרטים שהשתנו ולהשאיר את היתר כפי שהם.</p>
 
-      <UpdateSection description="עדכון ההתקדמות מול המעסיק." icon={Milestone} title="שלב בתהליך">
+      <UpdateSection description="עדכון ההתקדמות מול המעסיק." title="שלב בתהליך">
         <div className="flex flex-col gap-4">
           {detail.allowed_recruitment_transitions.length === 0 ? null : (
             <StatusChips
+              allowed={detail.allowed_recruitment_transitions}
               current={detail.recruitment_status}
+              error={errors.targetStatus?.message}
               onChange={(status) =>
                 form.setValue("targetStatus", status as RecruitmentUpdateFields["targetStatus"], {
                   shouldDirty: true,
@@ -172,30 +183,23 @@ export const RecruitmentUpdateForm = ({
               value={fields.targetStatus}
             />
           )}
-          <Field
-            className={detail.allowed_recruitment_transitions.length === 0 ? undefined : "max-lg:hidden"}
-            error={errors.targetStatus?.message}
-            label="עדכון שלב"
-          >
-            {(control) => (
-              <Select
-                {...control}
-                {...form.register("targetStatus")}
-                disabled={detail.allowed_recruitment_transitions.length === 0}
-                value={fields.targetStatus}
-              >
-                <option value="">ללא שינוי בשלב</option>
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {recruitmentStatusLabel(status)}
-                    {status === selectedStatus && !detail.allowed_recruitment_transitions.includes(status)
-                      ? " · הבחירה שלך"
-                      : ""}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
+          {/* With nowhere to move, the stage is shown as the disabled select it always was,
+              with the sentence under it saying why. */}
+          {detail.allowed_recruitment_transitions.length === 0 ? (
+            <Field error={errors.targetStatus?.message} label="עדכון שלב">
+              {(control) => (
+                <Select {...control} {...form.register("targetStatus")} disabled value={fields.targetStatus}>
+                  <option value="">ללא שינוי בשלב</option>
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {recruitmentStatusLabel(status)}
+                      {status === selectedStatus ? " · הבחירה שלך" : ""}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          ) : null}
           {detail.allowed_recruitment_transitions.length === 0 ? (
             <p className="text-support text-cv-text-muted">אין מעבר קדימה זמין מהמצב הנוכחי.</p>
           ) : null}
@@ -207,7 +211,7 @@ export const RecruitmentUpdateForm = ({
         </div>
       </UpdateSection>
 
-      <UpdateSection description="מה צריך לקרות ומתי כדאי לטפל בו." icon={ListTodo} title="הפעולה הבאה">
+      <UpdateSection description="מה צריך לקרות ומתי כדאי לטפל בו." title="הפעולה הבאה">
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
           <Field error={errors.nextAction?.message} label="הפעולה הבאה">
             {(control) => <Input {...control} {...form.register("nextAction")} dir="auto" />}
@@ -220,7 +224,7 @@ export const RecruitmentUpdateForm = ({
         </div>
       </UpdateSection>
 
-      <UpdateSection description="מידע שימושי לשיחה או למעקב הבא." icon={NotebookPen} title="הערות">
+      <UpdateSection description="מידע שימושי לשיחה או למעקב הבא." title="הערות">
         <Field error={errors.notes?.message} label="תוכן ההערה">
           {(control) => <Textarea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
         </Field>
