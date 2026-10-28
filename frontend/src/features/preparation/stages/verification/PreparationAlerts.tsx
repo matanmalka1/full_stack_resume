@@ -107,7 +107,13 @@ export const PreparationAlerts = ({
   }
 
   return (
-    <Card aria-label="התראות" className="flex flex-col gap-3 bg-cv-surface-muted p-3">
+    /* On a phone the backdrop is a rounded, borderless block like the cards around it:
+       there the step is a column of cards on the canvas, and a square hairline box read
+       as a different kind of thing. */
+    <Card
+      aria-label="התראות"
+      className="flex flex-col gap-3 bg-cv-surface-muted p-3 max-lg:rounded-surface max-lg:border-0 max-lg:p-3.5"
+    >
       {reviewReasons.map((reason) => (
         <ResolvableReasonCallout
           applicationId={detail.application.id}

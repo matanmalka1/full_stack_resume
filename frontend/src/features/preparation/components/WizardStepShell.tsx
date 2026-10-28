@@ -104,7 +104,18 @@ export const WizardStepShell = ({
         eyebrow={eyebrow}
         landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} stage={stage} />}
         measure={measure}
-        title={title ?? workflowStageLabels[stage]}
+        title={
+          title ??
+          (stage === "intake" ? (
+            workflowStageLabels[stage]
+          ) : (
+            /* On a phone the stage bar above already names the step, in the place the
+               design's compact header gives it, so the heading stays for assistive tech
+               and route focus only. A page's own title - a stage its record does not
+               actually meet - says something the bar does not, and stays in view. */
+            <span className="max-lg:sr-only">{workflowStageLabels[stage]}</span>
+          ))
+        }
       >
         <div className="flex flex-col gap-6">
           {/* The step's Operation status, first on every step - see `StatusSlot`. */}

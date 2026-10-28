@@ -14,8 +14,16 @@ export interface WorkflowStep {
   state: WorkflowStepState;
 }
 
+/* What the rail turns into below the large breakpoint. A step with a record behind it
+   reads as the design's compact header: the open stage's name and its position over a bar
+   of one segment per stage. The intake step, which has no record yet, keeps its numbered
+   marks - a short stepper under the page's own heading, the way the new-job screen draws
+   it. */
+type PhoneLayout = "marks" | "segments";
+
 interface WorkflowStepsRailProps {
   label: string;
+  phone?: PhoneLayout;
   steps: WorkflowStep[];
 }
 
@@ -25,6 +33,10 @@ interface WorkflowStepsRailProps {
    survive without it. */
 const railClasses =
   "w-full min-w-0 rounded-control border border-cv-border bg-cv-surface px-3 py-3 shadow-surface sm:px-4";
+
+/* On a phone the rail drops its frame: it is part of the page's header there, not a card
+   above it, and a framed band ate a sixth of the screen before the step began. */
+const phoneRailClasses = "max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none";
 
 /* Three shapes, heaviest for what is done: a filled mark with a tick, a ring around the
    number of the step the work is at, a light outline for what is ahead. A completed step
@@ -49,12 +61,13 @@ const connectorClasses: Record<WorkflowStepState, string> = {
   upcoming: "workflow-track-upcoming",
 };
 
-const StepMark = ({ index, state }: { index: number; state: WorkflowStepState }) => (
+const StepMark = ({ index, phone, state }: { index: number; phone: PhoneLayout; state: WorkflowStepState }) => (
   <span
     aria-hidden="true"
     className={cx(
       "relative z-(--cv-z-content-raised) flex size-8 shrink-0 items-center justify-center rounded-pill border",
       "text-support font-bold transition-[background-color,border-color,color] duration-200",
+      phone === "segments" ? "max-lg:hidden" : "max-lg:size-6 max-lg:text-caption",
       stepMarkClasses[state],
     )}
   >
@@ -72,26 +85,48 @@ const StepMark = ({ index, state }: { index: number; state: WorkflowStepState })
    the mark's own shape (a check, a filled circle, an outline) and in the label's weight
    and colour - color is never the only signal (A.2), and it no longer needs to be a
    second line to avoid being one. */
-const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
+const StepBody = ({ index, phone, step }: { index: number; phone: PhoneLayout; step: WorkflowStep }) => (
   <span
     className={cx(
       /* Tightens rather than truncates: below the wide breakpoints the padding and the gap
          between mark and label give up their room first, so the words themselves never
          have to. */
       "relative flex min-w-0 flex-1 items-center gap-2 p-1 text-heading-sm transition-colors duration-200 lg:gap-3 lg:px-2 lg:py-2",
+      /* Unpositioned on a phone's bar, so the open stage's name below can hang from the
+         rail's own corner rather than from its segment. */
+      phone === "segments" && "max-lg:static max-lg:w-full max-lg:p-0",
+      phone === "marks" && "max-lg:text-support",
       stepLabelClasses[step.state],
       step.state === "current" && "font-bold",
     )}
   >
-    <StepMark index={index} state={step.state} />
+    <StepMark index={index} phone={phone} state={step.state} />
+    {/* The phone's segment: filled up to and including the open stage, the way the
+        board's cards draw a CV's progress. */}
+    {phone === "segments" ? (
+      <span
+        aria-hidden="true"
+        className={cx(
+          "h-1 w-full rounded-pill lg:hidden",
+          step.state === "upcoming" ? "bg-cv-border" : "bg-cv-accent",
+        )}
+      />
+    ) : null}
     {/* Below the large breakpoint the spine is a row of marks across the top of the
         screen, and only the open step keeps its words: four labels abreast do not fit a
         phone, and stacked they pushed the page's own heading below the fold. The marks'
         shapes still carry every step's state, and each link keeps its own name. */}
+    {/* On the phone's bar the open stage's name is the header's title: it leaves its
+        segment for the rail's top corner, opposite the count, so the name is drawn once
+        rather than copied into a header of its own. */}
     <span
       className={cx(
         "min-w-0 flex-1 whitespace-nowrap",
-        step.here !== true && step.state !== "current" && "sr-only lg:not-sr-only",
+        phone === "segments"
+          ? step.state === "current"
+            ? "max-lg:absolute max-lg:start-0 max-lg:top-0 max-lg:text-support max-lg:leading-5 max-lg:text-cv-text"
+            : "sr-only lg:not-sr-only"
+          : step.here !== true && step.state !== "current" && "sr-only lg:not-sr-only",
       )}
     >
       {step.label}
@@ -112,7 +147,7 @@ const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
    its heading, at every width. It used to turn into a column beside the content from the
    large breakpoint, which reserved that column for the rail's own height - a hole under
    a short step's heading, and on the draft step a narrower editor for the whole page. */
-export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
+export const WorkflowStepsRail = ({ label, phone = "segments", steps }: WorkflowStepsRailProps) => {
   const current = steps.find((step) => step.state === "current");
   const position = current === undefined ? null : steps.indexOf(current) + 1;
   const completed = current === undefined && steps.length > 0 && steps.every((step) => step.state === "complete");
@@ -148,17 +183,36 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
       : `שלב ${position} מתוך ${steps.length}`;
 
   const content = (
-    <div className="flex flex-col gap-2">
+    <div className={cx("flex flex-col gap-2", phone === "segments" && "max-lg:relative max-lg:gap-0")}>
       {/* Decorative: the nav's own `aria-label` already states the label and the
-          position in words, so this repeats it for sighted readers only. */}
-      <div aria-hidden="true" className="flex shrink-0 flex-wrap items-baseline gap-x-2">
-        <span className="text-heading-sm font-bold text-cv-text">{label}</span>
+          position in words, so this repeats it for sighted readers only.
+
+          A phone's bar keeps only the count here, at the row's far end; the open stage's
+          name takes the near end (see `StepBody`). The new-job stepper has no header at
+          all: the page's heading right above it already says what the marks count. */}
+      <div
+        aria-hidden="true"
+        className={cx(
+          "flex shrink-0 flex-wrap items-baseline gap-x-2",
+          phone === "segments" ? "max-lg:min-h-5" : "max-lg:hidden",
+        )}
+      >
+        <span className={cx("text-heading-sm font-bold text-cv-text", phone === "segments" && "max-lg:hidden")}>
+          {label}
+        </span>
         {/* The count never breaks across lines. Beside a two-line label in the 13rem
             spine column there is room for about half of it, and the wrap fell inside the
             phrase - "הושלם 4" over "מתוך 4" - which reads as two numbers rather than one
             ratio. Held together it drops to its own line instead. */}
         {progressText === null ? null : (
-          <span className="text-caption whitespace-nowrap text-cv-text-muted">{progressText}</span>
+          <span
+            className={cx(
+              "text-caption whitespace-nowrap text-cv-text-muted",
+              phone === "segments" && "max-lg:ms-auto max-lg:leading-5 max-lg:font-semibold",
+            )}
+          >
+            {progressText}
+          </span>
         )}
       </div>
 
@@ -172,9 +226,20 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
           large breakpoint - a phone, a split window - only the open step keeps its label,
           so all four stay visible in one short band above the heading. */}
       <div className="min-w-0">
-        <div className="flex items-center">
+        {/* On a phone's bar the segments sit a short gap apart, and a reachable stage's
+            44px target spills above and below its 4px segment rather than spacing them. */}
+        <div
+          className={cx(
+            "flex items-center",
+            phone === "segments" && "max-lg:gap-1",
+            phone === "segments" && (navigable ? "max-lg:-my-2.5" : "max-lg:mt-2"),
+          )}
+        >
           {steps.map((step, index) => {
-            const body = <StepBody index={index} step={step} />;
+            const body = <StepBody index={index} phone={phone} step={step} />;
+            /* The open screen's tint marks a chip; a segment is marked by its fill. */
+            const segment = phone === "segments" && "max-lg:min-w-0 max-lg:flex-1 max-lg:shrink";
+            const hereTint = step.here === true && "border-cv-accent/25 bg-cv-accent-soft";
             const next = steps[index + 1];
 
             return (
@@ -184,7 +249,9 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                     aria-hidden="true"
                     className={cx(
                       "flex shrink-0 rounded-control border border-transparent",
-                      step.here === true && "border-cv-accent/25 bg-cv-accent-soft",
+                      hereTint,
+                      segment,
+                      segment && "max-lg:border-0 max-lg:bg-transparent",
                     )}
                   >
                     {body}
@@ -201,7 +268,9 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                       "group flex min-h-11 shrink-0 items-center rounded-control border border-transparent",
                       "transition-[background-color,border-color,box-shadow] duration-200",
                       "hover:border-cv-border hover:bg-cv-surface-muted",
-                      step.here === true && "border-cv-accent/25 bg-cv-accent-soft",
+                      hereTint,
+                      segment,
+                      segment && "max-lg:border-0 max-lg:bg-transparent max-lg:hover:bg-transparent",
                     )}
                     to={step.href}
                   >
@@ -210,7 +279,14 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                 )}
 
                 {next === undefined ? null : (
-                  <span aria-hidden="true" className={cx("h-px min-w-3 flex-1", connectorClasses[next.state])} />
+                  <span
+                    aria-hidden="true"
+                    className={cx(
+                      "h-px min-w-3 flex-1",
+                      phone === "segments" && "max-lg:hidden",
+                      connectorClasses[next.state],
+                    )}
+                  />
                 )}
               </Fragment>
             );
@@ -225,14 +301,14 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
       // The rail's real elements are exposed via aria-hidden; role="img" presents the
       // composite as one image for assistive tech, which `<img>` (a void element) cannot do.
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-      <div aria-label={description} className={railClasses} role="img">
+      <div aria-label={description} className={cx(railClasses, phoneRailClasses)} role="img">
         <div aria-hidden="true">{content}</div>
       </div>
     );
   }
 
   return (
-    <nav aria-label={description} className={railClasses}>
+    <nav aria-label={description} className={cx(railClasses, phoneRailClasses)}>
       {content}
     </nav>
   );

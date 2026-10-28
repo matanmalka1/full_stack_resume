@@ -20,7 +20,7 @@ export const AnalysisPanel = ({
   /* Controls about how the analysis was produced, shown under its heading. */
   headerContent?: ReactNode;
 }) => (
-  <section aria-labelledby="analysis-heading" className={surfaceClasses("bg-cv-surface p-5")}>
+  <section aria-labelledby="analysis-heading" className={surfaceClasses("bg-cv-surface p-5 max-lg:p-4")}>
     <AnalysisHeader record={detail.latest_analysis ?? null}>{headerContent}</AnalysisHeader>
 
     <div className="flex flex-col divide-y divide-cv-border [&>*]:py-5 [&>*:last-child]:pb-0">

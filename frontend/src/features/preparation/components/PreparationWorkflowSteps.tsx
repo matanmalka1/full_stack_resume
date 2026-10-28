@@ -1,8 +1,9 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronRight, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { boardPath, boardReturnState } from "@/navigation/boardReturn";
+import { cx } from "@/ui/cx";
 import { type WorkflowStep, WorkflowStepsRail } from "./WorkflowStepsRail";
 import {
   type StageDestinations,
@@ -94,18 +95,29 @@ export const PreparationWorkflowSteps = ({ applicationId, detail, stage }: Prepa
      only unique destination was the board, so that is what is left: a way out of the
      wizard, not a level above it. It returns to the board as the reader left it, filters
      and all. */
+  /* On a phone the way out is an icon beside the stage bar, the compact header an app's
+     inner screen has. The new-job screen draws it as a close mark instead: nothing has been
+     created yet, so leaving is cancelling rather than going back. Its name stays the same
+     words either way. */
+  const intake = stage === "intake";
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cx("flex flex-col gap-2", !intake && "max-lg:flex-row max-lg:items-center max-lg:gap-1")}>
       <Link
-        className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text"
+        className="inline-flex min-h-11 w-fit shrink-0 items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text max-lg:min-w-11 max-lg:justify-center max-lg:px-0 max-lg:text-cv-text"
         state={boardReturnState(applicationId)}
         to={boardPath()}
       >
-        <ArrowRight aria-hidden="true" className="size-icon-md shrink-0" />
-        חזרה ללוח המועמדויות
+        <ArrowRight aria-hidden="true" className="size-icon-md shrink-0 max-lg:hidden" />
+        {intake ? (
+          <X aria-hidden="true" className="size-icon-lg shrink-0 lg:hidden" />
+        ) : (
+          <ChevronRight aria-hidden="true" className="size-icon-lg shrink-0 lg:hidden" />
+        )}
+        <span className="max-lg:sr-only">חזרה ללוח המועמדויות</span>
       </Link>
 
-      <WorkflowStepsRail label="שלבי הכנת קורות החיים" steps={located} />
+      <WorkflowStepsRail label="שלבי הכנת קורות החיים" phone={intake ? "marks" : "segments"} steps={located} />
     </div>
   );
 };
