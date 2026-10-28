@@ -7,11 +7,15 @@ import type { DraftFit } from "../model/draftFit";
 
    The analysis step decided this; the draft step only reports it, so the reader tailoring
    a line knows which requirement is still open without going back a step to look. Nothing
-   here gates anything - a gap is shown, not enforced, exactly as on the analysis step. */
+   here gates anything - a gap is shown, not enforced, exactly as on the analysis step.
+
+   On a phone it opens the step. From the large breakpoint it is the step grid's end
+   column beside the workspace (see the page's `bodyClassName`), pinned while the lines
+   scroll past it - the `!` overrides the grid's default of spanning both columns. */
 export const DraftFitCard = ({ fit }: { fit: DraftFit }) => (
   <section
     aria-labelledby="draft-fit-heading"
-    className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface p-card-padding"
+    className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface p-card-padding lg:sticky lg:top-6 lg:order-1 lg:col-span-1! lg:col-start-2! lg:border-cv-hairline lg:shadow-card"
   >
     <div className="flex items-baseline justify-between gap-3">
       <h2 className="text-support font-semibold text-cv-text-muted" id="draft-fit-heading">

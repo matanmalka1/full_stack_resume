@@ -3,9 +3,14 @@ import type { ReactNode } from "react";
 import { cx } from "@/ui/cx";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 
-/* What the screen is for at this moment. `read` is the primary desktop workspace: clean
-   inline editing beside the rendered document. `document` is a focused preview for narrow
-   screens or for a final full-width read. */
+/* What the screen is for at this moment. `read` is the lines, each with its own editing
+   controls. `document` is the rendered document at the workspace's full width, with the
+   template, the page count and the check beside it - the preview, at every width.
+
+   The desktop used to set the two side by side in `read`. Its design gives that width to
+   the section list and the fit card instead, and the rendered page squeezed into a
+   third of what was left was too small to read anyway; the masthead's switch is one press
+   away from it. */
 export type DraftWorkspaceMode = "read" | "document";
 
 interface DraftWorkspaceProps {
@@ -18,9 +23,8 @@ interface DraftWorkspaceProps {
   preview: ReactNode;
 }
 
-/* The mode switch. It sits in the status line under the heading rather than on a row of
-   its own above the workspace: alone there it was a band of empty width with one control
-   at its far end. */
+/* The mode switch, the desktop's way to the preview. A phone has `DraftPreviewToggle`
+   in its compact header instead, so the page draws this from `lg` only. */
 export const DraftWorkspaceSwitch = ({
   mode,
   onModeChange,
@@ -32,33 +36,21 @@ export const DraftWorkspaceSwitch = ({
     label="בחירת תצוגת סביבת העבודה"
     onChange={onModeChange}
     options={[
-      { label: "עריכה ותצוגה", value: "read" },
-      { label: "תצוגה מלאה", value: "document" },
+      { label: "עריכה", value: "read" },
+      { label: "תצוגה מקדימה", value: "document" },
     ]}
     value={mode}
   />
 );
 
-/* A.4's responsive fallback. Both panes stay mounted and one is hidden, rather than one
-   being unmounted: switching modes must not discard text the user has typed, and an
-   unmounted editor would take its visible text with it. `document` hides the claim
-   column the same way, which is also what makes approval reachable on a narrow screen
-   where the preview pane never sits beside anything. */
+/* Both panes stay mounted and one is hidden, rather than one being unmounted: switching
+   modes must not discard text the user has typed, and an unmounted editor would take its
+   visible text with it. One pane at a time at every width - see `DraftWorkspaceMode`. */
 export const DraftWorkspace = ({ editor, mode, preview }: DraftWorkspaceProps) => (
-  <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8 xl:gap-10">
-    <div className={cx("min-w-0 flex-col gap-6", mode === "document" ? "hidden" : "flex lg:flex-1 lg:basis-7/12")}>
-      {editor}
-    </div>
+  /* The step grid's wide column from the large breakpoint, beside the fit card. */
+  <div className="flex flex-col gap-6 lg:col-span-1! lg:col-start-1!">
+    <div className={cx("min-w-0 flex-col gap-6", mode === "document" ? "hidden" : "flex")}>{editor}</div>
 
-    <div
-      className={cx(
-        "min-w-0 flex-col gap-5",
-        /* `document` is the whole width, not the narrow column the split gives it: with
-           the claims hidden there is nothing beside it to make room for. */
-        mode === "document" ? "flex w-full" : "hidden lg:sticky lg:top-20 lg:flex lg:flex-1 lg:basis-5/12",
-      )}
-    >
-      {preview}
-    </div>
+    <div className={cx("min-w-0 flex-col gap-5", mode === "document" ? "flex w-full" : "hidden")}>{preview}</div>
   </div>
 );

@@ -192,9 +192,14 @@ test.describe("accessibility", () => {
     api.stub("GET /api/v1/facts/history", json({ events: [] }));
 
     await page.goto("/applications/app-1/draft");
-    await expect(page.getByRole("button", { name: "עריכה ותצוגה" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTitle("תצוגה מקדימה של הטיוטה")).toBeVisible();
+    await expect(page.getByRole("button", { name: "עריכה", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText("Owned the CRM migration.").first()).toBeVisible();
+
+    await scan(page, [DRAFT_PREVIEW]);
+
+    /* The rendered document is the workspace's other mode, one press away. */
+    await page.getByRole("button", { name: "תצוגה מקדימה", exact: true }).click();
+    await expect(page.getByTitle("תצוגה מקדימה של הטיוטה")).toBeVisible();
 
     await scan(page, [DRAFT_PREVIEW]);
 

@@ -36,7 +36,11 @@ interface DraftClaimRowProps {
    `pill` is the short word a phone shows instead of the icon, for the two commands a
    reader decides a line with - edit it or remove it. There a row shows one line at a time
    and has the width for the words, and an unlabelled pencil and bin were the two icons
-   most often mistaken for each other. The accessible name stays `label` either way. */
+   most often mistaken for each other. The accessible name stays `label` either way.
+
+   `pillWide` keeps the word on a desktop too. It is set on a line waiting on the reader's
+   decision, where the desktop design draws the same two pills: on that one row the
+   commands are the point, not chrome to keep quiet. */
 const RowAction = ({
   className,
   disabled,
@@ -44,6 +48,7 @@ const RowAction = ({
   label,
   onClick,
   pill,
+  pillWide = false,
 }: {
   className?: string;
   disabled?: boolean;
@@ -51,29 +56,38 @@ const RowAction = ({
   label: string;
   onClick: () => void;
   pill?: string;
-}) => (
-  <Tooltip label={label}>
-    <IconButton
-      aria-label={label}
-      className={
-        pill === undefined
-          ? "max-lg:size-11"
-          : "max-lg:h-11 max-lg:w-auto max-lg:rounded-pill max-lg:border max-lg:border-cv-border max-lg:px-4 max-lg:text-support max-lg:font-semibold max-lg:text-cv-text"
-      }
-      disabled={disabled}
-      onClick={onClick}
-      size="sm"
-      variant="quiet"
-    >
-      <Icon aria-hidden="true" className={cx("size-icon-md", pill !== undefined && "max-lg:hidden", className)} />
-      {pill === undefined ? null : (
-        <span aria-hidden="true" className="lg:hidden">
-          {pill}
-        </span>
-      )}
-    </IconButton>
-  </Tooltip>
-);
+  pillWide?: boolean;
+}) => {
+  const wide = pill !== undefined && pillWide;
+  return (
+    <Tooltip label={label}>
+      <IconButton
+        aria-label={label}
+        className={cx(
+          pill === undefined
+            ? "max-lg:size-11"
+            : "max-lg:h-11 max-lg:w-auto max-lg:rounded-pill max-lg:border max-lg:border-cv-border max-lg:px-4 max-lg:text-support max-lg:font-semibold max-lg:text-cv-text",
+          wide &&
+            "lg:h-9 lg:w-auto lg:rounded-pill lg:border lg:border-cv-border lg:bg-cv-surface lg:px-4 lg:text-support lg:font-bold lg:text-cv-text",
+        )}
+        disabled={disabled}
+        onClick={onClick}
+        size="sm"
+        variant="quiet"
+      >
+        <Icon
+          aria-hidden="true"
+          className={cx("size-icon-md", pill !== undefined && "max-lg:hidden", wide && "lg:hidden", className)}
+        />
+        {pill === undefined ? null : (
+          <span aria-hidden="true" className={wide ? undefined : "lg:hidden"}>
+            {pill}
+          </span>
+        )}
+      </IconButton>
+    </Tooltip>
+  );
+};
 
 /* Whether a line's source has anything to say that the line and its badge do not: a fact
    worded differently from the line, the evidence a reworded line was accepted on, or why
@@ -226,6 +240,10 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
       className={cx(
         "group/row flex scroll-mt-24 flex-col max-lg:scroll-mt-36 gap-2 py-3 first:pt-0 focus-visible:outline-offset-4",
         pending && "border-s-2 border-s-cv-blocker ps-3",
+        /* On a desktop the section is a card, and the line waiting on a decision is the
+           band across it the design draws: a muted fill edge to edge in place of the
+           blocker rule, which the callout under the line already carries. */
+        pending && "lg:-mx-5 lg:border-s-0 lg:bg-cv-surface-muted lg:px-5 lg:first:pt-3",
       )}
       id={`draft-claim-${claim.claim_id}`}
       tabIndex={-1}
@@ -302,7 +320,14 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
 
         {/* Quiet until the row is pointed at or focused: sixty rows of five full-strength
             icons read as a toolbar, not a document. Always present and always focusable. */}
-        <div className="flex items-center gap-0.5 transition-opacity lg:opacity-60 lg:group-focus-within/row:opacity-100 lg:group-hover/row:opacity-100">
+        <div
+          className={cx(
+            "flex items-center gap-0.5 transition-opacity",
+            pending
+              ? "lg:gap-1.5"
+              : "lg:opacity-60 lg:group-focus-within/row:opacity-100 lg:group-hover/row:opacity-100",
+          )}
+        >
           {move === undefined ? null : (
             <>
               <RowAction
@@ -326,6 +351,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
             label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
             onClick={toggleEditing}
             pill={editing ? "סיום" : "עריכה"}
+            pillWide={pending}
           />
           {regeneratable ? (
             <RowAction
@@ -342,6 +368,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
               label="הסרת השורה"
               onClick={() => setConfirmingRemoval(true)}
               pill="הסרה"
+              pillWide={pending}
             />
           )}
         </div>
