@@ -5,8 +5,9 @@ A password is read from a prompt that does not echo, entered twice, or with
 shell history or a process listing.
 
 `import-knowledge` reads Knowledge in the installation's file layout (`base/` and
-`profiles/` under one directory, the installation itself by default) into one user's
-rows, once.
+`profiles/` under one directory) into one user's rows, once. `export-knowledge` writes
+one user's rows in that layout, which is how Knowledge reaches another installation.
+The installation's own `profiles/` hold templates only, so it is never the source.
 """
 
 from __future__ import annotations
@@ -47,7 +48,15 @@ def _parser() -> argparse.ArgumentParser:
         "--from",
         dest="source",
         type=Path,
-        help="the directory holding base/ and profiles/ (default: this installation)",
+        required=True,
+        help="the directory holding base/ and profiles/, as export-knowledge writes it",
+    )
+    exporting = commands.add_parser(
+        "export-knowledge", help="write one user's Knowledge as files import-knowledge reads"
+    )
+    exporting.add_argument("--email", required=True)
+    exporting.add_argument(
+        "--to", dest="target", type=Path, required=True, help="a directory that does not exist"
     )
     commands.add_parser(
         "reconcile", help="verify immutable evidence and every user's fact lifecycle"
@@ -109,13 +118,29 @@ def main(
         elif arguments.command == "import-knowledge":
             from ..infrastructure.knowledge import FileKnowledge
 
-            root = arguments.source or services.paths.knowledge_root
             result = services.knowledge_import.import_knowledge(
-                arguments.email, FileKnowledge(root.resolve())
+                arguments.email, FileKnowledge(arguments.source.resolve())
             )
             print(
                 f"imported {result.facts} facts and {result.profiles} profile bindings "
                 f"for {result.email}",
+                file=out,
+            )
+        elif arguments.command == "export-knowledge":
+            from ..infrastructure.knowledge import write_file_knowledge
+
+            target = arguments.target.resolve()
+            if target.exists():
+                print(f"error: {target} already exists", file=err)
+                return 1
+            policy_root = services.paths.knowledge_root
+            exported = services.knowledge_export.export_knowledge(
+                arguments.email,
+                lambda knowledge: write_file_knowledge(knowledge, target, policy_root),
+            )
+            print(
+                f"exported {exported.facts} facts and {exported.profiles} profiles "
+                f"of {exported.email} to {target}",
                 file=out,
             )
         elif arguments.command == "reconcile":

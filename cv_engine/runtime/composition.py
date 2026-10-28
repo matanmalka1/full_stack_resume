@@ -30,6 +30,7 @@ from ..application.services.knowledge import (
     FactLifecycleService,
     KnowledgeQueryService,
 )
+from ..application.services.knowledge.exporting import KnowledgeExportService
 from ..application.services.knowledge.importing import KnowledgeImportService
 from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
@@ -133,6 +134,7 @@ class Services:
     settings: SettingsService
     accounts: AccountService
     knowledge_import: KnowledgeImportService
+    knowledge_export: KnowledgeExportService
 
 
 def build_object_store(paths: AppPaths, config: RuntimeConfig) -> ObjectStore:
@@ -414,6 +416,11 @@ def build_services(
             transactions,
             account_repository,
             user_knowledge,
+        ),
+        knowledge_export=KnowledgeExportService(
+            transactions,
+            account_repository,
+            resolved_knowledge,
         ),
     )
 

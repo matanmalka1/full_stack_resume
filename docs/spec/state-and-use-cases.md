@@ -810,8 +810,8 @@ No route deactivates or deletes an account.
 
 ### Operator commands
 
-`create-user`, `set-password`, and `import-knowledge` are CLI commands (architecture.md
-§18.7). `set-password` revokes every session of the user.
+`create-user`, `set-password`, `import-knowledge`, and `export-knowledge` are CLI
+commands (architecture.md §18.7). `set-password` revokes every session of the user.
 
 ### Codes
 
