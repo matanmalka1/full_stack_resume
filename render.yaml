@@ -21,6 +21,7 @@ services:
     name: cv-engine
     runtime: docker
     plan: free
+    # Next to the Neon database (aws eu-central-1): every query crosses this hop.
     region: frankfurt
     branch: main
     autoDeploy: true
