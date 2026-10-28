@@ -5,6 +5,7 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import { Field } from "@/ui/Field";
 import { FormSection } from "@/ui/FormSection";
 import { Input } from "@/ui/Input";
+import { cx } from "@/ui/cx";
 import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS, validateSourceUrl } from "@/features/application-detail";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
 import { intakeSectionClasses } from "./intakeSection";
@@ -28,7 +29,9 @@ interface JobDetailsFieldsProps {
 }
 
 export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetailsFieldsProps) => (
-  <FormSection className={intakeSectionClasses} divided={false} title="פרטי המשרה">
+  /* Second from the large breakpoint: the desktop design leads with the posting text, the
+     thing the step is about, and names the job under it. A phone keeps the details first. */
+  <FormSection className={cx(intakeSectionClasses, "lg:order-2!")} divided={false} title="פרטי המשרה">
     <div className="grid gap-4 md:grid-cols-2">
       <Field error={errors.company?.message} label="שם החברה">
         {(control) => (

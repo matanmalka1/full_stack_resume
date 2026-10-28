@@ -6,7 +6,8 @@ import { EmptyState } from "@/ui/EmptyState";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 import { type RequirementFilter, needsAttention, requirementGroups } from "../../model/requirementGroups";
-import { RequirementRow } from "./RequirementRow";
+import { cx } from "@/ui/cx";
+import { RequirementRow, requirementColumns } from "./RequirementRow";
 import { useRequirementEvidence } from "./useRequirementEvidence";
 
 const importanceTitles: Record<RequirementImportance, string> = {
@@ -66,29 +67,46 @@ export const RequirementList = ({
           </p>
         </EmptyState>
       ) : (
-        groups.map((group) =>
-          group.requirements.length === 0 ? null : (
-            <section aria-labelledby={`requirements-${group.importance}`} key={group.importance}>
-              {/* Coverage per importance is stated here, once; the filter counts the states. */}
-              <h4 className="flex items-baseline justify-between gap-3 border-b border-cv-border pb-2 text-support font-bold text-cv-text">
-                <span id={`requirements-${group.importance}`}>{importanceTitles[group.importance]}</span>
-                <span className="text-caption font-semibold text-cv-text-muted">
-                  {group.matched}/{group.total} מכוסות
-                </span>
-              </h4>
-              <ul aria-labelledby={`requirements-${group.importance}`} className="divide-y divide-cv-border">
-                {group.requirements.map((requirement) => (
-                  <RequirementRow
-                    evidence={evidence}
-                    gapReason={gapReasons.get(requirement.requirementId)}
-                    key={requirement.requirementId}
-                    requirement={requirement}
-                  />
-                ))}
-              </ul>
-            </section>
-          ),
-        )
+        /* The desktop table's column heads, once above the groups. Drawn for sighted
+           readers only: each row's parts already say what they are - the badge its
+           coverage, the gap line its severity, the disclosure what it holds. */
+        <div className="flex flex-col gap-4 lg:gap-5">
+          <div
+            aria-hidden="true"
+            className={cx(
+              "border-b border-cv-border pb-2 text-caption font-bold text-cv-text-muted max-lg:hidden",
+              requirementColumns,
+            )}
+          >
+            <span>דרישה</span>
+            <span>כיסוי</span>
+            <span>פער</span>
+            <span>ראיות תומכות</span>
+          </div>
+          {groups.map((group) =>
+            group.requirements.length === 0 ? null : (
+              <section aria-labelledby={`requirements-${group.importance}`} key={group.importance}>
+                {/* Coverage per importance is stated here, once; the filter counts the states. */}
+                <h4 className="flex items-baseline justify-between gap-3 border-b border-cv-border pb-2 text-support font-bold text-cv-text">
+                  <span id={`requirements-${group.importance}`}>{importanceTitles[group.importance]}</span>
+                  <span className="text-caption font-semibold text-cv-text-muted">
+                    {group.matched}/{group.total} מכוסות
+                  </span>
+                </h4>
+                <ul aria-labelledby={`requirements-${group.importance}`} className="divide-y divide-cv-border">
+                  {group.requirements.map((requirement) => (
+                    <RequirementRow
+                      evidence={evidence}
+                      gapReason={gapReasons.get(requirement.requirementId)}
+                      key={requirement.requirementId}
+                      requirement={requirement}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ),
+          )}
+        </div>
       )}
     </section>
   );

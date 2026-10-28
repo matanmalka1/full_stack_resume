@@ -30,7 +30,7 @@ export const VerificationStage = ({
 }) => {
   return (
     <>
-      <PreparationAlerts detail={detail} />
+      <PreparationAlerts aside detail={detail} />
 
       {/* The step's action, not a card around it. The action used to sit in an emphasized
           bordered box to mark it as recommended - but on a wizard step the action is the
