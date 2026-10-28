@@ -53,7 +53,10 @@ class DatabaseKnowledge:
     def state(self, tx: ReadTransaction, user_id: str) -> StoredKnowledge:
         state = self._repo.knowledge_state(tx, user_id)
         if state is None:
-            raise KnowledgeRejected("This user has no Knowledge yet; run import-knowledge.")
+            raise KnowledgeRejected(
+                "This user has no Knowledge yet; run import-knowledge --from a directory "
+                "export-knowledge wrote."
+            )
         return state
 
     def build(self, state: StoredKnowledge) -> Knowledge:

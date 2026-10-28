@@ -256,9 +256,9 @@ Types, statuses, phases, and failure codes: state-and-use-cases.md §11, §19.
 - one running render overall (`uq_operations_running_render`).
 
 A waiting Operation stays `queued`; its phase is derived on read. The worker's thread
-count (2) is the only overall limit.
+count (`CV_WORKER_CONCURRENCY`, default 2) is the only overall limit.
 
-**Claiming.** The worker (`runtime/execution.py`) polls every 0.25 s with 2 threads. A
+**Claiming.** The worker (`runtime/execution.py`) polls every 0.25 s with its threads. A
 claim walks queued Operations oldest first, skipping ones whose Application or render
 slot is busy, and in a savepoint locks the row (`FOR UPDATE SKIP LOCKED`) and sets
 `running`, `executing`, and `lease_owner`. A lost race (skipped row, `40001`, or `23505`
@@ -364,8 +364,9 @@ status and phase. Autosave conflicts (`409`) open an explicit comparison.
 
 The service binds to `127.0.0.1`, serves UI and API from one origin, and validates
 `Origin` on every mutation. CORS uses an explicit list, no wildcard, no credentials;
-development adds the Vite origin (`CV_API_DEV_ORIGIN`). An allowed `Origin` plus
-`SameSite=Lax` cookies is the CSRF defence. *Not built:* hosted public origin (§18.5).
+development adds the Vite origin (`CV_API_DEV_ORIGIN`), and a deployed instance its one
+public HTTPS origin (`CV_PUBLIC_ORIGIN`, §18.5). An allowed `Origin` plus `SameSite=Lax`
+cookies is the CSRF defence.
 
 `OPENAI_API_KEY` is environment-only; React sees only whether it is set. Logs and
 payloads never contain keys or secrets. No endpoint accepts paths or arbitrary uploads.
@@ -380,7 +381,9 @@ pages (`Renderer.measure_pages`, product-spec §10): the composed HTML without t
 stamp, rendered in a temporary directory and discarded. It runs in the Operation's
 prepare, outside any database scope, and is not a render Operation, so it does not take
 the render slot. A measurement that fails is reported on the Operation as
-`page_fit.status = unavailable`; it never fails the draft.
+`page_fit.status = unavailable`; it never fails the draft. The editor's page count
+(`GET …/document/page-count`) is the same measurement, run in the API process for the
+owner's current content; a failed measurement is `pages: null`, never an error.
 
 Rotating JSON logs under `logs_root`: `server.jsonl` (API) and `operations.jsonl`
 (worker). Tracebacks go only to files. The API console logs one line per request
@@ -492,8 +495,9 @@ analysis = analyses.get_for_application(tx, analysis_id, application.id)
 - Sign-in rate limit in `rate_limit_buckets`: 15-minute window, 5 failures per email,
   20 attempts per IP. The IP comes from a forwarding header only per
   `CV_TRUSTED_PROXY_HOPS`. The worker removes old windows.
-- *Not built:* one public origin (`CV_PUBLIC_ORIGIN`, HTTPS), a Host allowlist, and
-  HSTS.
+- A deployed instance names its one public origin in `CV_PUBLIC_ORIGIN`: exactly
+  `https://host[:port]`, refused at startup otherwise, never a wildcard or a list.
+- *Not built:* a Host allowlist and HSTS.
 
 ### 18.6 Renderer isolation
 
@@ -516,9 +520,14 @@ from a non-echoing prompt (entered twice) or `--password-stdin`, never an argume
 
 - `create-user --email`
 - `set-password --email` (revokes every session)
-- `import-knowledge --email [--from <dir>]`: loads `base/` and `profiles/` from `<dir>`
-  (default: the installation) through the validated loader and writes the user's facts,
-  CandidateContext, and Profile bindings in one transaction. Refuses an unknown user or
-  one who already has Knowledge. Verifies by reading back before commit.
-  `fact_store_version` starts at 0.
+- `import-knowledge --email --from <dir>`: loads `base/` and `profiles/` from `<dir>`
+  through the validated loader and writes the user's facts, CandidateContext, and
+  Profile bindings in one transaction. Refuses an unknown user or one who already has
+  Knowledge. Verifies by reading back before commit. `fact_store_version` starts at 0.
+  The installation's own `profiles/` hold templates only, so `<dir>` is never the
+  installation: it is what `export-knowledge` wrote.
+- `export-knowledge --email --to <dir>`: writes the user's Knowledge in that layout
+  (facts by source file, the candidate context, each Profile whole, and the policy
+  files), into a directory that does not exist yet. Verifies by loading the files back.
+  This is how a user's Knowledge reaches another installation.
 - `reconcile`, `inspect-orphans` (state-and-use-cases.md §19b).

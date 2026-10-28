@@ -299,6 +299,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/document/page-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count the pages the document's current content takes in its template
+         * @description `200` with the count and the Profile's limit; `412` before content exists.
+         *
+         *     Measured by the browser the render uses, so the client asks once per saved version.
+         *     Nothing is stored.
+         */
+        get: operations["document_page_count_api_v1_applications__application_id__document_page_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}/document/pdf": {
         parameters: {
             query?: never;
@@ -1769,6 +1792,27 @@ export interface components {
              */
             pending_claim_ids: string[];
             preparation_state: components["schemas"]["PreparationState"];
+        };
+        /**
+         * DocumentPageCountResponse
+         * @description The current content's page count in its own template, and the limit it must meet.
+         *
+         *     `pages` is null when it could not be measured; `maximum` is null when the
+         *     document's Profile cannot be read. `document_hash` names the content counted.
+         */
+        DocumentPageCountResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Document Hash */
+            document_hash: string;
+            /** Document Id */
+            document_id: string;
+            /** Maximum */
+            maximum: number | null;
+            /** Pages */
+            pages: number | null;
+            /** Template */
+            template: ("single-column" | "two-column" | "modern" | "modern-two-column" | "clean" | "latex" | "vivid" | "vivid-single" | "deedy" | "modern-deedy") | null;
         };
         /**
          * DocumentResponse
@@ -3523,6 +3567,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    document_page_count_api_v1_applications__application_id__document_page_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentPageCountResponse"];
                 };
             };
             /** @description No valid session (`AUTHENTICATION_REQUIRED`). */

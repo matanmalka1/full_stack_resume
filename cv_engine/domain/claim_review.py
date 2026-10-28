@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Literal, Protocol
 
 from .drafts import EDITABLE_STYLES
@@ -58,8 +59,51 @@ def _alphanumeric(value: str) -> str:
     return "".join(char.casefold() for char in value if char.isalnum())
 
 
+_SCALES: dict[str, int] = {
+    "k": 1_000,
+    "thousand": 1_000,
+    "אלף": 1_000,
+    "אלפים": 1_000,
+    "m": 1_000_000,
+    "million": 1_000_000,
+    "מיליון": 1_000_000,
+    "מליון": 1_000_000,
+    "b": 1_000_000_000,
+    "billion": 1_000_000_000,
+    "מיליארד": 1_000_000_000,
+}
+_PERCENT = ("%", "percent", "per cent", "אחוזים", "אחוז")
+_UNITS = "|".join(re.escape(unit) for unit in sorted([*_SCALES, *_PERCENT], key=len, reverse=True))
+#: A number as written: an optional currency mark (ignored, as it always was), digits
+#: with optional thousands separators and decimals, and an optional scale or percent
+#: word. A unit must end the word, so "2 managers" is 2 and "3 B2B" is 3, not billions.
+_NUMBER = re.compile(
+    r"(?P<number>\d{1,3}(?:,\d{3})+(?!\d)|\d+)(?P<fraction>\.\d+)?"
+    rf"(?:\s*(?P<unit>%|(?:{_UNITS})(?!\w)))?",
+    re.IGNORECASE,
+)
+
+
 def _protected_numbers(value: str) -> set[str]:
-    return set(re.findall(r"\d+(?:[.,]\d+)?%?", value))
+    """Each number in `value` by what it states, not how it is written.
+
+    `1,000` and `1000`, `40%` and `40 percent` / `40 אחוז`, `2M` and `2 million` and
+    `2,000,000` all state the same value, so a reformat is not a new number. A changed
+    value, a changed scale, or a plain number becoming a percentage still is.
+    """
+    found: set[str] = set()
+    for match in _NUMBER.finditer(value):
+        amount = Decimal(match["number"].replace(",", "") + (match["fraction"] or ""))
+        # A digit inside a Latin word ("B2B", "S3") is part of a name, so a letter after
+        # it is no scale; the digit itself is still protected. A Hebrew prefix letter
+        # ("ב40%") attaches to a quantity, so it does not count.
+        previous = value[match.start() - 1 : match.start()]
+        inside_word = previous.isascii() and previous.isalpha()
+        unit = "" if inside_word else (match["unit"] or "").casefold()
+        amount *= _SCALES.get(unit, 1)
+        kind = "%" if unit in _PERCENT else ""
+        found.add(f"{kind}{format(amount.normalize(), 'f')}")
+    return found
 
 
 def _quotes_pair_with_facts(

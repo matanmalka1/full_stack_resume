@@ -848,6 +848,8 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "AccountService",
         # The operator's import: loads the files outside any scope, then writes once.
         "KnowledgeImportService",
+        # The operator's export: reads the rows in one scope, then writes the files.
+        "KnowledgeExportService",
         # Appends each provider attempt in its own short scope before deciding a retry.
         "AICallRunner",
     }

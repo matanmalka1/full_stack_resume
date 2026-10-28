@@ -166,6 +166,21 @@ class DocumentPreviewView(BoundaryDTO):
     html: str
 
 
+class DocumentPageCountView(BoundaryDTO):
+    """How many pages the current content takes in its template, against its limit.
+
+    `pages` is None when the pages could not be measured (no browser, say); `maximum`
+    is None when the document's Profile cannot be read.
+    """
+
+    application_id: str
+    document_id: str
+    document_hash: str
+    template: str | None
+    pages: int | None
+    maximum: int | None
+
+
 class DocumentPdfPreviewView(BoundaryDTO):
     """The document's current content as a stamped, unstored preview PDF."""
 

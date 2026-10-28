@@ -18,6 +18,7 @@ from ...domain.contracts.knowledge import Profile
 from ...domain.contracts.validation import ValidationReport
 from ...domain.document import DocumentState, document_state
 from ...domain.knowledge import Knowledge
+from ...domain.render_validation import page_limit
 from ...domain.templates import SampleLanguage, preview_template, template_spec
 from ...util import new_id, utc_now
 from ..actor import Actor
@@ -37,7 +38,8 @@ from ..ports import PayloadVerifier, Renderer
 from ..ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ..ports.documents import DocumentFileStore, DocumentStore, RenderedFiles
 from ..ports.transactions import TransactionManager, WriteTransaction
-from ..queries import DocumentPdfPreviewView, DocumentPreviewView
+from ..queries import DocumentPageCountView, DocumentPdfPreviewView, DocumentPreviewView
+from ..transactions import assert_external_io_allowed
 from .documents import (
     DocumentSource,
     current_basis,
@@ -322,6 +324,36 @@ class RenderingService:
             document_id=document.id,
             document_hash=document.document_hash,
             pdf=self.renderer.preview_pdf(content, knowledge.candidate, document.template),
+        )
+
+    def document_page_count(self, actor: Actor, application_id: str) -> DocumentPageCountView:
+        """How many pages the current content takes in its own template; stored nowhere.
+
+        The same measurement `create_draft` fits a new draft with (`measure_pages`: the
+        render's composition and browser, no preview stamp, a temporary directory), so
+        the editor can show an overflow before approval rather than at render. It starts
+        a browser, so the client asks once per saved version, not per keystroke. A
+        measurement that fails is `pages=None`, never an error: the count is a hint.
+        """
+        document, content, knowledge = self._previewable(actor, application_id)
+        try:
+            maximum: int | None = page_limit(knowledge.profiles.get(content.profile))
+        except (KeyError, ValueError):
+            maximum = None
+        assert_external_io_allowed("document page measurement")
+        try:
+            pages: int | None = self.renderer.measure_pages(
+                content, knowledge.candidate, document.template
+            )
+        except InfrastructureFailure:
+            pages = None
+        return DocumentPageCountView(
+            application_id=application_id,
+            document_id=document.id,
+            document_hash=document.document_hash,
+            template=document.template,
+            pages=pages if pages is None or pages >= 1 else None,
+            maximum=maximum,
         )
 
     def sample_template(self, template: str, language: SampleLanguage) -> str:

@@ -241,8 +241,11 @@ The page limit (two pages when the Profile sets `allow_two_pages`, otherwise one
 enforced on the new draft before it is written, so an overflow is not first discovered
 when the approved document is rendered. After review the engine renders the draft through the same
 browser the approved render uses (no preview stamp, nothing stored) and counts its
-pages. While it is over the limit, the engine drops one line and measures again, at
-most six measurements in all. The line to drop:
+pages. When it is over the limit, the engine drops the fewest lines that make it fit.
+The order lines go in follows from the rule below alone, so it is fixed before anything
+more is measured; the engine binary-searches how many of them to drop, taking the page
+count as never rising as more lines go, at most six measurements in all. The line to
+drop next:
 
 - only a section's evidence lines may go - never the headline, a contact, a heading,
   or a date - and never a line linked to a fact its section pins;
@@ -256,11 +259,13 @@ most six measurements in all. The line to drop:
   is the one its pool ranks lowest.
 
 The Operation records the outcome as `page_fit`, with every dropped line (section,
-heading, wording): `fits` (nothing dropped), `trimmed` (lines dropped until it fit),
-`over` (still over the limit with nothing left that may go, or the measurements ran
-out; the most trimmed draft is written, and rendering will fail until the user
-shortens it), or `unavailable` (the pages could not be measured, for example no browser; the
-draft is written untrimmed and the draft never fails for this). A dropped line leaves
+heading, wording): `fits` (nothing dropped), `trimmed` (the fewest lines found to make
+it fit were dropped), `over` (still over the limit with nothing left that may go, or the
+measurements ran out before any trim fit; the most trimmed draft measured is written,
+and rendering will fail until the user shortens it), or `unavailable` (the pages could
+not be measured, for example no browser; the draft is written untrimmed and the draft
+never fails for this). A measurement that fails after a trim was found to fit keeps that
+trim, reported `trimmed`. A dropped line leaves
 the Operation's withheld lines too. The UI lists the dropped lines; a line the user adds back
 by editing is a new pending line (§10.1). `regenerate_section` and `regenerate_claim` are not fitted.
 
@@ -285,7 +290,12 @@ Autosave uses the document hash as ETag. A stale save is a conflict: the UI show
 versions and the user chooses.
 
 The HTML preview and the on-demand draft PDF render the current content without
-approval and store nothing.
+approval and store nothing. Beside the preview the editor shows the saved content's page
+count in its template against the Profile's limit, measured the way the page fit above
+measures (`GET …/document/page-count`), and warns when it is over, so an overflow shows
+while editing rather than when rendering fails. Each count starts a browser, so it is
+asked once per saved version, after the saves settle; a count that cannot be measured
+shows nothing.
 
 ### 10.1 Reviewed wording
 
@@ -299,6 +309,13 @@ wording passes the hard checks (numbers, dates, sources) and a separate AI revie
 accepted only when every assertion is `supported` and the evidence passes the
 deterministic check (`cv_engine/domain/claim_review.py`). Accepted wording needs no
 per-line user confirmation.
+
+The number check compares what a number states, not how it is written: thousands
+separators, a scale word or suffix (K, M, B, thousand, million, billion, אלף, מיליון,
+מיליארד), a percent word (`%`, percent, אחוז, אחוזים), and a currency mark do not make a
+number new, so `1,000` and `1000`, `40%` and `40 אחוז`, `$2M` and `2,000,000` agree. A
+changed value, a changed scale, or a plain number turned into a percentage still fails
+(`unsupported-review-number`). A currency is not compared; the review judges it.
 
 Writer and reviewer run in one Operation, judged line by line. A line that fails is
 *withheld*: it keeps the wording it had before (for a first draft, its frame line built
@@ -322,6 +339,16 @@ and policy versions, plus section placement and fact eligibility. A failed check
 basis moves.
 
 Warnings never block. Anything that needs a decision is a blocker or review reason.
+
+The content check also reports writing-style warnings, deterministically
+(`cv_engine/domain/writing_style.py`): `em-dash` (an em dash or `--` in a paragraph,
+bullet, or item), `long-bullet` (a bullet over 35 words), `repeated-opener` (three or
+more bullets under one heading opening with the same word), and `mixed-date-formats`
+(date lines writing months in more than one way: `Jan 2020`, `01/2020`, `2020-01`). In
+English documents only: `weak-opener` (a bullet opening "Responsible for", "Helped
+with", "Worked on", and the like) and `first-person` (I, me, my). Date formats are read
+as displayed, so a Hebrew month name counts as the `MM/YYYY` it is shown as; year-only
+lines are not counted.
 
 Approval is an explicit user action that stamps `approved_basis` and `approved_at`.
 

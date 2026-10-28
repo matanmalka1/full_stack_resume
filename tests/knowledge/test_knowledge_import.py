@@ -280,3 +280,68 @@ def test_cli_imports_from_a_named_directory(services, user, project_root) -> Non
     )
     assert code == 1
     assert "runs once" in err.getvalue()
+
+
+def _stored(transaction_manager, user_id: str):
+    return DatabaseKnowledge(
+        transaction_manager, SqlAlchemyUserKnowledgeRepository(transaction_manager), SOURCE_ROOT
+    ).load(user_id)
+
+
+def test_exported_knowledge_imports_into_another_user_unchanged(
+    services, user, project_root, transaction_manager, tmp_path
+) -> None:
+    """`export-knowledge` is how Knowledge reaches another installation: its files are
+    exactly what `import-knowledge --from` needs to rebuild the same Knowledge."""
+    services.knowledge_import.import_knowledge(EMAIL, FileKnowledge(project_root))
+    target = tmp_path / "exported"
+    out, err = io.StringIO(), io.StringIO()
+
+    code = admin(
+        ["export-knowledge", "--email", EMAIL, "--to", str(target)],
+        services=services,
+        out=out,
+        err=err,
+    )
+
+    assert code == 0, err.getvalue()
+    assert f"of {EMAIL} to {target}" in out.getvalue()
+    other = services.accounts.create_user("other@example.com", PASSWORD)
+    services.knowledge_import.import_knowledge("other@example.com", FileKnowledge(target))
+    original, copied = _stored(transaction_manager, user.id), _stored(transaction_manager, other.id)
+    assert list(copied.facts.facts.items()) == list(original.facts.facts.items())
+    assert copied.profiles.profiles == original.profiles.profiles
+    assert copied.candidate == original.candidate
+
+
+def test_export_refuses_a_user_without_knowledge_and_an_existing_target(
+    services, user, project_root, tmp_path
+) -> None:
+    err = io.StringIO()
+    code = admin(
+        ["export-knowledge", "--email", EMAIL, "--to", str(tmp_path / "none")],
+        services=services,
+        out=io.StringIO(),
+        err=err,
+    )
+    assert code == 1
+    assert "no Knowledge yet" in err.getvalue()
+
+    services.knowledge_import.import_knowledge(EMAIL, FileKnowledge(project_root))
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    err = io.StringIO()
+    code = admin(
+        ["export-knowledge", "--email", EMAIL, "--to", str(existing)],
+        services=services,
+        out=io.StringIO(),
+        err=err,
+    )
+    assert code == 1
+    assert "already exists" in err.getvalue()
+    assert list(existing.iterdir()) == []
+
+
+def test_import_names_its_source_because_the_installation_holds_templates_only() -> None:
+    with pytest.raises(SystemExit):
+        admin(["import-knowledge", "--email", EMAIL], err=io.StringIO())

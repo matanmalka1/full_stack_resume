@@ -20,6 +20,7 @@ from .drafts import (
 from .facts import FactStore, FactStoreError
 from .frame import dangling_heading, misplaced_role_claims
 from .presentations import PresentationStore
+from .writing_style import writing_findings
 
 STALE_OR_UNSUPPORTED = {
     r"\b3\s*[–-]\s*4\s+sales representatives\b": "stale-team-size",
@@ -374,6 +375,12 @@ def _historical_titles_are_headings(context: _ValidationContext) -> None:
         )
 
 
+def _writing_style_is_advised(context: _ValidationContext) -> None:
+    """Style advice (weak openers, length, em dashes, date formats): warnings only."""
+    for finding in writing_findings(context.draft):
+        context.add_issue("content", finding.code, finding.message, hard=False)
+
+
 def _headline_is_safe(context: _ValidationContext) -> None:
     if context.draft.headline.text not in context.profile.safe_headlines:
         context.add_issue("headline_safety", "unsafe-headline", context.draft.headline.text)
@@ -387,6 +394,7 @@ VALIDATION_RULES: tuple[DraftRule, ...] = (
     _sections_match_profile,
     _historical_titles_are_headings,
     _headline_is_safe,
+    _writing_style_is_advised,
 )
 
 
