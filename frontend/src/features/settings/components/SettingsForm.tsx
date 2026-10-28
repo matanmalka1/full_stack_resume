@@ -32,6 +32,21 @@ import { editableSettings, reasoningEffortLabels } from "../settings.model";
    On a phone the cards are the rounded groups of a settings list. */
 export const settingsCardClasses = "bg-cv-surface p-5 shadow-surface max-lg:rounded-surface max-lg:p-4 sm:p-6";
 
+/* A wide screen lays each section out in two columns, as a desktop settings page does:
+   its name and what it governs on the reader's side, its controls on a card at the far
+   side, and a rule between one section and the next. The section's own card gives up its
+   surface there, and the body under the header takes it. Below the breakpoint none of
+   this applies and the section is the phone's card. */
+export const settingsSectionClasses =
+  "lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start lg:gap-x-10 lg:rounded-none lg:border-0 lg:border-b lg:border-cv-hairline lg:bg-transparent lg:p-0 lg:pb-8 lg:shadow-none";
+
+/* The section's header in its own column: no rule under it, and no icon tile - the
+   column itself sets the section apart. */
+export const settingsSectionHeaderClasses = "lg:mb-0 lg:border-b-0 lg:pb-0 lg:[&>div>span]:hidden";
+
+export const settingsSectionBodyClasses =
+  "lg:col-start-2 lg:rounded-surface lg:border lg:border-cv-hairline lg:bg-cv-surface lg:p-5 lg:shadow-card";
+
 const themeOptions = [
   { icon: Sun, label: "בהירה", value: "light" },
   { icon: Moon, label: "כהה", value: "dark" },
@@ -139,17 +154,17 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
         })}
       >
         <fieldset disabled={save.isPending || conflict !== null} className="flex min-w-0 flex-col gap-6">
-          {/* A phone reads the cards in the order a person reaches for them - the look of the
-              interface, then the CV's, then the AI - so the display card leads there. */}
+          {/* The cards stand in the order a person reaches for them - the look of the
+              interface, then the CV's, then the AI - so the display card leads. */}
           {!themeOnly && (
-            <Card className={cx(settingsCardClasses, "max-lg:order-3")}>
+            <Card className={cx(settingsCardClasses, settingsSectionClasses, "order-3")}>
               <SectionHeader
-                className="mb-5"
+                className={cx("mb-5", settingsSectionHeaderClasses)}
                 description="איך ומתי המערכת נעזרת במודל שפה."
                 icon={Sparkles}
                 title="בינה מלאכותית"
               />
-              <div className="flex flex-col gap-6">
+              <div className={cx("flex flex-col gap-6", settingsSectionBodyClasses)}>
                 <FormSection title="מודל">
                   <p className="text-support leading-6 text-cv-text-muted">
                     {settings.provider_configured
@@ -223,9 +238,9 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
             </Card>
           )}
           {!themeOnly && (
-            <Card className={cx(settingsCardClasses, "max-lg:order-2")}>
+            <Card className={cx(settingsCardClasses, settingsSectionClasses, "order-2")}>
               <SectionHeader
-                className="mb-5"
+                className={cx("mb-5", settingsSectionHeaderClasses)}
                 description="העיצוב שבו נפתחים קורות חיים חדשים. כל משרה יכולה להחליף תבנית בעורך; שינוי כאן לא משנה קורות חיים קיימים."
                 icon={LayoutTemplate}
                 title="תבנית קורות חיים"
@@ -236,7 +251,11 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
                 value={templateLabel(settings.available_templates, form.default_template ?? null)}
               />
               <div
-                className={cx("flex flex-col gap-4 max-lg:mt-3", templateFold.panelProps.className)}
+                className={cx(
+                  "flex flex-col gap-4 max-lg:mt-3",
+                  settingsSectionBodyClasses,
+                  templateFold.panelProps.className,
+                )}
                 id={templateFold.panelProps.id}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -262,14 +281,14 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
               </div>
             </Card>
           )}
-          <Card className={cx(settingsCardClasses, "max-lg:order-1")}>
+          <Card className={cx(settingsCardClasses, settingsSectionClasses, "order-1")}>
             <SectionHeader
-              className="mb-5"
+              className={cx("mb-5", settingsSectionHeaderClasses)}
               description="משפיע מיד על הממשק, לכל מסך. נשמר רק בלחיצה על שמירה."
               icon={Palette}
               title="תצוגה"
             />
-            <div className="flex flex-col gap-6">
+            <div className={cx("flex flex-col gap-6", settingsSectionBodyClasses)}>
               {/* One choice of three, side by side. It was two switches - "follow the
                   system" and "dark", the second locked until the first was off. */}
               <SegmentedControl

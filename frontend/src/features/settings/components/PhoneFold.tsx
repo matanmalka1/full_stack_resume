@@ -11,15 +11,19 @@ import { cx } from "@/ui/cx";
    there and the section is always open.
 
    It folds in place rather than opening a sub-screen: a sub-screen would be a route of
-   its own, and these sections are part of the one Settings form and its one save. */
-export const usePhoneFold = () => {
+   its own, and these sections are part of the one Settings form and its one save.
+
+   `wide` keeps the fold at every width, for a section a wide screen also opens on
+   request: there the row is drawn as a bordered button of its own width. */
+export const usePhoneFold = ({ wide = false }: { wide?: boolean } = {}) => {
   const [open, setOpen] = useState(false);
   const id = useId();
 
   return {
-    /* For the folded section: hidden below the large breakpoint until opened. */
-    panelProps: { className: open ? undefined : "max-lg:hidden", id },
-    rowProps: { controls: id, onToggle: () => setOpen((current) => !current), open },
+    /* For the folded section: hidden below the large breakpoint (at every width with
+       `wide`) until opened. */
+    panelProps: { className: open ? undefined : wide ? "hidden" : "max-lg:hidden", id },
+    rowProps: { controls: id, onToggle: () => setOpen((current) => !current), open, wide },
   };
 };
 
@@ -30,6 +34,7 @@ export const PhoneFoldRow = ({
   onToggle,
   open,
   value,
+  wide = false,
 }: {
   controls: string;
   icon?: LucideIcon;
@@ -37,11 +42,17 @@ export const PhoneFoldRow = ({
   onToggle: () => void;
   open: boolean;
   value?: string;
+  wide?: boolean;
 }) => (
   <button
     aria-controls={controls}
     aria-expanded={open}
-    className="flex min-h-12 w-full items-center gap-3 text-start text-body font-semibold text-cv-text lg:hidden"
+    className={cx(
+      "flex min-h-12 w-full items-center gap-3 text-start text-body font-semibold text-cv-text",
+      wide
+        ? "lg:min-h-11 lg:w-auto lg:rounded-control lg:border lg:border-cv-border lg:bg-cv-surface lg:px-4 lg:text-support lg:font-bold lg:hover:border-cv-border-strong lg:hover:bg-cv-surface-muted lg:[&>svg]:hidden"
+        : "lg:hidden",
+    )}
     onClick={onToggle}
     type="button"
   >
