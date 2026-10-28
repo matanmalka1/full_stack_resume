@@ -11,7 +11,12 @@ import { recruitmentRung } from "../model/recruitmentLadder";
    The card is here because a reader on a phone opens an application from the board and
    asks both questions at once; it states the second without claiming the first depends
    on it, and changing it stays the recruitment manager's job - "עדכון" opens the same
-   dialog the board does. */
+   dialog the board does.
+
+   On a wide screen the card is the main column's first: its heading leads, every rung is
+   named under its own segment with the current one bold, and the masthead's "עדכון
+   סטטוס" opens the manager, so the card's own button and the sentence the names now say
+   step aside - the sentence stays for assistive tech, which the names are hidden from. */
 export const RecruitmentStageCard = ({ detail, onUpdate }: { detail: ApplicationDetail; onUpdate: () => void }) => {
   const rung = recruitmentRung(detail.recruitment_status);
   const label = recruitmentStatusLabel(detail.recruitment_status);
@@ -19,18 +24,26 @@ export const RecruitmentStageCard = ({ detail, onUpdate }: { detail: Application
   return (
     <section
       aria-labelledby="recruitment-stage-heading"
-      className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface p-4"
+      className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 lg:gap-4 lg:p-card-padding lg:shadow-surface"
     >
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-support text-cv-text-muted" id="recruitment-stage-heading">
+        <h2
+          className="text-support text-cv-text-muted lg:text-body lg:font-bold lg:text-cv-text"
+          id="recruitment-stage-heading"
+        >
           שלב הגיוס
         </h2>
-        <Button className="rounded-pill max-lg:min-h-11" onClick={onUpdate} size="compact" variant="secondary">
+        <Button
+          className="rounded-pill max-lg:min-h-11 lg:hidden"
+          onClick={onUpdate}
+          size="compact"
+          variant="secondary"
+        >
           עדכון
           <span className="sr-only"> שלב הגיוס</span>
         </Button>
       </div>
-      <p className="flex flex-wrap items-baseline gap-x-2">
+      <p className="flex flex-wrap items-baseline gap-x-2 lg:sr-only">
         <span className="text-heading-sm font-extrabold text-cv-text">{label}</span>
         {rung.index === null ? null : (
           <span className="text-support text-cv-text-muted">
@@ -51,7 +64,14 @@ export const RecruitmentStageCard = ({ detail, onUpdate }: { detail: Application
           />
         ))}
       </div>
-      <div className="flex justify-between gap-2 text-caption text-cv-text-muted">
+      <div aria-hidden="true" className="grid grid-cols-5 gap-1.5 text-support text-cv-text-muted max-lg:hidden">
+        {rung.names.map((name, index) => (
+          <span className={cx(index === rung.index && "font-bold text-cv-text")} key={name}>
+            {name}
+          </span>
+        ))}
+      </div>
+      <div className="flex justify-between gap-2 text-caption text-cv-text-muted lg:hidden">
         <span aria-hidden="true">{rung.first}</span>
         {rung.next === null ? null : <span>הבא: {rung.next}</span>}
         <span aria-hidden="true">{rung.last}</span>

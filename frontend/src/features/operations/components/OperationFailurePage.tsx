@@ -1,15 +1,18 @@
 import { ShieldCheck } from "lucide-react";
+import { type ReactNode, useEffect } from "react";
 import { Link } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
 import { routePaths } from "@/navigation/routePaths";
 import { Button, buttonClasses } from "@/ui/Button";
+import { reportError } from "@/ui/reportError";
 import type { FailureSummary } from "../model/failureSummary";
 import { OperationActions } from "./OperationActions";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
 
-/* A run that ended without a result, as a phone's page of its own: what happened, that
+/* A run that ended without a result, as a page of its own - a phone's sheet, a wide
+   screen's centred card: what happened, that
    nothing the reader had was lost, where the run stopped, and the two ways on - back to
    the application, or the run again.
 
@@ -19,11 +22,15 @@ import { OperationPhaseSteps } from "./OperationPhaseSteps";
    never shown. The sheet's title carries the headline and its icon the warning mark; this
    is the body under them. */
 export const OperationFailurePage = ({
+  failureAction,
   onClose,
   onQueued,
   operation,
   summary,
 }: {
+  /* The host's recovery for the record the run failed to produce, as the report offers
+     it - beside the way back, in the one action row. */
+  failureAction?: ReactNode;
   onClose: () => void;
   onQueued: (operationId: string) => void;
   operation: Operation;
@@ -31,6 +38,15 @@ export const OperationFailurePage = ({
 }) => {
   /* The run stopped in the queue if it never started, otherwise while executing. */
   const failedStep = operation.started_at == null ? 0 : 1;
+  /* A failure this client has no wording for: the server's detail is English and meant
+     for diagnosis, so it goes to the console, as the report sends it, while the reader
+     gets the safe general line. */
+  const unreportedDetail = operation.failure_code == null ? (operation.safe_failure_detail ?? null) : null;
+  useEffect(() => {
+    if (unreportedDetail !== null) {
+      reportError("operation_failure", { failure_code: operation.failure_code, detail: unreportedDetail });
+    }
+  }, [operation.failure_code, unreportedDetail]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -78,7 +94,9 @@ export const OperationFailurePage = ({
               <Link className={buttonClasses("primary")} to={routePaths.settings}>
                 פתיחת ההגדרות
               </Link>
-            ) : null}
+            ) : (
+              failureAction
+            )}
           </>
         }
         retryOffered={!summary.missingProvider}
