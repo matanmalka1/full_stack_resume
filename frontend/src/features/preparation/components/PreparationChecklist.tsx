@@ -34,6 +34,16 @@ const markClasses: Record<RowState, string> = {
   upcoming: "border-cv-border-strong bg-cv-surface",
 };
 
+/* From the large breakpoint the rows stand abreast as five tiles, as the desktop
+   Application screen draws them: a done step on a muted fill, the open one on a bordered
+   surface, what is ahead in a dashed outline - shape as well as tone, so the three states
+   survive greyscale. */
+const tileClasses: Record<RowState, string> = {
+  done: "lg:border-transparent lg:bg-cv-surface-muted",
+  current: "lg:border-cv-accent lg:bg-cv-surface",
+  upcoming: "lg:border-dashed lg:border-cv-border-strong",
+};
+
 const stateWords: Record<RowState, string> = {
   done: "הושלם",
   current: "השלב הנוכחי",
@@ -66,7 +76,7 @@ export const PreparationChecklist = ({ detail }: { detail: ApplicationDetail }) 
           <span dir="ltr">{`${position}/${rows.length}`}</span>
         </span>
       </div>
-      <ol className="mt-3 flex flex-col gap-1">
+      <ol className="mt-3 flex flex-col gap-1 lg:mt-4 lg:grid lg:grid-cols-5 lg:gap-2">
         {rows.map((row, index) => {
           const state: RowState = index < done ? "done" : index === done ? "current" : "upcoming";
           const editorRow = row.key === "draft" || row.key === "approve";
@@ -78,6 +88,8 @@ export const PreparationChecklist = ({ detail }: { detail: ApplicationDetail }) 
               className={cx(
                 "flex min-h-11 items-center gap-3 rounded-control px-2",
                 state === "current" && "bg-cv-surface-muted",
+                "lg:flex-col lg:items-start lg:gap-2 lg:border lg:p-3",
+                tileClasses[state],
               )}
               key={row.key}
             >
@@ -93,7 +105,7 @@ export const PreparationChecklist = ({ detail }: { detail: ApplicationDetail }) 
               </span>
               <span
                 className={cx(
-                  "min-w-0 flex-1 text-support",
+                  "min-w-0 flex-1 text-support lg:flex-none",
                   state === "current"
                     ? "font-bold text-cv-text"
                     : state === "done"

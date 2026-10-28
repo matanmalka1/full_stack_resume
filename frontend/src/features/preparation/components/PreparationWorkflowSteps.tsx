@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronRight, X } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -41,6 +41,9 @@ export interface PhoneHeader {
 }
 
 interface PreparationWorkflowStepsProps {
+  /* Whether the stepper is drawn from the large breakpoint. A step whose desktop header
+     says where the work stands some other way leaves it out there. */
+  desktopSpine?: boolean;
   /* Absent while the record naming the Application has not loaded: no stage has a
      destination yet, so the bar is an indicator until one does. */
   applicationId?: string;
@@ -91,6 +94,7 @@ const stepsFor = (
 
 export const PreparationWorkflowSteps = ({
   applicationId,
+  desktopSpine = true,
   detail,
   phoneHeader = NO_PHONE_HEADER,
   stage,
@@ -143,12 +147,13 @@ export const PreparationWorkflowSteps = ({
           "max-lg:grid max-lg:grid-cols-[auto_minmax(0,1fr)_auto] max-lg:items-center max-lg:gap-x-2 max-lg:gap-y-3",
       )}
     >
+      {/* A phone's way out. From the large breakpoint the page header's own bordered chevron
+          (or its trail) is the way back, so this one is not drawn there. */}
       <Link
-        className="inline-flex min-h-11 w-fit shrink-0 items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text max-lg:min-w-11 max-lg:justify-center max-lg:px-0 max-lg:text-cv-text"
+        className="inline-flex min-h-11 w-fit shrink-0 items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text max-lg:min-w-11 max-lg:justify-center max-lg:px-0 max-lg:text-cv-text lg:hidden"
         state={boardReturnState(applicationId)}
         to={boardPath()}
       >
-        <ArrowRight aria-hidden="true" className="size-icon-md shrink-0 max-lg:hidden" />
         {intake ? (
           <X aria-hidden="true" className="size-icon-lg shrink-0 lg:hidden" />
         ) : (
@@ -185,7 +190,13 @@ export const PreparationWorkflowSteps = ({
         <div className="flex shrink-0 items-center lg:hidden">{phoneHeader.action}</div>
       )}
 
-      <div className={cx(!intake && "max-lg:col-span-3", phoneHeader.bar === false && "max-lg:hidden")}>
+      <div
+        className={cx(
+          !intake && "max-lg:col-span-3",
+          phoneHeader.bar === false && "max-lg:hidden",
+          !desktopSpine && "lg:hidden",
+        )}
+      >
         <WorkflowStepsRail label="שלבי הכנת קורות החיים" phone={intake ? "marks" : "segments"} steps={located} />
       </div>
     </div>
