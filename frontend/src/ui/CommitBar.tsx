@@ -21,6 +21,10 @@ interface CommitBarProps {
      first step with a record - the intake behind it created the Application, and
      re-entering it would not be going back. */
   back?: ReactNode;
+  /* False drops `back` below the large breakpoint, so the command takes the bar's whole
+     width there - a phone reaches the previous step through the screen's own back link,
+     and a bar holding both left the command a narrow button in a corner. */
+  backOnPhone?: boolean;
   children?: ReactNode;
   /* What this bar is, in one small line above whatever `children` say. Given by a wizard
      step, which has the same answer on every screen; omitted by a commit that is already
@@ -84,6 +88,7 @@ const useScrollClearance = (pinned: boolean) => {
 
 const CommitBarSurface = ({
   back,
+  backOnPhone = true,
   children,
   inline,
   label,
@@ -93,6 +98,9 @@ const CommitBarSurface = ({
   secondaryIconOnly = false,
 }: CommitBarProps) => {
   const ref = useScrollClearance(!inline);
+  /* Whether the phone grid has a back cell. From `sm` the grid's cells are placed by the
+     `sm:` classes alone, so this only ever changes the layout below the large breakpoint. */
+  const phoneBack = back !== undefined && backOnPhone;
   return (
     <div
       ref={ref}
@@ -118,7 +126,11 @@ const CommitBarSurface = ({
         <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
           {/* The two wrappers exist for the phone grid only; from `sm` they dissolve and
             their contents flow in the opening side's row as they always have. */}
-          {back === undefined ? null : <div className="col-start-1 row-start-2 min-w-0 sm:contents">{back}</div>}
+          {back === undefined ? null : (
+            <div className={cx("col-start-1 row-start-2 min-w-0 sm:contents", !backOnPhone && "max-lg:hidden")}>
+              {back}
+            </div>
+          )}
           {label === undefined && children === undefined ? null : (
             <div className="col-span-2 min-w-0 sm:contents">
               {label === undefined ? (
@@ -141,9 +153,9 @@ const CommitBarSurface = ({
         <div
           className={cx(
             "flex flex-wrap items-center gap-3 sm:col-start-auto sm:row-start-auto sm:justify-self-end",
-            back === undefined ? "col-span-2 sm:col-span-1" : "col-start-2 row-start-2 justify-self-end",
+            phoneBack ? "col-start-2 row-start-2 justify-self-end" : "col-span-2 sm:col-span-1",
             "max-lg:flex-nowrap max-lg:gap-2 max-lg:text-body",
-            back === undefined && "max-lg:justify-self-stretch",
+            !phoneBack && "max-lg:justify-self-stretch",
           )}
         >
           {secondary === undefined ? null : (
