@@ -50,8 +50,11 @@ export const OperationFailurePage = ({
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Announced as it appears, the way the report's failure callout was: the page
+          opens by itself on an outcome, and this is the outcome. */}
       <section
         aria-labelledby="operation-failure-what"
+        role="alert"
         className="rounded-surface border border-cv-border bg-cv-surface p-4"
       >
         <h3 className="mb-2 text-support font-bold text-cv-text" id="operation-failure-what">

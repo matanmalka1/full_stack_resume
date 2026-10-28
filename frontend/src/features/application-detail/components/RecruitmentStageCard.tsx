@@ -15,8 +15,9 @@ import { recruitmentRung } from "../model/recruitmentLadder";
 
    On a wide screen the card is the main column's first: its heading leads, every rung is
    named under its own segment with the current one bold, and the masthead's "עדכון
-   סטטוס" opens the manager, so the card's own button and the sentence the names now say
-   step aside - the sentence stays for assistive tech, which the names are hidden from. */
+   סטטוס" opens the manager, so the card's own button steps aside. The sentence stays in
+   view: a rung groups several statuses, so its name alone would not say the exact one,
+   and a closed process sits on no rung at all - the sentence then says it closed. */
 export const RecruitmentStageCard = ({ detail, onUpdate }: { detail: ApplicationDetail; onUpdate: () => void }) => {
   const rung = recruitmentRung(detail.recruitment_status);
   const label = recruitmentStatusLabel(detail.recruitment_status);
@@ -43,9 +44,13 @@ export const RecruitmentStageCard = ({ detail, onUpdate }: { detail: Application
           <span className="sr-only"> שלב הגיוס</span>
         </Button>
       </div>
-      <p className="flex flex-wrap items-baseline gap-x-2 lg:sr-only">
+      <p className="flex flex-wrap items-baseline gap-x-2">
         <span className="text-heading-sm font-extrabold text-cv-text">{label}</span>
-        {rung.index === null ? null : (
+        {rung.index === null ? (
+          /* The phone's empty bar says it alone; the wide card names the rungs, so one
+             with none bold needs the words. */
+          <span className="text-support text-cv-text-muted max-lg:hidden">· תהליך הגיוס נסגר</span>
+        ) : (
           <span className="text-support text-cv-text-muted">
             · שלב {rung.index + 1} מתוך {rung.total}
           </span>
@@ -71,10 +76,16 @@ export const RecruitmentStageCard = ({ detail, onUpdate }: { detail: Application
           </span>
         ))}
       </div>
-      <div className="flex justify-between gap-2 text-caption text-cv-text-muted lg:hidden">
-        <span aria-hidden="true">{rung.first}</span>
+      {/* A phone's ends and what comes next. A wide card has every rung named above, so
+          only "הבא" stays, under them. */}
+      <div className="flex justify-between gap-2 text-caption text-cv-text-muted lg:justify-start lg:text-support">
+        <span aria-hidden="true" className="lg:hidden">
+          {rung.first}
+        </span>
         {rung.next === null ? null : <span>הבא: {rung.next}</span>}
-        <span aria-hidden="true">{rung.last}</span>
+        <span aria-hidden="true" className="lg:hidden">
+          {rung.last}
+        </span>
       </div>
     </section>
   );

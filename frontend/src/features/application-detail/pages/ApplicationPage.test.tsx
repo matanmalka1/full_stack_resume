@@ -123,6 +123,15 @@ describe("ApplicationPage", () => {
     expect(await screen.findByRole("button", { name: "ביטול הסגירה" })).toBeInTheDocument();
   });
 
+  /* A closed process is on no rung of the bar, so the card says it closed in words. */
+  it("states a closed recruitment status in words beside its exact name", async () => {
+    renderPage(() => Promise.resolve(json({ ...detail(), recruitment_status: "rejected" })));
+
+    expect(await screen.findByText("לא התקבל")).toBeInTheDocument();
+    expect(screen.getByText("· תהליך הגיוס נסגר")).toBeInTheDocument();
+    expect(screen.queryByText(/הבא:/)).not.toBeInTheDocument();
+  });
+
   it("keeps recruitment state off the CV preparation step", async () => {
     renderPage();
 
