@@ -10,7 +10,7 @@ export interface MatchingValues {
 
 export type MatchingKey = keyof MatchingValues;
 
-export const matchingKeys: readonly MatchingKey[] = ["track", "profile", "emphasis", "language"];
+const matchingKeys: readonly MatchingKey[] = ["track", "profile", "emphasis", "language"];
 
 export const matchingValuesFrom = (classification: Classification): MatchingValues | null =>
   classification.track === null ||

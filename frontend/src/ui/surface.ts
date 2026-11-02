@@ -12,6 +12,3 @@ export const surfaceClasses = (className?: string): string =>
    same classes. */
 export const cardClasses = (className?: string): string =>
   surfaceClasses(cx("bg-cv-surface shadow-surface", className));
-
-/* A content separator with no surface of its own: flat, square and shadowless. */
-export const flatSurfaceClasses = (className?: string): string => cx("border border-cv-hairline", className);

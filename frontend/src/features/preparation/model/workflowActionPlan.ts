@@ -45,18 +45,6 @@ export interface WorkflowActionPlan {
   unbuiltRecommendation: string | null;
 }
 
-/* Whether `WorkflowActions` has anything to put inside its surface. Some actions are
-   deliberately handled elsewhere on the preparation screen: re-analysis sits beside the
-   diagnostics. Treating those as content here leaves an
-   emphasized but empty card behind. */
-export const hasWorkflowActionsContent = (plan: WorkflowActionPlan): boolean =>
-  (plan.analyze !== null && !plan.analyze.reanalysis) ||
-  plan.createDraft !== null ||
-  plan.buildFromAnalysis !== null ||
-  plan.draftScreen !== null ||
-  plan.ready !== null ||
-  plan.unbuiltRecommendation !== null;
-
 export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPlan => {
   const applicationId = detail.application.id;
   const recommended = detail.recommended_action ?? null;

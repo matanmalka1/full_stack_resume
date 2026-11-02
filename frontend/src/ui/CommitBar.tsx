@@ -1,5 +1,4 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { cx } from "./cx";
 import { LiveRegion } from "./LiveRegion";
@@ -44,12 +43,6 @@ interface CommitBarProps {
   result?: ReactNode;
 }
 
-/* A workflow page owns one physical action position even when the component deciding
-   what belongs there lives several layers below the route. The shell supplies this
-   target; a standalone CommitBar (including focused component tests) still renders in
-   place. Portalling only changes layout ownership, not action ownership. */
-export const CommitBarTargetContext = createContext<HTMLElement | null | undefined>(undefined);
-
 /* The bar that closes a piece of work: the way back and what is still missing on one
    side, the command on the other.
 
@@ -86,7 +79,7 @@ const useScrollClearance = (pinned: boolean) => {
   return ref;
 };
 
-const CommitBarSurface = ({
+export const CommitBar = ({
   back,
   backOnPhone = true,
   children,
@@ -183,13 +176,4 @@ const CommitBarSurface = ({
       )}
     </div>
   );
-};
-
-export const CommitBar = (props: CommitBarProps) => {
-  const target = useContext(CommitBarTargetContext);
-  const surface = <CommitBarSurface {...props} />;
-
-  if (props.inline || target === undefined) return surface;
-  if (target === null) return null;
-  return createPortal(surface, target);
 };

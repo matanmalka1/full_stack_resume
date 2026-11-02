@@ -14,8 +14,6 @@ import type {
   CreatedApplication,
   DeletedApplication,
   UpdatedApplicationNotes,
-  UpdatedJobText,
-  UpdateJobTextRequest,
   UpdateApplicationNotesRequest,
   DuplicateCheckResult,
   DuplicateMatch,
@@ -202,9 +200,6 @@ const applicationPath = (applicationId: string): ApiPath => `/api/v1/application
 const applicationNotesPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/notes`;
 
-const jobTextPath = (applicationId: string): ApiPath =>
-  `/api/v1/applications/${encodeURIComponent(applicationId)}/job-text`;
-
 const analysesPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/analyses`;
 
@@ -278,33 +273,6 @@ export const applicationListQueryOptions = (query: ApplicationListQuery = {}) =>
        the search field flickered the table once per keystroke. */
     placeholderData: (previous) => previous,
   });
-
-/* A posting that changed after the Application was opened: the text is replaced in place.
-   The edit names the text it replaces (`expected_job_text_hash`), so an edit made against
-   a text someone else already changed is refused rather than overwriting it. Analyses of
-   the earlier text stay on record; what follows - an analysis that no longer matches the
-   posting, a document built on it - is the engine's projection rather than this
-   client's. Once the Application has a Submission the text is locked and the edit is
-   refused.
-
-   Not idempotency-keyed. This is a synchronous command with no Operation behind it, and a
-   resent edit names a hash the first one already replaced, so it cannot apply twice. */
-export const updateJobText = async (
-  applicationId: string,
-  posting: { jobText: string; sourceUrl: string | null; expectedJobTextHash: string },
-): Promise<UpdatedJobText> => {
-  const body: UpdateJobTextRequest = {
-    job_text: posting.jobText,
-    source_url: posting.sourceUrl,
-    expected_job_text_hash: posting.expectedJobTextHash,
-  };
-
-  const response = await apiRequest<UpdatedJobText>(jobTextPath(applicationId), {
-    method: "PATCH",
-    body,
-  });
-  return response.data;
-};
 
 export const updateApplicationNotes = async (
   applicationId: string,

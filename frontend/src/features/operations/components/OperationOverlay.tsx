@@ -12,7 +12,6 @@ import { Dialog } from "@/ui/Dialog";
 import { IconButton } from "@/ui/IconButton";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
-import { StatusSlot } from "@/ui/StatusSlot";
 import { type Tone, toneBorderClasses, tonePresentation, toneTextClasses } from "@/ui/tone";
 import {
   operationRunNotes,
@@ -352,29 +351,27 @@ export const OperationOverlay = ({
       )}
 
       {showChip ? (
-        <StatusSlot>
-          <button
-            aria-haspopup="dialog"
-            className={cx(
-              "cv-settle-in flex w-full items-center gap-3 rounded-surface border bg-cv-surface px-4 py-2.5 text-start text-support shadow-surface transition-colors hover:bg-cv-surface-muted",
-              toneBorderClasses[tone],
-              toneTextClasses[tone],
-            )}
-            onClick={openDialog}
-            ref={chipRef}
-            type="button"
-          >
-            <Icon aria-hidden="true" className={cx("size-icon-md shrink-0", tone === "progress" && "animate-spin")} />
-            <span className="min-w-0 flex-1 text-cv-text">
-              <span className="font-semibold">{heading}</span>
-              <span className="text-cv-text-muted"> · {statusText}</span>
-            </span>
-            <span className="flex shrink-0 items-center gap-1 font-medium underline underline-offset-4">
-              פירוט ההרצה
-              <ChevronLeft aria-hidden="true" className="size-icon-sm" />
-            </span>
-          </button>
-        </StatusSlot>
+        <button
+          aria-haspopup="dialog"
+          className={cx(
+            "cv-settle-in flex w-full items-center gap-3 rounded-surface border bg-cv-surface px-4 py-2.5 text-start text-support shadow-surface transition-colors hover:bg-cv-surface-muted",
+            toneBorderClasses[tone],
+            toneTextClasses[tone],
+          )}
+          onClick={openDialog}
+          ref={chipRef}
+          type="button"
+        >
+          <Icon aria-hidden="true" className={cx("size-icon-md shrink-0", tone === "progress" && "animate-spin")} />
+          <span className="min-w-0 flex-1 text-cv-text">
+            <span className="font-semibold">{heading}</span>
+            <span className="text-cv-text-muted"> · {statusText}</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1 font-medium underline underline-offset-4">
+            פירוט ההרצה
+            <ChevronLeft aria-hidden="true" className="size-icon-sm" />
+          </span>
+        </button>
       ) : null}
 
       {showPanel ? (

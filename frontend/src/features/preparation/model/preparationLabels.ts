@@ -1,8 +1,5 @@
 import { classificationFromAnalysis } from "@/api/analyses";
 import type { ApplicationDetail, PreparationState } from "@/api/contracts";
-import { BadgeCheck, CircleCheck, Clock, FilePen, FilePlus2, type LucideIcon } from "lucide-react";
-
-import type { Tone } from "@/ui/tone";
 
 /* Keyed by the generated unions, so a state added to the §9 projection fails the
    frontend build instead of reaching the screen untranslated. */
@@ -12,16 +9,6 @@ export const preparationStateLabels: Record<PreparationState, string> = {
   draft_in_progress: "טיוטה בעבודה",
   approved: "אושר, ממתין ליצירת הקובץ",
   ready: "קורות החיים מוכנים",
-};
-
-/* A.2: a state is never colour alone. The tone adds the icon and the Hebrew status word
-   the badge already carries. */
-export const preparationStateTones: Record<PreparationState, Tone> = {
-  needs_analysis: "neutral",
-  ready_to_draft: "neutral",
-  draft_in_progress: "neutral",
-  approved: "success",
-  ready: "success",
 };
 
 /* Hebrew names for the actions the projection reports. Deliberately a partial map over
@@ -151,16 +138,4 @@ export const missingRequirement = (
   }
   const count = Number.parseInt(references.requirement_count ?? "1", 10);
   return { requirementText: requirement.text, others: Number.isFinite(count) && count > 1 ? count - 1 : 0 };
-};
-
-/* A face per preparation state, for the same reason the recruitment axis has one: the
-   two badges sit side by side in every row, and the icon is what separates "where the CV
-   is" from "where the Application is" before the words are read. Exhaustive over the
-   generated union. */
-export const preparationStateIcons: Record<PreparationState, LucideIcon> = {
-  needs_analysis: Clock,
-  ready_to_draft: FilePlus2,
-  draft_in_progress: FilePen,
-  approved: CircleCheck,
-  ready: BadgeCheck,
 };

@@ -8,7 +8,7 @@
    with the report the overlay opens, so neither `OperationActions` nor `OperationReport`
    is exported: a screen that shows an Operation shows this overlay, once - a live panel
    beside the page, the report as a dialog on an outcome that needs the reader, and a
-   status row in the step's `StatusSlot`. */
+   status row at the top of the step. */
 export { OperationOverlay, type PendingWork } from "./components/OperationOverlay";
 /* Whether the viewport is a phone's. For a screen that draws its commands in a different
    place per width and must not put each one in the document twice. */

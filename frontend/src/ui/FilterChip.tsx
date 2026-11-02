@@ -9,7 +9,7 @@ export type FilterChipCount = "plain" | "badge";
 /* The pill a quick filter draws, as class data so a router Link that changes the URL's
    filter can carry it as well as the toggle button below. Pressed, it fills with the
    accent; a chip that asks for attention keeps a stronger edge at rest. */
-export const filterChipClasses = (pressed: boolean, emphasis = false, className?: ClassValue): string =>
+const filterChipClasses = (pressed: boolean, emphasis = false, className?: ClassValue): string =>
   cx(
     "inline-flex h-9.5 shrink-0 items-center gap-1.5 rounded-pill border text-label whitespace-nowrap transition-colors",
     pressed
@@ -25,7 +25,7 @@ export const filterChipClasses = (pressed: boolean, emphasis = false, className?
 
 /* The number beside a chip's label. Decorative styling only - the number is real text
    and is read as part of the chip's name. */
-export const FilterChipCountMark = ({
+const FilterChipCountMark = ({
   count,
   pressed,
   variant = "plain",
