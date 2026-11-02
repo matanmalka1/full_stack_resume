@@ -16,12 +16,12 @@ export const NotFoundPage = () => (
     aria-labelledby="route-heading"
     className="page-frame flex min-h-[70dvh] flex-col lg:min-h-[calc(100dvh-5rem)] items-center justify-center gap-4.5 text-center"
   >
-    <p
+    {/* Drawn as generated content: it is a decoration, deliberately paler than any text
+        may be, and the heading under it says the same thing in words. */}
+    <span
       aria-hidden="true"
-      className="text-[5.5rem] leading-none font-extrabold tracking-tighter text-cv-border-soft lg:text-[8.75rem]"
-    >
-      404
-    </p>
+      className="block text-[5.5rem] leading-none font-extrabold tracking-tighter text-cv-border-soft before:content-['404'] lg:text-[8.75rem]"
+    />
     <h1
       className="text-[1.625rem] font-extrabold tracking-tight text-cv-text lg:text-[2.125rem]"
       data-route-heading
