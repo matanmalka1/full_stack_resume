@@ -93,7 +93,8 @@ and tracking all work without a provider.
 - Facts screen ("מאגר העובדות"): list, inspect, create pending, confirm, delete, attach
   to Profile sections; create a fact from a claim; `Confirm and use`. *Not built:*
   editing a fact in place (§17).
-- Dashboard with search, filters, presets, facets, and sorting; Application Detail with
+- Dashboard with presets, an action hub, sorting, and a cards or recruitment-stage view;
+  quick search (⌘K) for finding an Application or fact by name; Application Detail with
   preparation state, blockers, next action, notes, timeline, and submissions.
 - Recruitment status, corrections, one next action with overdue warning, internal and
   external submissions, close, soft delete.
@@ -451,8 +452,12 @@ owns action policy; React does not duplicate it.
 
 ## 14. Recruitment tracking
 
-The Dashboard is a table with search, filters, presets (needs attention, ready to send,
-active interviews), facet counts, sorting, and paging.
+The Dashboard shows every open Application at once, as cards or in columns by recruitment
+stage, narrowed only by presets (needs attention, ready to send, active interviews) with
+their counts, and sorted. An action hub lists what waits on the user: overdue, today's and
+this week's reminders, blockers, and Ready documents. Finding an Application by name is the
+quick search's. The list endpoint itself still takes search, stage and status filters, and
+paging.
 
 Application Detail shows status, next action, notes, preparation and blockers, a
 unified timeline, the document, and submissions.

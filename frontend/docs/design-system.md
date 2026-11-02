@@ -102,8 +102,8 @@ search button. The three destinations move to a tab bar pinned to the bottom of 
 viewport: icon over a short visible label, the active one marked by a pill behind its
 icon and a bold label. The new-job command becomes a
 floating button over the board, above the bottom bar; sign-out moves to the Settings
-account card. The board's action hub becomes a dark accent frame around a light list
-there. The bar's
+account card. The board's action hub is a dark accent frame around a light list at every
+width: above the cards on a phone, a column beside them from the large breakpoint. The bar's
 height is `--cv-bottom-nav-height` (zero at the large breakpoint), and every other
 bottom-pinned surface - `CommitBar`, a sticky `ActionBar`, the Settings save row, the
 page's own bottom padding and scroll padding - stands on top of it by that height.
@@ -156,8 +156,9 @@ name a test or a screen reader finds:
 
 - List screens (the board, the facts pool, Settings) draw their groups as rounded
   white cards on the canvas under plain labels.
-  A filter used often becomes chips; the rest fold behind a "סינון" toggle that counts
-  the active ones. A list and its record are two views chosen by the URL, and the
+  A filter used often becomes chips (`FilterChip`); the board has no other filter -
+  finding a record by name is the quick search's. A list and its record are two views
+  chosen by the URL, and the
   record's one command is pinned above the bottom bar.
 - `Dialog` is a bottom sheet (`presentation="sheet"`, the default): grab handle,
   `rounded-t-sheet`, an X, safe-area inset, and its commands on a hairline-topped bar.
