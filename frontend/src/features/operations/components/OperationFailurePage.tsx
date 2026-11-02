@@ -7,6 +7,7 @@ import { Button, buttonClasses } from "@/ui/Button";
 import type { FailureSummary } from "../model/failureSummary";
 import { OperationActions } from "./OperationActions";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
+import { failedPhaseStep } from "../model/operationPhases";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
 
 /* A run that ended without a result, as a phone's page of its own: what happened, that
@@ -29,9 +30,6 @@ export const OperationFailurePage = ({
   operation: Operation;
   summary: FailureSummary;
 }) => {
-  /* The run stopped in the queue if it never started, otherwise while executing. */
-  const failedStep = operation.started_at == null ? 0 : 1;
-
   return (
     <div className="flex flex-col gap-5">
       <section
@@ -57,7 +55,7 @@ export const OperationFailurePage = ({
           שלבי ההרצה
         </p>
         <div className="rounded-surface border border-cv-border bg-cv-surface px-4 py-3 text-support">
-          <OperationPhaseSteps failedStep={failedStep} phase={operation.phase} />
+          <OperationPhaseSteps failedStep={failedPhaseStep(operation.started_at)} from={1} phase={operation.phase} />
         </div>
       </div>
 

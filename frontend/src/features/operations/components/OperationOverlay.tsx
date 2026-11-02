@@ -2,6 +2,8 @@ import { ChevronLeft, Info, Sparkles, TriangleAlert, X } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
+import { routePaths } from "@/navigation/routePaths";
+
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { useAiAvailability } from "@/features/settings";
@@ -13,6 +15,7 @@ import { StatusBadge } from "@/ui/StatusBadge";
 import { StatusSlot } from "@/ui/StatusSlot";
 import { type Tone, toneBorderClasses, tonePresentation, toneTextClasses } from "@/ui/tone";
 import {
+  operationRunNotes,
   operationTypeLabels,
   pageFitLabel,
   pageFitNotice,
@@ -27,6 +30,7 @@ import { durationLabel } from "../model/operationElapsed";
 import { isOperationStarting } from "../model/operationLive";
 import { operationProgressLabel } from "../model/operationProgress";
 import { OperationFailurePage } from "./OperationFailurePage";
+import { FailedRunScreen, LiveRunScreen } from "./OperationScreen";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
 import { OperationReport } from "./OperationReport";
 import { OperationRunBar } from "./OperationRunBar";
@@ -57,6 +61,10 @@ interface Session {
 }
 
 const SUCCESS_LINGER_MS = 3_000;
+
+/* The Application a run screen belongs to before its record names it: the id segment of
+   the route the host screen is on. */
+const applicationIdFromLocation = (pathname: string): string => decodeURIComponent(pathname.split("/")[2] ?? "");
 
 /* Proposed lines a succeeded run withheld. Its result stands, but those lines kept their
    wording from before the run, so it is an outcome that needs the reader like a failure:
@@ -105,6 +113,7 @@ export const OperationOverlay = ({
   operation,
   pending,
   phoneRunBar = false,
+  screen = false,
   settled,
 }: {
   awaitingRecord: boolean;
@@ -139,6 +148,12 @@ export const OperationOverlay = ({
   /* On a phone, an inline run closes on a bar of its own - back to the board, or cancel.
      Only for a host whose step has no bar of its own while the run is its body. */
   phoneRunBar?: boolean;
+  /* The run is the host screen's whole body: nothing else is drawn while it lives, and a
+     run that ended without a result is reported in the same place rather than in a dialog
+     over an empty page. For a host whose step has no content until the run produces it -
+     the analysis before its first result, the draft step while the draft is written. The
+     heading here is then the route's own. */
+  screen?: boolean;
   settled: boolean;
 }) => {
   const headingId = useId();
@@ -199,7 +214,7 @@ export const OperationOverlay = ({
 
   /* The phone's inline run says how long it has been executing, so its clock ticks while
      it lives. The record is polled on its own schedule; a second's tick is the clock's. */
-  const ticking = isPhone && inline && live;
+  const ticking = ((isPhone && inline) || screen) && live;
   useEffect(() => {
     if (!ticking) return undefined;
     const interval = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -269,9 +284,11 @@ export const OperationOverlay = ({
   const elapsed =
     record?.started_at == null || isTerminalOperation(record) ? null : durationLabel(record.started_at, now);
   const activeNote =
-    !isPhone || !inline || record === undefined || elapsed === null
+    record === undefined || elapsed === null || !(screen || (isPhone && inline))
       ? undefined
-      : `${phaseLabels[record.phase]} · זמן שחלף: ${elapsed}`;
+      : isPhone
+        ? `${phaseLabels[record.phase]} · זמן שחלף: ${elapsed}`
+        : elapsed;
   /* On a phone a run that ended without a result is a page of its own (see
      `OperationFailurePage`). A failed review keeps the full report: its own panel lists
      the lines and the facts behind them, which the page has no room for. */
@@ -282,14 +299,26 @@ export const OperationOverlay = ({
     record.status !== "succeeded" &&
     record.failure_reason?.code !== "claim_review";
   const failure = phoneFailure ? failureSummary(record, ai === "available", ai !== "loading") : null;
+  /* On a host whose body is the run, a run that ended without a result is that body: it
+     replaces the live screen in place, at every width, and opens no dialog over it. A
+     failed review keeps the report, as on a phone. */
+  const screenFailure =
+    screen &&
+    record !== undefined &&
+    isTerminalOperation(record) &&
+    record.status !== "succeeded" &&
+    record.failure_reason?.code !== "claim_review"
+      ? failureSummary(record, ai === "available", ai !== "loading")
+      : null;
 
   const showingSuccess = !session.active && session.succeededId !== null && session.succeededId === record?.id;
-  const showPanel = (session.active && !session.panelHidden) || showingSuccess;
+  const showPanel = !screen && ((session.active && !session.panelHidden) || showingSuccess);
   /* The row in the step's status slot: an outcome that needs the reader, or live work
      whose panel was put away. A plain success leaves nothing behind - the page shows its
      result - and neither does one the screen found on arrival. */
   const showChip =
-    (session.active && session.panelHidden) || (!session.active && record !== undefined && needsReader(record));
+    !screen &&
+    ((session.active && session.panelHidden) || (!session.active && record !== undefined && needsReader(record)));
   const openDialog = () => {
     setNavigating(false);
     setSession((current) => ({ ...current, dialogOpen: true }));
@@ -297,6 +326,31 @@ export const OperationOverlay = ({
 
   return (
     <>
+      {!screen ? null : screenFailure !== null && record !== undefined ? (
+        <FailedRunScreen
+          eyebrow={eyebrow}
+          heading={heading}
+          onQueued={onQueued}
+          record={record}
+          summary={screenFailure}
+        />
+      ) : (
+        <LiveRunScreen
+          activeNote={activeNote}
+          closeTo={routePaths.application(operation?.application_id ?? applicationIdFromLocation(location.pathname))}
+          eyebrow={eyebrow}
+          heading={heading}
+          note={
+            continuation ??
+            pending?.note ??
+            (record === undefined ? "ההרצה נשלחה. המצב שלה יופיע כאן מיד." : operationRunNotes[record.operation_type])
+          }
+          onQueued={onQueued}
+          record={record}
+          resultNote={inlineNote}
+        />
+      )}
+
       {showChip ? (
         <StatusSlot>
           <button
@@ -424,7 +478,11 @@ export const OperationOverlay = ({
                     שלבי ההרצה
                   </p>
                 ) : null}
-                <OperationPhaseSteps activeNote={activeNote} phase={record.phase} stackOnPhone={inline} />
+                <OperationPhaseSteps
+                  activeNote={activeNote}
+                  layout={isPhone && inline ? "stacked" : "row"}
+                  phase={record.phase}
+                />
               </div>
               {/* In place of the page's own content, the card says what fills it. */}
               {inline ? (
@@ -467,7 +525,7 @@ export const OperationOverlay = ({
       <Dialog
         headingId={headingId}
         onClose={() => setSession((current) => ({ ...current, dialogOpen: false }))}
-        open={session.dialogOpen}
+        open={session.dialogOpen && screenFailure === null}
         {...(navigating ? {} : { restoreFocusTo: chipRef })}
         {...(failure === null
           ? {}
