@@ -36,13 +36,15 @@ const entries = toFactPool({
 } satisfies FactList).entries;
 
 describe("filterFactEntries", () => {
-  it("combines text, status, source, and tag filters", () => {
+  it("combines text, source, and pending filters", () => {
     expect(filterFactEntries(entries, { ...emptyFactFilters, query: "API" })).toHaveLength(1);
-    expect(filterFactEntries(entries, { ...emptyFactFilters, status: "pending" })[0]?.fact.fact_id).toBe("fact.sales");
+    expect(filterFactEntries(entries, { ...emptyFactFilters, pendingOnly: true })[0]?.fact.fact_id).toBe("fact.sales");
     expect(
-      filterFactEntries(entries, { ...emptyFactFilters, source: "development.json", tag: "backend" }),
+      filterFactEntries(entries, { ...emptyFactFilters, source: "development.json", query: "backend" }),
     ).toHaveLength(1);
-    expect(filterFactEntries(entries, { ...emptyFactFilters, source: "sales.json", status: "canonical" })).toEqual([]);
+    expect(filterFactEntries(entries, { ...emptyFactFilters, source: "development.json", pendingOnly: true })).toEqual(
+      [],
+    );
   });
 
   it("finds a fact by its knowledge source, as the global search does", () => {
