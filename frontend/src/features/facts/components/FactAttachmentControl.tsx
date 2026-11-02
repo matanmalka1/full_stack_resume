@@ -1,4 +1,3 @@
-import { Link2 } from "lucide-react";
 import { useState } from "react";
 
 import type { Fact, FactAttachmentTargets } from "@/api/contracts";
@@ -8,6 +7,7 @@ import { Checkbox } from "@/ui/Checkbox";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
+import { cardClasses } from "@/ui/surface";
 import { profileLabels } from "@/features/preparation";
 import { useAttachFact } from "../api/mutations";
 import { defaultFactSource } from "../model/factForm";
@@ -41,24 +41,17 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
   const crossTrack = isCrossTrackFact(fact.source, defaultFactSource(profile.profile));
 
   return (
-    /* A panel, not a page. It carried a 32px icon tile, a heading, a paragraph under it,
-       full-size selects and a button on a row of its own - four stacked bands for one
-       command with two inputs, in the same column as the fact it belongs to. Now it is a
-       titled strip: one header line, the two selects, and the confirmation and the
-       command sharing the row under them. Nothing was removed - the guidance moved onto
-       the header line and the fields are the compact size the dialogs use. */
+    /* A card like the fact's other blocks: a small heading with its guidance on the same
+       line, the two selects, and the pin choice and the command sharing the row under
+       them. The fields are the compact size the dialogs use. */
     <section
       aria-labelledby="fact-attachment-heading"
-      className="cv-fields-compact flex flex-col gap-3 rounded-control border border-cv-border bg-cv-surface-muted p-3"
+      className={cardClasses("cv-fields-compact flex flex-col gap-3 p-4.5")}
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <h3
-          className="inline-flex items-center gap-1.5 text-support font-semibold text-cv-text"
-          id="fact-attachment-heading"
-        >
-          <Link2 aria-hidden="true" className="size-icon-md text-cv-accent" />
+        <h2 className="text-support font-bold text-cv-text-muted" id="fact-attachment-heading">
           שיוך לפרופיל
-        </h3>
+        </h2>
         <p className="text-support text-cv-text-muted">בחרו היכן העובדה תוכל להשתתף בבניית קורות החיים.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">

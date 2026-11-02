@@ -166,6 +166,11 @@ name a test or a screen reader finds:
   finding a record by name is the quick search's. A list and its record are two views
   chosen by the URL, and the
   record's one command is pinned above the bottom bar.
+  The facts pool is one `<table>` at every width: a phone turns each knowledge file's
+  `tbody` into a card of rows under a heading row only it shows, and stretches each
+  row's link over the row. It has no "סינון" toggle - its search field, pending banner
+  and knowledge-file chips are its only filters - and an open fact is its own page on
+  both widths (`/facts?fact=…`), with its rare command (deletion) behind a ⋮ menu.
 - `Dialog` is a bottom sheet (`presentation="sheet"`, the default): grab handle,
   `rounded-t-sheet`, an X, safe-area inset, and its commands on a hairline-topped bar.
   A two-answer question is a centred card (`presentation="alert"`, and always for

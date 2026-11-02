@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Fact } from "@/api/contracts";
@@ -42,27 +42,50 @@ const targets = (attached = false) => ({
   ],
 });
 
+/* Answers the pool and each fact's detail from one list, the way the API does. */
+const stubFacts = (items: Fact[], recorded: (item: Fact) => string | null = (item) => item.status) =>
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+      if (url === "/api/v1/facts")
+        return Promise.resolve(json({ items: items.map((item) => ({ fact: item, recorded_status: recorded(item) })) }));
+      if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
+      const item = items.find((candidate) => url.endsWith(`/${candidate.fact_id}`));
+      if (item !== undefined) return Promise.resolve(json({ fact: item, events: [event(item)] }));
+      return Promise.resolve(json({}, 404));
+    }),
+  );
+
+const sales = fact({
+  fact_id: "fact.sales",
+  meaning: "Managed accounts",
+  renderings: { en: "Managed accounts" },
+  source: "sales.json",
+  status: "pending",
+  tags: ["sales"],
+});
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe("FactsPage", () => {
   it("shows a reconciliation blocker when the store and lifecycle trail disagree", async () => {
-    const item = fact();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: string | URL | Request) => {
-        const url = String(input);
-        if (url === "/api/v1/facts")
-          return Promise.resolve(json({ items: [{ fact: item, recorded_status: "pending" }] }));
-        if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: item, events: [event(item)] }));
-        if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
-        return Promise.resolve(json({}, 404));
-      }),
-    );
+    stubFacts([fact()], () => "pending");
+
+    renderRoute("/facts?fact=fact.backend", "/facts", <FactsPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("נמצאה אי־התאמה ביומן העובדות");
+    await screen.findByRole("heading", { level: 1, name: "בניית שירותי Backend" });
+    expect(screen.queryByRole("button", { name: "צירוף העובדה לסעיף" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "יצירת תיקון לעובדה" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "אפשרויות נוספות" })).not.toBeInTheDocument();
+  });
+
+  it("offers no new fact while the trail is out of sync", async () => {
+    stubFacts([fact()], () => "pending");
 
     renderRoute("/facts", "/facts", <FactsPage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("נמצאה אי־התאמה ביומן העובדות");
-    expect(screen.queryByText("הוספת עובדה חדשה")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "צירוף העובדה לסעיף" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "עובדה חדשה" })).not.toBeInTheDocument();
   });
 
   it("shows a load failure without presenting an empty pool", async () => {
@@ -72,109 +95,68 @@ describe("FactsPage", () => {
     );
     renderRoute("/facts", "/facts", <FactsPage />);
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(screen.queryByText("לא נמצאו עובדות התואמות למסננים.")).not.toBeInTheDocument();
+    expect(screen.queryByText("לא נמצאו עובדות התואמות לחיפוש.")).not.toBeInTheDocument();
   });
 
-  it("deep-links a fact and filters the candidate pool without another API surface", async () => {
-    const backend = fact();
-    const sales = fact({
-      fact_id: "fact.sales",
-      meaning: "Managed accounts",
-      renderings: { en: "Managed accounts" },
-      source: "sales.json",
-      status: "pending",
-      tags: ["sales"],
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: string | URL | Request) => {
-        const url = String(input);
-        if (url === "/api/v1/facts")
-          return Promise.resolve(
-            json({ items: [backend, sales].map((item) => ({ fact: item, recorded_status: item.status })) }),
-          );
-        if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
-        if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: backend, events: [event(backend)] }));
-        if (url.endsWith("/fact.sales")) return Promise.resolve(json({ fact: sales, events: [event(sales)] }));
-        return Promise.resolve(json({}, 404));
-      }),
-    );
-
-    renderRoute("/facts?fact=fact.backend", "/facts", <FactsPage />);
-
-    expect(await screen.findByRole("link", { name: /בניית שירותי Backend/ })).toHaveAttribute("aria-current", "true");
-    /* The selected fact leads with the English rendering - the one a CV is built from -
-       and keeps the Hebrew one under it. */
-    expect(screen.getByRole("heading", { name: "Built backend services" })).toBeInTheDocument();
-    expect(screen.getAllByText("בניית שירותי Backend").length).toBeGreaterThan(0);
-    expect(screen.getByText("משמעות עובדתית")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("מעמד"), { target: { value: "pending" } });
-    expect(screen.getByText("Managed accounts")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();
-  });
-
-  /* The phone's forms of the filters - the pending banner and the source chips - drive the
-     same filters as the wide screen's selects. */
-  it("narrows the pool from the pending banner and the source chips", async () => {
-    const backend = fact();
-    const sales = fact({
-      fact_id: "fact.sales",
-      meaning: "Managed accounts",
-      renderings: { en: "Managed accounts" },
-      source: "sales.json",
-      status: "pending",
-      tags: ["sales"],
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: string | URL | Request) => {
-        const url = String(input);
-        if (url === "/api/v1/facts")
-          return Promise.resolve(
-            json({ items: [backend, sales].map((item) => ({ fact: item, recorded_status: item.status })) }),
-          );
-        if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
-        if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: backend, events: [event(backend)] }));
-        return Promise.resolve(json({}, 404));
-      }),
-    );
+  /* One table, a fact per row and a group per knowledge file; each fact links to its own
+     page. */
+  it("lists the pool and narrows it by search and by knowledge file", async () => {
+    stubFacts([fact(), sales]);
 
     renderRoute("/facts", "/facts", <FactsPage />);
+    const table = await screen.findByRole("table", { name: "רשימת העובדות" });
+    expect(within(table).getByRole("link", { name: "בניית שירותי Backend" })).toHaveAttribute(
+      "href",
+      "/facts?fact=fact.backend",
+    );
+    expect(within(table).getByRole("link", { name: "Managed accounts" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "ניסיון בפיתוח" })).toBeInTheDocument();
 
-    const banner = await screen.findByRole("button", { name: /עובדה אחת ממתינה לאישורך/ });
-    fireEvent.click(banner);
-    expect(banner).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByLabelText("מעמד")).toHaveValue("pending");
-    expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();
-    fireEvent.click(banner);
-    expect(screen.getByLabelText("מעמד")).toHaveValue("all");
+    fireEvent.change(screen.getByLabelText("חיפוש עובדות"), { target: { value: "managed" } });
+    expect(within(table).queryByRole("link", { name: "בניית שירותי Backend" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("חיפוש עובדות"), { target: { value: "" } });
 
     fireEvent.click(screen.getByRole("button", { name: "ניסיון במכירות" }));
-    expect(screen.getByLabelText("מאגר מקור")).toHaveValue("sales.json");
-    expect(screen.getByRole("link", { name: /Managed accounts/ })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();
+    expect(within(table).getByRole("link", { name: "Managed accounts" })).toBeInTheDocument();
+    expect(within(table).queryByRole("link", { name: "בניית שירותי Backend" })).not.toBeInTheDocument();
   });
 
-  it("opens and marks the exact fact history event from a deep link", async () => {
-    const item = fact();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: string | URL | Request) => {
-        const url = String(input);
-        if (url === "/api/v1/facts") {
-          return Promise.resolve(json({ items: [{ fact: item, recorded_status: item.status }] }));
-        }
-        if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
-        if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: item, events: [event(item)] }));
-        return Promise.resolve(json({}, 404));
-      }),
+  it("leads from the pending banner to the one fact that waits", async () => {
+    stubFacts([fact(), sales]);
+
+    renderRoute("/facts", "/facts", <FactsPage />);
+    expect(await screen.findByRole("link", { name: /עובדה אחת ממתינה לאישורך/ })).toHaveAttribute(
+      "href",
+      "/facts?fact=fact.sales",
     );
+  });
+
+  it("narrows the pool to the facts that wait when several do", async () => {
+    stubFacts([fact(), sales, fact({ fact_id: "fact.other", renderings: { en: "Other" }, status: "pending" })]);
+
+    renderRoute("/facts", "/facts", <FactsPage />);
+    const banner = await screen.findByRole("button", { name: /2 עובדות ממתינות לאישורך/ });
+    const table = screen.getByRole("table");
+    fireEvent.click(banner);
+    expect(banner).toHaveAttribute("aria-pressed", "true");
+    expect(within(table).queryByRole("link", { name: "בניית שירותי Backend" })).not.toBeInTheDocument();
+    fireEvent.click(banner);
+    expect(within(table).getByRole("link", { name: "בניית שירותי Backend" })).toBeInTheDocument();
+  });
+
+  it("opens a fact as its own page and marks the exact history event from a deep link", async () => {
+    stubFacts([fact()]);
 
     renderRoute("/facts?fact=fact.backend&event=event-fact.backend", "/facts", <FactsPage />);
 
-    const selected = await screen.findByText(/candidate confirmation/);
-    expect(selected).toHaveAttribute("aria-current", "location");
-    expect(screen.getByText("היסטוריית העובדה").closest("details")).toHaveAttribute("open");
+    expect(await screen.findByRole("heading", { level: 1, name: "בניית שירותי Backend" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "חזרה למאגר העובדות" })).toHaveAttribute("href", "/facts");
+    expect(screen.getByRole("heading", { name: "ניסוח באנגלית" })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("complementary", { name: "פרטי העובדה" })).getByText("ניסיון בפיתוח"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByText(/נוצרה כממתינה/).closest("li")).toHaveAttribute("aria-current", "location");
   });
 
   it("uses explicit replacement and attachment commands", async () => {
@@ -226,7 +208,6 @@ describe("FactsPage", () => {
     );
 
     renderRoute("/facts?fact=fact.backend", "/facts", <FactsPage />);
-    await screen.findByRole("link", { name: /בניית שירותי Backend/ });
 
     fireEvent.click(await screen.findByRole("button", { name: "צירוף העובדה לסעיף" }));
     await waitFor(() => expect(requests.some((request) => request.url.endsWith("/attachments"))).toBe(true));
@@ -246,7 +227,7 @@ describe("FactsPage", () => {
     });
   });
 
-  it("requires attestation before confirming a pending fact as canonical", async () => {
+  it("asks before promoting a pending fact to the source of truth", async () => {
     const item = fact({ status: "pending" });
     const requests: string[] = [];
     vi.stubGlobal(
@@ -269,10 +250,49 @@ describe("FactsPage", () => {
     );
 
     renderRoute("/facts?fact=fact.backend", "/facts", <FactsPage />);
-    const button = await screen.findByRole("button", { name: "אישור העובדה כמקור אמת" });
-    expect(button).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox", { name: /בדקתי את תוכן העובדה/ }));
-    fireEvent.click(button);
+    expect(await screen.findByText("שיוך לפרופיל יתאפשר לאחר הקידום למקור אמת")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "קידום למקור אמת" }));
+    expect(requests).toEqual([]);
+    const question = screen.getByRole("dialog", { name: "לקדם את העובדה למקור אמת?" });
+    fireEvent.click(within(question).getByRole("button", { name: "קידום למקור אמת" }));
     await waitFor(() => expect(requests).toContain("/api/v1/facts/fact.backend/confirm"));
+  });
+
+  it("deletes a fact from its menu only after a second question, then returns to the pool", async () => {
+    const item = fact();
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") {
+          requests.push(url);
+          return Promise.resolve(
+            json({
+              fact: fact({ status: "deleted" }),
+              event_id: "event-delete",
+              facts_version: "facts-2",
+              lifecycle_version: "lifecycle-2",
+            }),
+          );
+        }
+        if (url === "/api/v1/facts")
+          return Promise.resolve(json({ items: [{ fact: item, recorded_status: "canonical" }] }));
+        if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: item, events: [event(item)] }));
+        if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
+        return Promise.resolve(json({}, 404));
+      }),
+    );
+
+    renderRoute("/facts?fact=fact.backend", "/facts", <FactsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "אפשרויות נוספות" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "פעולות על העובדה" })).getByRole("button", { name: "מחיקת העובדה" }),
+    );
+    expect(requests).toEqual([]);
+    const question = screen.getByRole("dialog", { name: "למחוק את העובדה?" });
+    fireEvent.click(within(question).getByRole("button", { name: "מחיקת העובדה" }));
+    await waitFor(() => expect(requests).toContain("/api/v1/facts/fact.backend/delete"));
+    expect(await screen.findByRole("heading", { level: 1, name: "מאגר העובדות" })).toBeInTheDocument();
   });
 });

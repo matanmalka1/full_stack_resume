@@ -1,18 +1,19 @@
-import type { Fact, FactStatus } from "@/api/contracts";
+import type { Fact } from "@/api/contracts";
 import type { FactPoolEntry } from "./factPool";
 
+/* The pool narrows three ways, as the design draws it: the search field, one knowledge
+   file from the chip row, and the pending banner's "only what waits for me". Status and
+   tag selects are gone with the filter panel that held them. */
 export interface FactFilters {
+  pendingOnly: boolean;
   query: string;
   source: string;
-  status: FactStatus | "all";
-  tag: string;
 }
 
 export const emptyFactFilters: FactFilters = {
+  pendingOnly: false,
   query: "",
   source: "all",
-  status: "all",
-  tag: "all",
 };
 
 /* Everything a fact is found by, as one lowercased string: its meaning, every rendering,
@@ -25,12 +26,10 @@ export const factSearchText = (fact: Fact): string =>
 
 export const filterFactEntries = (entries: FactPoolEntry[], filters: FactFilters): FactPoolEntry[] => {
   const query = filters.query.trim().toLocaleLowerCase();
-  return entries.filter(({ fact }) => {
-    return (
+  return entries.filter(
+    ({ fact }) =>
       (query === "" || factSearchText(fact).includes(query)) &&
       (filters.source === "all" || fact.source === filters.source) &&
-      (filters.status === "all" || fact.status === filters.status) &&
-      (filters.tag === "all" || fact.tags.includes(filters.tag))
-    );
-  });
+      (!filters.pendingOnly || fact.status === "pending"),
+  );
 };

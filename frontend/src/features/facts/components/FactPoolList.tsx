@@ -2,151 +2,61 @@ import { AlertTriangle } from "lucide-react";
 import { createElement } from "react";
 import { Link } from "react-router-dom";
 
-import type { FactStatus } from "@/api/contracts";
+import type { Fact } from "@/api/contracts";
 import { cx } from "@/ui/cx";
-import { toneTextClasses } from "@/ui/tone";
 import {
-  factLabelInLanguage,
+  factContextLine,
+  factLabel,
   factSourceIcon,
   factSourceLabel,
   factStatusIcons,
   factStatusLabels,
-  factStatusTones,
+  factStyleLabel,
 } from "../model/factLabels";
 import type { FactPoolEntry } from "../model/factPool";
+import { FactStatusBadge } from "./FactStatusBadge";
 
-const defaultFactHref = (factId: string): string => `?fact=${encodeURIComponent(factId)}`;
-
-/* The status as a mark rather than a pill or a word. Every value a row used to restate -
-   the source file, the tags, the status word - is spelled out in full on the fact itself
-   beside the list, so repeating it ninety-eight times bought nothing and cost the wording
-   most of its width. What is left in the row is the fact and one icon: which lifecycle
-   state it is in is what decides whether the row is even usable yet, and an icon carries
-   that without taking a line. Its Hebrew word stays as the accessible name.
-
-   A phone's row has the width a wide screen gives the detail beside it, and the one state
-   a reader there has to act on - a fact waiting for confirmation - is drawn as its word in
-   a pill at the row's far end; the settled state keeps its icon there. */
-const FactRowStatus = ({ status }: { status: FactStatus }) => {
-  const Icon = factStatusIcons[status];
-  const pill = status === "pending";
-
-  return (
-    <span
-      aria-label={factStatusLabels[status]}
-      className={cx(
-        "mt-0.5 inline-flex shrink-0 max-lg:order-last max-lg:self-center",
-        toneTextClasses[factStatusTones[status]],
-      )}
-      // The icon inside is aria-hidden; role="img" presents the pair as one image for
-      // assistive tech, which `<img>` (a void element) cannot do.
-      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-      role="img"
-    >
-      <Icon aria-hidden="true" className={cx("size-icon-md", pill && "max-lg:hidden")} />
-      {pill ? (
-        <span
-          aria-hidden="true"
-          className="rounded-pill bg-cv-accent px-2.5 py-1 text-caption font-bold whitespace-nowrap text-cv-on-accent lg:hidden"
-        >
-          {factStatusLabels[status]}
-        </span>
-      ) : null}
-    </span>
-  );
-};
-
-/* The icon is a module-level component chosen by lookup, not one created here. */
-const FactSourceTile = ({ source }: { source: string }) => (
+const OutOfSyncMark = () => (
   <span
-    aria-hidden="true"
-    className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-surface-muted text-cv-text lg:hidden"
+    aria-label="מצב העובדה אינו תואם למצב האחרון ביומן"
+    className="relative inline-flex shrink-0 items-center text-cv-blocker"
+    // The icon inside is aria-hidden; role="img" presents it as one image for assistive
+    // tech, which `<img>` (a void element) cannot do.
+    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+    role="img"
   >
-    {createElement(factSourceIcon(source), { className: "size-icon-md" })}
+    <AlertTriangle aria-hidden="true" className="size-icon-md" />
   </span>
 );
 
-/* A row is an index entry, not a second copy of the fact: its wording, and the marks that
-   say whether it is usable. Everything else - id, source, attestation, tags - is one click
-   away and drawn in full there.
-
-   The whole row is the link rather than the wording alone: a 4px target in a list of
-   ninety-eight is a miss waiting to happen, and the row has nothing else to click.
-   Selection is an accent fill plus a bar on the reader's side of the row, so the open
-   fact is identifiable by shape as well as by colour. A phone shows the list and the fact
-   one at a time, so there nothing beside the list is open and the row drops the mark;
-   it leads with a tile naming the fact's knowledge file instead. */
-const FactPoolRow = ({
-  entry: { fact, outOfSync },
-  selected,
-  to,
-}: {
-  entry: FactPoolEntry;
-  selected: boolean;
-  to: string;
-}) => {
-  const english = factLabelInLanguage(fact, "en");
-  const hebrew = fact.renderings.he === english ? undefined : fact.renderings.he;
-
+/* The status cell. A wide screen draws every status as its pill; a phone keeps the pill
+   only for the state a reader has to act on - a fact waiting for confirmation - and draws
+   the settled state as a mark, its word kept as the accessible name. */
+const StatusCell = ({ fact }: { fact: Fact }) => {
+  if (fact.status === "pending") {
+    return <FactStatusBadge status={fact.status} />;
+  }
+  const Icon = factStatusIcons[fact.status];
   return (
-    <li>
-      <Link
-        aria-current={selected ? "true" : undefined}
-        className={cx(
-          "flex items-start gap-2.5 border-s-4 max-lg:items-center max-lg:gap-3 px-3 py-2.5 transition-colors max-lg:min-h-11 max-lg:border-s-0 max-lg:py-3",
-          selected
-            ? "border-s-cv-accent bg-cv-accent-soft max-lg:bg-transparent"
-            : "border-s-transparent hover:bg-cv-surface-muted",
-        )}
-        to={to}
+    <>
+      <span className="max-lg:hidden">
+        <FactStatusBadge status={fact.status} />
+      </span>
+      <span
+        aria-label={factStatusLabels[fact.status]}
+        className="inline-flex text-cv-accent lg:hidden"
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+        role="img"
       >
-        <FactSourceTile source={fact.source} />
-        <FactRowStatus status={fact.status} />
-        {/* English leads. It is the rendering the CV is built from, so it is the wording a
-          person is actually choosing between here; the Hebrew rendering follows in the
-          supporting size as a reading aid, and only when the store holds one distinct
-          from what is already shown. `text-right` anchors both lines to the row's RTL
-          edge (the shell is always RTL): with `dir="auto"` alone an English title sat
-          left above a Hebrew line on the right, so every row zig-zagged. The bidi order
-          inside each line is unchanged. */}
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-cv-text text-right" dir="auto">
-            {english}
-          </p>
-          {hebrew === undefined ? null : (
-            <p className="mt-0.5 text-support text-cv-text-muted" dir="rtl">
-              {hebrew}
-            </p>
-          )}
-        </div>
-        {outOfSync ? (
-          <span
-            aria-label="מצב העובדה אינו תואם למצב האחרון ביומן"
-            className="mt-0.5 inline-flex shrink-0 items-center text-cv-blocker"
-            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-            role="img"
-          >
-            <AlertTriangle aria-hidden="true" className="size-icon-md" />
-          </span>
-        ) : null}
-      </Link>
-    </li>
+        <Icon aria-hidden="true" className="size-5" />
+      </span>
+    </>
   );
 };
 
-/* Grouped by the knowledge file a fact lives in - the same axis the "מאגר מקור" filter
-   narrows by, and the one thing every fact in the pool has exactly one of. As a heading
-   above its facts it is stated once per group instead of once per row, and the group
-   headings double as position while scrolling: they stick to the top of the scroll area,
-   so it always says which store the rows under the cursor belong to.
-
-   Groups keep the order the pool arrived in rather than being sorted here: the store's
-   own order is what the store itself and the integrity report show.
-
-   Below the large breakpoint the list is not a scroll box of its own: a box inside a
-   scrolling page on a phone traps the thumb. The page scrolls, each group is a rounded
-   card under a plain label, and the label stops sticking - the masthead already holds
-   the top of the screen there. */
+/* Grouped by the knowledge file a fact lives in - the axis the chips above narrow by,
+   and the one thing every fact in the pool has exactly one of. Groups keep the order the
+   pool arrived in: the store's own order is what the store and the integrity report show. */
 const groupBySource = (entries: FactPoolEntry[]): { entries: FactPoolEntry[]; source: string }[] => {
   const groups = new Map<string, FactPoolEntry[]>();
 
@@ -163,42 +73,98 @@ const groupBySource = (entries: FactPoolEntry[]): { entries: FactPoolEntry[]; so
   return [...groups].map(([source, grouped]) => ({ entries: grouped, source }));
 };
 
+/* The pool is one table, drawn two ways, as the design draws it. A wide screen sees it as
+   a table: a fact per row, its kind, origin and status in columns, the wording the row's
+   link. A phone sees each knowledge file as a card of rows under a small heading - a tile
+   naming the file, the wording with its origin under it, the status at the far end - and
+   the whole row is the link. One tree rather than a list beside a table, so every fact
+   has one link and one name; the group headings are rows of their own that only a phone
+   shows, which is why each knowledge file is a `tbody`. */
 export const FactPoolList = ({
   entries,
-  factHref = defaultFactHref,
-  selectedFactId,
+  factHref,
 }: {
   entries: FactPoolEntry[];
-  factHref?: (factId: string) => string;
-  selectedFactId?: string | null;
+  factHref: (factId: string) => string;
 }) => (
-  <div
-    aria-label="רשימת העובדות"
-    className="max-h-[70dvh] min-h-64 overflow-y-auto rounded-control border border-cv-border max-lg:max-h-none max-lg:min-h-0 max-lg:overflow-visible max-lg:border-0 lg:h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-9rem)]"
-    dir="ltr"
-    // A named region rather than one long list: the groups below carry the lists.
-    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-    role="group"
-  >
-    <div className="max-lg:flex max-lg:flex-col max-lg:gap-4" dir="rtl">
+  <div className="lg:overflow-x-auto lg:rounded-surface lg:border lg:border-cv-hairline lg:bg-cv-surface lg:shadow-surface">
+    <table className="w-full border-collapse text-label max-lg:block lg:min-w-160">
+      <caption className="sr-only">רשימת העובדות</caption>
+      <thead className="max-lg:hidden">
+        <tr className="bg-cv-canvas">
+          {["עובדה", "סוג הצגה", "מקור", "מעמד"].map((heading) => (
+            <th className="px-4.5 py-3 text-start text-caption font-bold text-cv-text-muted" key={heading} scope="col">
+              {heading}
+            </th>
+          ))}
+        </tr>
+      </thead>
       {groupBySource(entries).map(({ entries: grouped, source }) => (
-        <section key={source}>
-          <h3 className="sticky top-0 z-(--cv-z-content-raised) flex items-baseline justify-between gap-control-gap border-b border-cv-border bg-cv-surface-sunken px-3 py-1.5 text-support font-semibold text-cv-text-muted max-lg:static max-lg:border-0 max-lg:bg-transparent max-lg:px-1 max-lg:pt-0 max-lg:font-bold">
-            <span dir="auto">{factSourceLabel(source)}</span>
-            <span className="font-normal">{grouped.length}</span>
-          </h3>
-          <ul className="divide-y divide-cv-border max-lg:overflow-hidden max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface">
-            {grouped.map((entry) => (
-              <FactPoolRow
-                entry={entry}
-                key={entry.fact.fact_id}
-                selected={entry.fact.fact_id === selectedFactId}
-                to={factHref(entry.fact.fact_id)}
-              />
-            ))}
-          </ul>
-        </section>
+        <tbody className="max-lg:mb-3.5 max-lg:flex max-lg:flex-col max-lg:last:mb-0" key={source}>
+          <tr className="lg:hidden">
+            <th
+              className="block pb-2 text-start text-support font-bold text-cv-text-muted"
+              colSpan={4}
+              dir="auto"
+              scope="colgroup"
+            >
+              {factSourceLabel(source)}
+            </th>
+          </tr>
+          {grouped.map(({ fact, outOfSync }, index) => {
+            const context = factContextLine(fact);
+            return (
+              <tr
+                className={cx(
+                  "relative border-t border-cv-canvas",
+                  "max-lg:flex max-lg:items-center max-lg:gap-3 max-lg:border-x max-lg:border-x-cv-hairline max-lg:bg-cv-surface max-lg:p-3.5 max-lg:transition-colors max-lg:hover:bg-cv-surface-muted",
+                  index === 0 && "max-lg:rounded-t-surface max-lg:border-t-cv-hairline",
+                  index === grouped.length - 1 &&
+                    "max-lg:rounded-b-surface max-lg:border-b max-lg:border-b-cv-hairline",
+                  fact.status === "pending" && "lg:bg-cv-canvas/60",
+                )}
+                key={fact.fact_id}
+              >
+                <td className="px-4.5 py-3 max-lg:flex max-lg:min-w-0 max-lg:flex-1 max-lg:items-center max-lg:gap-3 max-lg:p-0">
+                  <span
+                    aria-hidden="true"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-control-sm bg-cv-canvas text-cv-accent lg:hidden"
+                  >
+                    {createElement(factSourceIcon(fact.source), { className: "size-4.5" })}
+                  </span>
+                  <span className="min-w-0 max-lg:flex-1">
+                    {/* On a phone the link's box stretches over the whole row. */}
+                    <Link
+                      className="font-bold text-cv-text max-lg:block max-lg:text-body max-lg:leading-snug max-lg:after:absolute max-lg:after:inset-0 lg:underline lg:underline-offset-2"
+                      dir="auto"
+                      to={factHref(fact.fact_id)}
+                    >
+                      {factLabel(fact)}
+                    </Link>
+                    {context === "" ? null : (
+                      <span className="block truncate text-caption text-cv-text-muted lg:hidden" dir="auto">
+                        {context}
+                      </span>
+                    )}
+                  </span>
+                  {outOfSync ? (
+                    <span className="ms-2 inline-flex align-middle">
+                      <OutOfSyncMark />
+                    </span>
+                  ) : null}
+                </td>
+                <td className="px-4.5 py-3 text-cv-text-muted max-lg:hidden">{factStyleLabel(fact.resume_style)}</td>
+                <td className="max-w-60 truncate px-4.5 py-3 text-cv-text-muted max-lg:hidden" dir="auto">
+                  {context === "" ? "—" : context}
+                </td>
+                <td className="px-4.5 py-3 max-lg:shrink-0 max-lg:p-0">
+                  <StatusCell fact={fact} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
       ))}
-    </div>
+    </table>
   </div>
 );

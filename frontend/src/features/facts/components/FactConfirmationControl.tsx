@@ -1,47 +1,57 @@
+import { Check } from "lucide-react";
 import { useState } from "react";
 
 import type { Fact } from "@/api/contracts";
-import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
-import { Checkbox } from "@/ui/Checkbox";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useConfirmFact } from "../api/mutations";
 
-/* Confirming a pending fact makes it canonical: the one lifecycle step. It is a
-   deliberate act: the checkbox is the person attesting they read the fact and its source,
-   so it is required rather than advisory. Any other status has nothing to confirm and
-   renders nothing. */
-export const FactConfirmationControl = ({ fact }: { fact: Fact }) => {
-  const [attested, setAttested] = useState(false);
-  const confirmation = useConfirmFact(fact.fact_id, () => setAttested(false));
+/* Promoting a pending fact to the source of truth: the one lifecycle step. The design
+   draws it as a single command; the person attesting that they read the fact and its
+   source - which used to be a checkbox the button waited on - is now the question the
+   command asks before it writes, so it stays a deliberate act. Any other status has
+   nothing to promote and renders nothing. */
+export const FactConfirmationControl = ({ className, fact }: { className?: string; fact: Fact }) => {
+  const [asking, setAsking] = useState(false);
+  const confirmation = useConfirmFact(fact.fact_id, () => setAsking(false));
 
   if (fact.status !== "pending") {
     return null;
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-control border border-cv-border bg-cv-surface p-4">
-      <Checkbox checked={attested} onChange={(event) => setAttested(event.currentTarget.checked)}>
-        בדקתי את תוכן העובדה והמקור ואני מאשר את שינוי המעמד
-      </Checkbox>
-      {/* On a phone the step is the screen's one command, pinned above the bottom bar where
-          a thumb finds it; the attestation it waits on stays here in the body. */}
-      <div className="max-lg:fixed max-lg:inset-x-0 max-lg:bottom-(--cv-bottom-nav-height) max-lg:z-(--cv-z-sticky) max-lg:border-t max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-4">
-        <Button
-          className="w-full max-lg:min-h-12 max-lg:rounded-surface max-lg:text-body"
-          disabled={!attested}
-          onClick={() => confirmation.mutate()}
-          pending={confirmation.isPending}
-        >
-          אישור העובדה כמקור אמת
-        </Button>
-      </div>
-      {confirmation.error === null ? null : (
-        <ErrorCallout
-          error={confirmation.error}
-          fallbackDetail="העובדה לא השתנתה. אפשר לנסות שוב."
-          title="מעמד העובדה לא עודכן"
-        />
-      )}
-    </div>
+    <>
+      <Button className={className} onClick={() => setAsking(true)} size="default">
+        <Check aria-hidden="true" className="size-icon-md shrink-0" />
+        קידום למקור אמת
+      </Button>
+      <ConfirmDialog
+        confirmLabel="קידום למקור אמת"
+        headingId="fact-promotion-heading"
+        icon={<Check />}
+        onCancel={() => {
+          confirmation.reset();
+          setAsking(false);
+        }}
+        onConfirm={() => confirmation.mutate()}
+        open={asking}
+        pending={confirmation.isPending}
+        pendingLabel="מקדם…"
+        title="לקדם את העובדה למקור אמת?"
+      >
+        <p className="text-cv-text-muted">
+          בדקתי את תוכן העובדה ואת המקור שלה. מרגע הקידום היא יכולה להיכנס לטיוטות, ותיקון שלה ייעשה בעובדה מחליפה.
+        </p>
+        {confirmation.error === null ? null : (
+          <ErrorCallout
+            className="mt-3"
+            error={confirmation.error}
+            fallbackDetail="העובדה לא השתנתה. אפשר לנסות שוב."
+            title="מעמד העובדה לא עודכן"
+          />
+        )}
+      </ConfirmDialog>
+    </>
   );
 };
