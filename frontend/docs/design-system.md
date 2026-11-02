@@ -137,16 +137,22 @@ own tooltip arrives late, cannot be styled, and never shows on keyboard focus. P
 `wrap` for a label longer than a control's name. Text that only repeats what is already
 visible gets no tooltip; clamp it to two lines instead of truncating it.
 
-Workflow routes place their stage spine beside the active content at desktop widths.
-The spine uses heading-weight labels, larger marks and a continuous vertical connector.
-Below the large breakpoint a step gets the whole screen: the masthead and bottom bar
-fold away (`--cv-bottom-nav-height` is the home-indicator inset alone there) and the
-spine becomes the step's compact header - back chevron, role over company, an optional
-trailing action (`WizardStepShell`'s `phoneHeader`), then the open stage's name and
-position over one segment per stage. The page heading stays in the document for
-assistive tech (`phoneHeading="compact"`). Intake keeps a numbered stepper under its
-heading, led by a close mark. It stays the same navigation landmark, and every step
-keeps its accessible name.
+Workflow routes draw their stage rail under the heading at desktop widths: one row of
+24px marks in a white hairline card - a tick behind the work, a filled number for the
+open stage, an outlined number ahead - joined by 2px connectors that are solid as far
+as the work has come. The preparation steps (analysis, its matching settings, and the
+verification step that creates the draft) share `StepFrame`: a 40px bordered back
+square, the heading with role · company under it, the step's commands at the row's end,
+then the rail. Below the large breakpoint a step gets the whole screen: the masthead and
+bottom bar fold away (`--cv-bottom-nav-height` is the home-indicator inset alone there)
+and the header becomes the step's compact header - back chevron, role over company -
+then the open stage's name and position over one segment per stage, with the step's
+commands in a `PhoneActionBar` on the bottom edge. The page heading stays in the
+document for assistive tech unless the screen shows it (`phoneHeading`). The new-job
+screen has no record yet: it draws a close mark and the draft's saved state over its
+heading, and a numbered stepper (three short names on a phone, the four stage names
+wide). The rail stays one navigation landmark, and every step keeps its accessible
+name.
 
 ### Phone surfaces
 
@@ -170,10 +176,15 @@ name a test or a screen reader finds:
 - `CommitBar` and a sticky `ActionBar` run edge to edge on the bottom bar with 48px
   commands; `CommitBar` takes a `secondary` beside its primary and can drop `back`.
   Folded reference material is a `Disclosure variant="card"` row with a 56px summary.
-- A run reported inline is the step's whole screen: a turning ring, its phases stacked
-  in a card, and a bar with the way back and cancel. A run that ended without a result
-  is a page in its report sheet - warning mark, the catalogue's title, a "מה קרה" card
-  and the steps with the failed one marked.
+- A run that is a step's whole body (`OperationOverlay`'s `screen`) is the screen at
+  every width: a turning ring round the AI mark, the run's heading as the route
+  heading, its four phases (sent, queued, running, done) stacked in a card on a phone
+  and in columns on a wide screen, and the way back to the board and cancel - in the
+  phone's bottom bar, under the card wide, where the run is one centred card. A run
+  that ended without a result is reported in the same place: warning mark, the
+  catalogue's title, what happened, that the prior state was kept, the phases with the
+  failed one marked, and the ways on (Settings when a provider is missing, back to the
+  application, the run again). Elsewhere a failure is a page in the report sheet.
 - The application screen opens on the recruitment stage card and the dark next-action
   card at every width; the draft step opens with the job-fit card. On phones a draft's
   sections are cards under a pinned segmented strip of anchors - every section stays
