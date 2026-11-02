@@ -1,4 +1,4 @@
-import { type ReactNode, type RefObject, useEffect, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef } from "react";
 
 import { cx } from "./cx";
 import { wrapDialogFocus } from "./dialogFocus";
@@ -101,6 +101,18 @@ export const Dialog = ({
       dialog.close();
     }
   }, [open]);
+
+  /* A caller that unmounts the dialog instead of passing `open={false}` - the usual
+     `x === null ? null : <Dialog open …/>` - would remove a modal without closing it,
+     and the browser restores focus to the invoker only on `close()`. Closing it before
+     the node leaves the document keeps that restoration for every way out, the backdrop
+     included. A layout effect, because its cleanup runs before the node is removed. */
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    return () => {
+      if (dialog?.open) dialog.close();
+    };
+  }, []);
 
   return (
     <dialog
