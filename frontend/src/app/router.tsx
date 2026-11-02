@@ -81,6 +81,30 @@ export const routes: RouteObject[] = [
               (module) => module.ApplicationPage,
             ),
           },
+          /* The preparation steps between the job and its draft: the analysis, its
+             matching settings, and the step that creates the draft. Each is a screen of
+             its own, as the design draws them, rather than panels of the Application hub. */
+          {
+            path: "applications/:applicationId/analysis",
+            lazy: screen(
+              () => import("@/features/preparation/pages/AnalysisPage"),
+              (module) => module.AnalysisPage,
+            ),
+          },
+          {
+            path: "applications/:applicationId/analysis/matching",
+            lazy: screen(
+              () => import("@/features/preparation/pages/MatchingPage"),
+              (module) => module.MatchingPage,
+            ),
+          },
+          {
+            path: "applications/:applicationId/verification",
+            lazy: screen(
+              () => import("@/features/preparation/pages/VerificationPage"),
+              (module) => module.VerificationPage,
+            ),
+          },
           {
             path: "applications/:applicationId/resume",
             lazy: screen(

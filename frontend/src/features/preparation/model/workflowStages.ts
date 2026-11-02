@@ -78,9 +78,17 @@ export const workflowDestinations = (
     detail.preparation_state !== "needs_analysis" &&
     detail.preparation_state !== "ready_to_draft";
 
+  /* Before the draft has content its stage is the verification step that creates it,
+     once there is an analysis to create it from. */
+  const draftStep = hasContent
+    ? routePaths.draft(applicationId)
+    : detail?.latest_analysis_id != null && detail.document_id != null
+      ? routePaths.verification(applicationId)
+      : undefined;
+
   return {
-    analysis: routePaths.application(applicationId),
-    ...(hasContent ? { draft: routePaths.draft(applicationId) } : {}),
+    analysis: routePaths.analysis(applicationId),
+    ...(draftStep === undefined ? {} : { draft: draftStep }),
     ...(detail?.preparation_state === "ready" ? { ready: routePaths.ready(applicationId) } : {}),
   };
 };

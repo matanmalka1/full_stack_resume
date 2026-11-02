@@ -10,12 +10,19 @@ describe("workflowDestinations", () => {
     expect(stageForPreparationState.ready_to_draft).toBe("analysis");
     expect(
       workflowDestinations("app-1", detail({ document_id: "doc-1", preparation_state: "ready_to_draft" })),
-    ).toEqual({ analysis: "/applications/app-1" });
+    ).toEqual({ analysis: "/applications/app-1/analysis" });
+    /* With an analysis to draft from, the draft stage is the step that creates it. */
+    expect(
+      workflowDestinations(
+        "app-1",
+        detail({ document_id: "doc-1", latest_analysis_id: "analysis-1", preparation_state: "ready_to_draft" }),
+      ),
+    ).toEqual({ analysis: "/applications/app-1/analysis", draft: "/applications/app-1/verification" });
   });
 
   it("offers the editor once the document has content", () => {
     expect(workflowDestinations("app-1", detail({}))).toEqual({
-      analysis: "/applications/app-1",
+      analysis: "/applications/app-1/analysis",
     });
     expect(
       workflowDestinations("app-1", detail({ document_id: "doc-1", preparation_state: "draft_in_progress" })),
@@ -41,7 +48,7 @@ describe("workflowDestinations", () => {
      destination beside it, so the rail offers the way back to the draft. */
   it("offers both the ready document and the way back to its draft", () => {
     expect(workflowDestinations("app-1", detail({ document_id: "doc-1", preparation_state: "ready" }))).toEqual({
-      analysis: "/applications/app-1",
+      analysis: "/applications/app-1/analysis",
       draft: "/applications/app-1/draft",
       ready: "/applications/app-1/ready",
     });
