@@ -1399,7 +1399,7 @@
       },
       "CaptureClaimFactRequest": {
         "additionalProperties": false,
-        "description": "A fact created from an unsupported manual claim in the document.\n\nThe claim's exact text is copied without AI rewriting, so `renderings` is\nabsent: the English rendering comes from the claim itself. Everything the\nclaim cannot supply - meaning, tags, provenance - is explicit input.",
+        "description": "A fact created from an unsupported manual claim in the document.\n\nThe claim's exact text is copied without AI rewriting, so `renderings` is\nabsent: the English rendering comes from the claim itself. Everything the\nclaim cannot supply - meaning, tags - is explicit input.",
         "properties": {
           "application_id": {
             "title": "Application Id",
@@ -1447,11 +1447,6 @@
             "title": "Meaning",
             "type": "string"
           },
-          "provenance": {
-            "minLength": 1,
-            "title": "Provenance",
-            "type": "string"
-          },
           "reason": {
             "default": "",
             "title": "Reason",
@@ -1492,8 +1487,7 @@
           "claim_id",
           "source",
           "meaning",
-          "tags",
-          "provenance"
+          "tags"
         ],
         "title": "CaptureClaimFactRequest",
         "type": "object"
@@ -2766,7 +2760,7 @@
       },
       "EditPendingFactRequest": {
         "additionalProperties": false,
-        "description": "What a pending fact says, changed before it is confirmed (§17 `edit_pending_fact`).\n\nOnly the fields sent change. Identity, source, style, and provenance are not\neditable: provenance records where the fact came from (for a gap answer, the\nuser's own answer), and an edit does not change that.",
+        "description": "What a pending fact says, changed before it is confirmed (§17 `edit_pending_fact`).\n\nOnly the fields sent change. Identity, source, and style are not editable.",
         "properties": {
           "effective_dates": {
             "anyOf": [
@@ -2988,7 +2982,7 @@
       },
       "FactContentRequest": {
         "additionalProperties": false,
-        "description": "What a new fact says. Identity is generated, so it is not accepted here.\n\n`renderings` is the language-keyed display text; English is required by the\ndomain model. Meaning, tags, and provenance require explicit input and are\nnever inferred or AI-written.",
+        "description": "What a new fact says. Identity is generated, so it is not accepted here.\n\n`renderings` is the language-keyed display text; English is required by the\ndomain model. Meaning and tags require explicit input and are never\ninferred or AI-written.",
         "properties": {
           "effective_dates": {
             "anyOf": [
@@ -3004,11 +2998,6 @@
           "meaning": {
             "minLength": 1,
             "title": "Meaning",
-            "type": "string"
-          },
-          "provenance": {
-            "minLength": 1,
-            "title": "Provenance",
             "type": "string"
           },
           "reason": {
@@ -3070,7 +3059,6 @@
           "meaning",
           "renderings",
           "tags",
-          "provenance",
           "resume_style"
         ],
         "title": "FactContentRequest",
@@ -3363,10 +3351,6 @@
             "title": "Meaning",
             "type": "string"
           },
-          "provenance": {
-            "title": "Provenance",
-            "type": "string"
-          },
           "renderings": {
             "additionalProperties": {
               "type": "string"
@@ -3410,7 +3394,6 @@
           "renderings",
           "tags",
           "status",
-          "provenance",
           "source",
           "resume_style"
         ],

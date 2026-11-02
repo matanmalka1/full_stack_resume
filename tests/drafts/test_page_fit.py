@@ -34,7 +34,6 @@ def _fact(fact_id: str, style: str = "bullet", tags: list[str] | None = None) ->
         renderings={"en": fact_id},
         tags=tags or [],
         status=FactStatus.CANONICAL,
-        provenance="test",
         resume_style=style,  # type: ignore[arg-type]
     )
 

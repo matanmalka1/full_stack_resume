@@ -1228,7 +1228,7 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
     }
     assert supplied
     assert supplied < every_fact
-    # Nothing about lifecycle, provenance, or where a fact is stored.
+    # Nothing about lifecycle or where a fact is stored.
     assert set(payload["allowed_facts"][0]) == {
         "fact_id",
         "meaning",

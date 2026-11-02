@@ -199,7 +199,6 @@ def test_worker_reads_knowledge_for_the_operations_owner(
                 "meaning": text,
                 "renderings": {"en": text},
                 "tags": ["situational"],
-                "provenance": "explicit worker isolation fixture",
                 "resume_style": "bullet",
             },
         )

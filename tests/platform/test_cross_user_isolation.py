@@ -78,7 +78,6 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
             "meaning": "Owner Secret Fact",
             "renderings": {"en": "Owner Secret Fact"},
             "tags": ["situational"],
-            "provenance": "explicit test fact",
             "resume_style": "bullet",
         },
     ).fact
@@ -317,7 +316,6 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
                     "meaning": "foreign claim",
                     "tags": ["situational"],
                     "english": "foreign claim",
-                    "provenance": "test",
                 },
             ),
             ("POST", "/api/v1/facts/{fact_id}/attachments"): ForeignRequest(

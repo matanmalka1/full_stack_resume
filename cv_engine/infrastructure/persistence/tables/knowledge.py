@@ -71,7 +71,6 @@ facts = Table(
     Column("meaning", Text, nullable=False),
     Column("renderings", JSONB, nullable=False),
     Column("tags", JSONB, nullable=False),
-    Column("provenance", Text, nullable=False),
     Column("effective_dates", Text),
     Column("resume_style", Text, nullable=False),
     Column("link_target", Text),

@@ -14,7 +14,6 @@
         "company"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -35,7 +34,6 @@
         "customers"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -56,7 +54,6 @@
         "field-sales"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7.1; explicitly canonical, location Tel Aviv District rendered as Tel Aviv to match the Development entry",
       "confirmed_at": "2026-08-16",
       "effective_dates": "2019-03/2020-08",
       "replaces": null,
@@ -76,7 +73,6 @@
         "date"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": "2019-03/2020-08",
       "replaces": null,
@@ -97,7 +93,6 @@
         "leadership"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7.1; explicitly canonical, location Tel Aviv District rendered as Tel Aviv to match the Development entry",
       "confirmed_at": "2026-08-16",
       "effective_dates": "2020-08/2025-01",
       "replaces": null,
@@ -118,7 +113,6 @@
         "leadership"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": "2020-08/2025-01",
       "replaces": null,
@@ -139,7 +133,6 @@
         "summary"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -160,7 +153,6 @@
         "summary"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -182,7 +174,6 @@
         "summary"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -203,7 +194,6 @@
         "summary"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -225,7 +215,6 @@
         "summary"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -247,7 +236,6 @@
         "verified-quantitative"
       ],
       "status": "canonical",
-      "provenance": "User wording confirmation 2026-08-17; span follows from canonical role dates 2019-03/2025-01",
       "confirmed_at": "2026-08-17",
       "effective_dates": "2019-03/2025-01",
       "replaces": null,
@@ -268,7 +256,6 @@
         "new-business"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -289,7 +276,6 @@
         "communication"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -310,7 +296,6 @@
         "consultative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -331,7 +316,6 @@
         "commercial"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -352,7 +336,6 @@
         "closing"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -373,7 +356,6 @@
         "post-sales"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -394,7 +376,6 @@
         "account-growth"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -415,7 +396,6 @@
         "verified-quantitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -436,7 +416,6 @@
         "verified-quantitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -457,7 +436,6 @@
         "verified-quantitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": "legacy.team_size.3-4",
@@ -478,7 +456,6 @@
         "verified-quantitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": "legacy.revenue.30-yoy",
@@ -499,7 +476,6 @@
         "verified-quantitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -520,7 +496,6 @@
         "player-coach"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -542,7 +517,6 @@
         "forecasting"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -563,7 +537,6 @@
         "coaching"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -584,7 +557,6 @@
         "commercial"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -605,7 +577,6 @@
         "strategic-accounts"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -626,7 +597,6 @@
         "erp"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -647,7 +617,6 @@
         "analytics"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -668,7 +637,6 @@
         "communication"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -689,7 +657,6 @@
         "verified-quantitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -710,7 +677,6 @@
         "verified-quantitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -731,7 +697,6 @@
         "velocity"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -752,7 +717,6 @@
         "verified-qualitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -773,7 +737,6 @@
         "verified-qualitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -794,7 +757,6 @@
         "verified-qualitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -815,7 +777,6 @@
         "verified-qualitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -836,7 +797,6 @@
         "verified-qualitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -857,7 +817,6 @@
         "verified-qualitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -879,7 +838,6 @@
         "verified-qualitative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -901,7 +859,6 @@
         "boundary"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -922,7 +879,6 @@
         "career-narrative"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 8; binding narrative",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,

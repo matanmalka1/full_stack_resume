@@ -13,7 +13,6 @@
         "summary"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -32,7 +31,6 @@
         "historical-title"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": "2025-02/2026-06",
       "replaces": null,
@@ -51,7 +49,6 @@
         "date"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; months supplied by the user 2026-08-17 from their LinkedIn employment record (Feb 2025 - Jun 2026, 1 yr 5 mos)",
       "confirmed_at": null,
       "effective_dates": "2025-02/2026-06",
       "replaces": null,
@@ -71,7 +68,6 @@
         "full-stack"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; TypeScript added on explicit user confirmation 2026-08-17 that the main PH.Digital production applications were written in TypeScript",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -91,7 +87,6 @@
         "databases"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -111,7 +106,6 @@
         "testing"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -131,7 +125,6 @@
         "nextjs"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -151,7 +144,6 @@
         "backend"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -171,7 +163,6 @@
         "agile"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -191,7 +182,6 @@
         "backend"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -211,7 +201,6 @@
         "frontend"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; Tailwind CSS surfaced on user confirmation 2026-08-17 from canonical development.phdigital.nextjs and situational.vite_tailwind",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -231,7 +220,6 @@
         "ai"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -251,7 +239,6 @@
         "databases"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -271,7 +258,6 @@
         "devops"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; pytest and Vitest surfaced on user confirmation 2026-08-17 from canonical situational.testing and development.phdigital.nextjs",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -291,7 +277,6 @@
         "full-stack"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -311,7 +296,6 @@
         "backend"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -332,7 +316,6 @@
         "freelance"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -353,7 +336,6 @@
         "nextjs"
       ],
       "status": "canonical",
-      "provenance": "Summary restatement of canonical development.phdigital.nextjs and development.skills.frontend; no new claim. User request 2026-08-17 to lead with TypeScript/React positioning.",
       "confirmed_at": "2026-08-17",
       "effective_dates": null,
       "replaces": null,
@@ -374,7 +356,6 @@
         "databases"
       ],
       "status": "canonical",
-      "provenance": "Summary restatement of canonical development.phdigital.fullstack and development.phdigital.crm; no new claim. User request 2026-08-17.",
       "confirmed_at": "2026-08-17",
       "effective_dates": null,
       "replaces": null,
@@ -396,7 +377,6 @@
         "devops"
       ],
       "status": "canonical",
-      "provenance": "Summary restatement of canonical development.phdigital.fullstack and development.phdigital.cicd; no new claim. User request 2026-08-17.",
       "confirmed_at": "2026-08-17",
       "effective_dates": null,
       "replaces": null,
@@ -418,7 +398,6 @@
         "nodejs"
       ],
       "status": "canonical",
-      "provenance": "Project name as published; verified against https://github.com/matanmalka1/mm-backend-core and npm mm-backend-core@2.0.2.",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -438,7 +417,6 @@
         "open-source"
       ],
       "status": "canonical",
-      "provenance": "Both URLs resolved 2026-08-17: npm registry returned mm-backend-core@2.0.2 (MIT, node>=18); GitHub API returned a public JavaScript repository.",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -461,7 +439,6 @@
         "testing"
       ],
       "status": "canonical",
-      "provenance": "User statement 2026-08-17, independently verified against https://github.com/matanmalka1/mm-backend-core (public, JavaScript, MIT) and the npm registry (mm-backend-core@2.0.2, engines node>=18); template package.json confirms express@5, mongoose, passport OAuth, jsonwebtoken, multer, zod, helmet, express-rate-limit, express-mongo-sanitize, winston, vitest, supertest. Personal/open-source work; not attributable to PH.Digital.",
       "confirmed_at": "2026-08-17",
       "effective_dates": null,
       "replaces": null,

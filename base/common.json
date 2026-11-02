@@ -13,7 +13,6 @@
         "contact"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md and every rendered v1 CV; relocated into its canonical location for v2 without change",
       "confirmed_at": "2026-08-17",
       "effective_dates": null,
       "replaces": null,
@@ -31,7 +30,6 @@
         "contact"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -50,7 +48,6 @@
         "phone"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -69,7 +66,6 @@
         "email"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -88,7 +84,6 @@
         "linkedin"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -109,7 +104,6 @@
         "development"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -128,7 +122,6 @@
         "language"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -146,7 +139,6 @@
         "language"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -164,7 +156,6 @@
         "language"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -182,7 +173,6 @@
         "language"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -200,7 +190,6 @@
         "logistics"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -218,7 +207,6 @@
         "logistics"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -237,7 +225,6 @@
         "field-sales"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -257,7 +244,6 @@
         "sales"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
       "confirmed_at": "2026-08-16",
       "effective_dates": null,
       "replaces": null,
@@ -276,7 +262,6 @@
         "development"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": "2024-2025",
       "replaces": null,

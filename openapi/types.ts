@@ -1537,7 +1537,7 @@ export interface components {
          *
          *     The claim's exact text is copied without AI rewriting, so `renderings` is
          *     absent: the English rendering comes from the claim itself. Everything the
-         *     claim cannot supply - meaning, tags, provenance - is explicit input.
+         *     claim cannot supply - meaning, tags - is explicit input.
          */
         CaptureClaimFactRequest: {
             /** Application Id */
@@ -1552,8 +1552,6 @@ export interface components {
             hebrew?: string | null;
             /** Meaning */
             meaning: string;
-            /** Provenance */
-            provenance: string;
             /**
              * Reason
              * @default
@@ -2043,9 +2041,7 @@ export interface components {
          * EditPendingFactRequest
          * @description What a pending fact says, changed before it is confirmed (§17 `edit_pending_fact`).
          *
-         *     Only the fields sent change. Identity, source, style, and provenance are not
-         *     editable: provenance records where the fact came from (for a gap answer, the
-         *     user's own answer), and an edit does not change that.
+         *     Only the fields sent change. Identity, source, and style are not editable.
          */
         EditPendingFactRequest: {
             /** Effective Dates */
@@ -2143,16 +2139,14 @@ export interface components {
          * @description What a new fact says. Identity is generated, so it is not accepted here.
          *
          *     `renderings` is the language-keyed display text; English is required by the
-         *     domain model. Meaning, tags, and provenance require explicit input and are
-         *     never inferred or AI-written.
+         *     domain model. Meaning and tags require explicit input and are never
+         *     inferred or AI-written.
          */
         FactContentRequest: {
             /** Effective Dates */
             effective_dates?: string | null;
             /** Meaning */
             meaning: string;
-            /** Provenance */
-            provenance: string;
             /**
              * Reason
              * @default
@@ -2284,8 +2278,6 @@ export interface components {
             link_target?: string | null;
             /** Meaning */
             meaning: string;
-            /** Provenance */
-            provenance: string;
             /** Renderings */
             renderings: {
                 [key: string]: string;

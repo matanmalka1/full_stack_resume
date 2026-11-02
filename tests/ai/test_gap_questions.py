@@ -288,7 +288,6 @@ def test_an_answer_becomes_a_pending_fact_with_the_answer_as_its_evidence(
     fact = ai_services.knowledge_queries.show_fact(actor, output.output_id).fact
     assert fact.status is FactStatus.PENDING
     assert fact.source_file.endswith("situational_skills.json")
-    assert answer in fact.provenance
     assert fact.tags[:2] == ["sales", "situational"]
     assert "not-a-known-tag" not in fact.tags
 
@@ -309,7 +308,6 @@ def test_an_answer_becomes_a_pending_fact_with_the_answer_as_its_evidence(
         actor, fact.fact_id, renderings={"en": "Owned the sales cycle for 12 SMB accounts."}
     )
     assert edited.fact.renderings["en"] == "Owned the sales cycle for 12 SMB accounts."
-    assert edited.fact.provenance == fact.provenance
     confirmed = ai_services.knowledge_lifecycle.confirm_fact(
         actor, fact.fact_id, explicitly_confirmed=True
     )

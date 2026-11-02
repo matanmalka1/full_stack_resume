@@ -37,7 +37,6 @@ class Fact(StrictModel):
     renderings: dict[str, str]
     tags: list[str]
     status: FactStatus
-    provenance: str = Field(min_length=1)
     confirmed_at: str | None = None
     effective_dates: str | None = None
     replaces: str | None = None
