@@ -157,7 +157,6 @@ const fieldLabels: Record<string, string> = {
   renderings: "ניסוח העובדה",
   english: "ניסוח באנגלית",
   tags: "תגיות",
-  provenance: "מקור המידע",
   resume_style: "סגנון קורות החיים",
   submitted_at: "מועד ההגשה",
 };

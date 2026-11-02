@@ -16,11 +16,9 @@ from helpers import (
     validate_active_draft,
 )
 from helpers import working_claim as _working_claim
-from pydantic import ValidationError
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import ProgrammingError
 
-from cv_engine.api.schemas.facts import CaptureClaimFactRequest
 from cv_engine.application.commands import AnalyzeCommand, BuildFromAnalysisCommand
 from cv_engine.application.errors import (
     KnowledgeRejected,
@@ -42,7 +40,6 @@ NEW_FACT = {
     "meaning": "Used PostgreSQL for local application state in a personal project.",
     "renderings": {"en": "Used PostgreSQL for local application state in a personal project."},
     "tags": ["development", "situational", "databases"],
-    "provenance": "candidate wording from the user; not yet verified",
     "resume_style": "bullet",
 }
 
@@ -396,7 +393,6 @@ def test_lifecycle_survives_process_boundaries_over_http(
             "meaning": NEW_FACT["meaning"],
             "renderings": NEW_FACT["renderings"],
             "tags": ["development", "situational"],
-            "provenance": NEW_FACT["provenance"],
             "resume_style": "bullet",
         },
     )
@@ -476,18 +472,6 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     to it and validate. The draft is rebuilt after confirmation because a new
     canonical fact changes the canonical surface the draft was built from.
     """
-    # Capture over HTTP names its provenance explicitly; it is never defaulted.
-    with pytest.raises(ValidationError):
-        CaptureClaimFactRequest.model_validate(
-            {
-                "application_id": "application",
-                "claim_id": "claim",
-                "source": "sales.json",
-                "meaning": "candidate introduced a weekly pipeline review",
-                "tags": ["sales", "pipeline"],
-            }
-        )
-
     setup = drafted_application("Lifecycle Co")
     services, app_id = setup
     claim = _working_claim(services, app_id, "sales.cycle.account_management")

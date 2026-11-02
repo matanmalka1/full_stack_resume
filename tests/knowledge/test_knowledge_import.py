@@ -41,7 +41,6 @@ PENDING_FACT = {
     "meaning": "Used PostgreSQL for local application state in a personal project.",
     "renderings": {"en": "Used PostgreSQL for local application state in a personal project."},
     "tags": ["development", "situational", "databases"],
-    "provenance": "candidate wording from the user; not yet verified",
     "resume_style": "bullet",
 }
 
@@ -122,10 +121,9 @@ def test_rows_carry_each_fact_its_source_order_and_the_split_profiles(
     for row in rows:
         fact = knowledge.facts.facts[row["fact_id"]]
         assert fact.source_file == f"base/{row['source']}.json"
-        assert (row["meaning"], row["renderings"], row["provenance"], row["confirmed_at"]) == (
+        assert (row["meaning"], row["renderings"], row["confirmed_at"]) == (
             fact.meaning,
             fact.renderings,
-            fact.provenance,
             fact.confirmed_at,
         )
     for source in {row["source"] for row in rows}:

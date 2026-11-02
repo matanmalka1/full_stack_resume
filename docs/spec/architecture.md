@@ -442,7 +442,7 @@ Application.
 - **`facts`** (mutable): `id` (internal UUID), `user_id`, `fact_id` (the ID documents
   cite; `UNIQUE (user_id, fact_id)`), `status`, `source` (`common`, `development`,
   `sales`, `situational_skills`, or `user`), `ordinal`, `meaning`, `renderings` (`en`
-  required), `tags`, `provenance`, `effective_dates`, `resume_style`, `link_target`,
+  required), `tags`, `effective_dates`, `resume_style`, `link_target`,
   `replaces` (history only, no foreign key), `confirmed_at`, `created_at`,
   `updated_at`. A trigger refuses changes to `id`, `user_id`, `fact_id`, `source`,
   `ordinal`, `created_at`, and refuses deletes.

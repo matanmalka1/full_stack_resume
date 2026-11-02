@@ -176,7 +176,6 @@ def create_fact_from_claim(
         tags=request.tags,
         english=request.english,
         hebrew=request.hebrew,
-        provenance=request.provenance,
         effective_dates=request.effective_dates,
         replaces=request.replaces,
         reason=request.reason,

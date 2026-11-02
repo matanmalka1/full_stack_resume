@@ -183,7 +183,9 @@
   /* Radii, from the inside out: a row inside a list or a segment inside a switch (8px),
      a small control - the quick-search field, a switch's track, a compact button
      (10px) - a full-size control or field (12px), a card (16px), a centred dialog
-     (22px), a sheet and an empty state's frame (24px). */
+     (22px), a sheet and an empty state's frame (24px). A checkbox's box is the one
+     exception below an item (6px): at 20px across, a control's radius draws a circle. */
+  --radius-check: 0.375rem;
   --radius-item: 0.5rem;
   --radius-control-sm: 0.625rem;
   --radius-control: 0.75rem;

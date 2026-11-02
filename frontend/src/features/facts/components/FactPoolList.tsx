@@ -93,7 +93,7 @@ export const FactPoolList = ({
       <caption className="sr-only">רשימת העובדות</caption>
       <thead className="max-lg:hidden">
         <tr className="bg-cv-canvas">
-          {["עובדה", "סוג הצגה", "מקור", "מעמד"].map((heading) => (
+          {["עובדה", "סוג הצגה", "מעמד"].map((heading) => (
             <th className="px-4.5 py-3 text-start text-caption font-bold text-cv-text-muted" key={heading} scope="col">
               {heading}
             </th>
@@ -105,7 +105,7 @@ export const FactPoolList = ({
           <tr className="lg:border-t lg:border-cv-hairline lg:bg-cv-canvas">
             <th
               className="pb-2 text-start text-support font-bold text-cv-text-muted max-lg:block lg:px-4.5 lg:py-2 lg:text-caption"
-              colSpan={4}
+              colSpan={3}
               scope="colgroup"
             >
               <span className="flex items-baseline justify-between gap-3">
@@ -147,7 +147,7 @@ export const FactPoolList = ({
                       {factLabel(fact)}
                     </Link>
                     {context === "" ? null : (
-                      <span className="block truncate text-caption text-cv-text-muted lg:hidden" dir="auto">
+                      <span className="block truncate text-caption text-cv-text-muted" dir="auto">
                         {context}
                       </span>
                     )}
@@ -159,9 +159,6 @@ export const FactPoolList = ({
                   ) : null}
                 </td>
                 <td className="px-4.5 py-3 text-cv-text-muted max-lg:hidden">{factStyleLabel(fact.resume_style)}</td>
-                <td className="max-w-60 truncate px-4.5 py-3 text-cv-text-muted max-lg:hidden" dir="auto">
-                  {context === "" ? "—" : context}
-                </td>
                 <td className="px-4.5 py-3 max-lg:shrink-0 max-lg:p-0">
                   <StatusCell fact={fact} />
                 </td>

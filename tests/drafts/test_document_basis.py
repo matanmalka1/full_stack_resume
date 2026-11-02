@@ -36,7 +36,6 @@ def _fact(fact_id: str, text: str = "Built APIs", **changes) -> Fact:
         "renderings": {"en": text},
         "tags": [],
         "status": FactStatus.CANONICAL,
-        "provenance": "cv_base.md",
         "resume_style": "bullet",
         "source_file": "base/facts.md",
     }

@@ -14,7 +14,6 @@
         "testing"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -34,7 +33,6 @@
         "ai-assisted"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -54,7 +52,6 @@
         "frontend"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -74,7 +71,6 @@
         "configuration"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -94,7 +90,6 @@
         "databases"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -114,7 +109,6 @@
         "validation"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -134,7 +128,6 @@
         "frontend"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -154,7 +147,6 @@
         "monitoring"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -174,7 +166,6 @@
         "async"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -194,7 +185,6 @@
         "oauth"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -214,7 +204,6 @@
         "machine-learning"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -234,7 +223,6 @@
         "ai-assisted"
       ],
       "status": "canonical",
-      "provenance": "Verified in the repository 2026-08-19: docs/v2/process/execution-protocol.md defines roles, waves, exclusive file ownership and per-lane worktree isolation; docs/v2/records/architecture-audit.md section 4 records the staged plan; git worktree list shows main and v2-main. Candidate wording proposed from that evidence; not user-authored.",
       "confirmed_at": "2026-08-19",
       "effective_dates": null,
       "replaces": null,
@@ -254,7 +242,6 @@
         "ai-assisted"
       ],
       "status": "canonical",
-      "provenance": "Verified 2026-08-19: ~/.claude/skills/review-frontend/SKILL.md declares name, description, argument-hint, allowed-tools (including MCP tools) and model. One skill observed; plural wording needs user confirmation.",
       "confirmed_at": "2026-08-19",
       "effective_dates": null,
       "replaces": null,
@@ -274,7 +261,6 @@
         "ai-assisted"
       ],
       "status": "canonical",
-      "provenance": "Verified 2026-08-19: ~/.claude/mcp.json configures two stdio MCP servers (render, stitch). Configuration and use only; no evidence of authoring an MCP server.",
       "confirmed_at": "2026-08-19",
       "effective_dates": null,
       "replaces": null,
@@ -294,7 +280,6 @@
         "ai-assisted"
       ],
       "status": "canonical",
-      "provenance": "Verified 2026-08-19: CLAUDE.md (AGENTS.md symlink) in resume_python defines authority order, scope discipline, fact/AI boundaries and stop conditions; .codex/rules/pytest.rules constrains a second agent tool.",
       "confirmed_at": "2026-08-19",
       "effective_dates": null,
       "replaces": null,

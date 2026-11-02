@@ -9,7 +9,6 @@ export interface FactFormFields {
   english: string;
   hebrew: string;
   meaning: string;
-  provenance: string;
   source: FactSource;
   style: FactStyle;
   tags: string;
@@ -25,7 +24,6 @@ export const emptyFactForm = (profile: string | null, meaning = ""): FactFormFie
   english: "",
   hebrew: "",
   meaning,
-  provenance: "",
   source: defaultFactSource(profile),
   style: "bullet",
   tags: "",
@@ -35,7 +33,6 @@ export const replacementFactForm = (fact: Fact): FactFormFields => ({
   english: fact.renderings.en ?? "",
   hebrew: fact.renderings.he ?? "",
   meaning: fact.meaning,
-  provenance: fact.provenance,
   source: fact.source as FactSource,
   style: fact.resume_style as FactStyle,
   tags: fact.tags.join(", "),
@@ -53,6 +50,5 @@ export const parseFactTags = (value: string): string[] =>
 export const factFieldRules = {
   english: { validate: (value: string) => value.trim() !== "" || "יש להזין ניסוח באנגלית." },
   meaning: { validate: (value: string) => value.trim() !== "" || "יש להזין משמעות." },
-  provenance: { validate: (value: string) => value.trim() !== "" || "יש להזין מקור ואימות." },
   tags: { validate: (value: string) => parseFactTags(value).length > 0 || "יש להזין תגית אחת לפחות." },
 } as const;

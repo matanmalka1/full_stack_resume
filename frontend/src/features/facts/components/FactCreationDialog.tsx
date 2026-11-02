@@ -11,7 +11,6 @@ import {
   FactEnglishField,
   FactHebrewRenderingField,
   FactMeaningField,
-  FactProvenanceField,
   FactSourceField,
   FactStyleField,
   FactTagsField,
@@ -23,7 +22,6 @@ const serverFields = {
   renderings: "english",
   en: "english",
   tags: "tags",
-  provenance: "provenance",
 } as const satisfies Record<string, keyof FactFormFields>;
 
 interface FactCreationDialogProps {
@@ -46,8 +44,8 @@ interface FactCreationDialogProps {
 
    Laid out as the design draws it - the kind as a row of pills, then the fields in pairs:
    the two wordings side by side, the tags beside the knowledge file. The design has no
-   place for the fact's meaning or its provenance, but the store requires both and never
-   infers them, so they close the form as a third pair. A phone stacks every pair and
+   place for the fact's meaning, but the store requires it and never infers it, so it
+   closes the form. A phone stacks every pair and
    ends the sheet on its one command; its X is the way out.
 
    The same dialog serves the correction of a canonical fact - same command, same pending
@@ -103,7 +101,6 @@ export const FactCreationDialog = ({
         ...(fields.hebrew.trim() === "" ? {} : { he: fields.hebrew.trim() }),
       },
       tags: parseFactTags(fields.tags),
-      provenance: fields.provenance.trim(),
       resume_style: fields.style,
       ...(replaces === undefined ? {} : { replaces }),
       reason,
@@ -144,7 +141,6 @@ export const FactCreationDialog = ({
           <FactTagsField errors={errors} register={register} />
           <FactSourceField register={register} />
           <FactMeaningField errors={errors} register={register} />
-          <FactProvenanceField errors={errors} register={register} />
         </div>
         {create.error === null ? null : (
           <ErrorCallout

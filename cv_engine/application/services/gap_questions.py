@@ -138,16 +138,6 @@ def _examples(knowledge: Knowledge) -> list[dict[str, object]]:
     return picked
 
 
-def _provenance(question: GapQuestionRecord, answer: str) -> str:
-    """The fact's evidence: the user's own answer, verbatim, and what it answered."""
-    return (
-        "Drafted by AI from the user's own answer to a gap question "
-        f"(application {question.application_id}, requirement {question.requirement_id}: "
-        f'"{question.requirement_text}"). Question: {question.question} '
-        f"Answer: {answer}"
-    )
-
-
 class GapQuestionActivation:
     """What the two Operations write, in the runner's activation scope.
 
@@ -436,7 +426,6 @@ class GapQuestionService:
                 "meaning": meaning,
                 "renderings": renderings,
                 "tags": fact_tags(proposal.tags, vocabulary, track),
-                "provenance": _provenance(question, answer),
                 "resume_style": proposal.resume_style,
                 "effective_dates": None,
                 "replaces": None,

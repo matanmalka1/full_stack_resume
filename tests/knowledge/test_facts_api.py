@@ -20,7 +20,6 @@ def _content(**overrides) -> dict:
         "meaning": "candidate has production PostgreSQL experience",
         "renderings": {"en": "PostgreSQL"},
         "tags": ["database"],
-        "provenance": "stated by the candidate",
         "resume_style": "item",
         **overrides,
     }

@@ -8,7 +8,6 @@ import { FactsPage } from "./FactsPage";
 const fact = (overrides: Partial<Fact> = {}): Fact => ({
   fact_id: "fact.backend",
   meaning: "Built backend services",
-  provenance: "Confirmed by candidate",
   renderings: { en: "Built backend services", he: "בניית שירותי Backend" },
   resume_style: "bullet",
   source: "development.json",

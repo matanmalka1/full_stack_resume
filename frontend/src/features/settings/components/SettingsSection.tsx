@@ -1,6 +1,7 @@
 import { ChevronLeft } from "lucide-react";
 import { type ReactNode, type SelectHTMLAttributes, useId } from "react";
 
+import { CheckboxBox } from "@/ui/Checkbox";
 import { cx } from "@/ui/cx";
 import { cardClasses } from "@/ui/surface";
 
@@ -91,8 +92,8 @@ export const SettingsSelectRow = ({
   );
 };
 
-/* An on/off setting. The design draws it as the platform's own checkbox in the accent
-   colour; `role="switch"` announces it as on/off, and the row's name is its label. */
+/* An on/off setting, drawn as the app's one checkbox; `role="switch"` announces it as
+   on/off, and the row's name is its label. */
 export const SettingsSwitchRow = ({
   checked,
   label,
@@ -109,14 +110,12 @@ export const SettingsSwitchRow = ({
       <label className={cx(rowLabelClasses, "cursor-pointer")} htmlFor={id}>
         {label}
       </label>
-      <input
+      <CheckboxBox
         aria-checked={checked}
         checked={checked}
-        className="size-6.5 shrink-0 cursor-pointer accent-cv-accent lg:size-5.5"
         id={id}
         onChange={(event) => onChange(event.target.checked)}
         role="switch"
-        type="checkbox"
       />
     </div>
   );

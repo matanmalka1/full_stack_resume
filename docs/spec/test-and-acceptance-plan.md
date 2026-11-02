@@ -254,7 +254,7 @@ stable across prompt versions; injected instructions don't change requirements, 
 Fit, or coverage; no provider means no analysis.
 
 **Gap questions.** Only unmet requirements are asked about, mandatory first and capped;
-an answer becomes a pending fact with the answer as provenance and only known tags; a
+an answer becomes a pending fact with only known tags, and stays on its question; a
 draft that adds a number or a named term, or lacks a Hebrew rendering, is refused and
 saves nothing; one outcome per question; a pending draft can be edited, then confirmed.
 `tests/ai/test_gap_questions.py`.

@@ -23,7 +23,6 @@ _FACT_COLUMNS = (
     "meaning",
     "renderings",
     "tags",
-    "provenance",
     "effective_dates",
     "resume_style",
     "link_target",

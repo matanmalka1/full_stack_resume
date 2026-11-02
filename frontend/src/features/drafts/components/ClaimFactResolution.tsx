@@ -16,7 +16,6 @@ import {
   emptyFactForm,
   FactCoreFields,
   FactEventHistory,
-  FactProvenanceField,
   FactSourceField,
   FactTagsField,
   factLabelInLanguage,
@@ -52,7 +51,6 @@ const captureServerFields = {
   meaning: "meaning",
   english: "english",
   tags: "tags",
-  provenance: "provenance",
 } as const satisfies Record<string, keyof FactFormFields>;
 
 /* Turning an unsupported line of the draft into a fact the CV is allowed to carry. The
@@ -154,7 +152,6 @@ export const ClaimFactResolution = ({
       source: fields.source,
       meaning: fields.meaning.trim(),
       tags: parseFactTags(fields.tags),
-      provenance: fields.provenance.trim(),
       reason: "captured from the contextual draft claim flow",
       ...(language === "he" ? { english: fields.english.trim() } : {}),
     });
@@ -192,7 +189,7 @@ export const ClaimFactResolution = ({
       {factId === null ? (
         <form className="mt-4 flex flex-col gap-3" onSubmit={captureForm.handleSubmit(submitCapture)}>
           <Callout title="הניסוח נשמר בדיוק" tone="neutral">
-            הטקסט של השורה יועתק כפי שהוא. השדות הבאים מתארים את משמעותו ומקורו ואינם נוצרים באמצעות AI.
+            הטקסט של השורה יועתק כפי שהוא. השדות הבאים מתארים את משמעותו ואינם נוצרים באמצעות AI.
           </Callout>
           <FactSourceField register={captureForm.register} />
           <FactCoreFields
@@ -201,7 +198,6 @@ export const ClaimFactResolution = ({
             showEnglish={language === "he"}
           />
           <FactTagsField {...captureFields} />
-          <FactProvenanceField {...captureFields} />
           <Button pending={capture.isPending} pendingLabel="יוצר עובדה…" type="submit">
             יצירת עובדה ממתינה
           </Button>
@@ -237,7 +233,7 @@ export const ClaimFactResolution = ({
           ) : (
             <form className="flex flex-col gap-3" onSubmit={confirmationForm.handleSubmit(() => useFact.mutate())}>
               <Checkbox {...confirmationForm.register("confirmed")}>
-                בדקתי את הניסוח, המשמעות, התגיות והמקור ואני מאשר לקדם, לצרף ולבחור את העובדה
+                בדקתי את הניסוח, המשמעות והתגיות ואני מאשר לקדם, לצרף ולבחור את העובדה
               </Checkbox>
               <Button disabled={!confirmed} pending={useFact.isPending} pendingLabel="מאשר ומשתמש…" type="submit">
                 אישור העובדה ושימוש בה

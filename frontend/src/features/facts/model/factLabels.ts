@@ -79,10 +79,9 @@ export const factLabel = (fact: Fact): string => fact.renderings.he ?? fact.rend
 export const factLabelInLanguage = (fact: Fact, language: string): string =>
   fact.renderings[language] ?? fact.renderings.en ?? fact.meaning;
 
-/* The line under a fact's wording on the pool and on its page: where it came from and,
-   when the store has them, its dates. A fact with neither has no line. */
-export const factContextLine = (fact: Fact): string =>
-  [fact.provenance, fact.effective_dates].filter((part) => part != null && part.trim() !== "").join(" · ");
+/* The line under a fact's wording on the pool and on its page: its dates, when the store
+   has them. A fact without dates has no line. */
+export const factContextLine = (fact: Fact): string => fact.effective_dates?.trim() ?? "";
 
 /* Sources that belong to no single career track. A fact filed under one of these is
    meant to be reused across tracks, so attaching it anywhere raises nothing. */

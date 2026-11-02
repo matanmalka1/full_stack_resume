@@ -362,7 +362,7 @@ class FactLifecycleService:
         Only a `pending` fact: it reaches no CV until confirmed, so its wording is
         still the user's to settle (a gap answer's draft is reviewed this way). A
         canonical fact is corrected by a replacement, and a deleted one not at all.
-        Identity, source, style, provenance, and status do not change. Appends a
+        Identity, source, style, and status do not change. Appends a
         `fact_edited` event carrying the fact as it now reads.
         """
         changes: dict[str, Any] = {
@@ -420,7 +420,6 @@ class FactLifecycleService:
         tags: list[str],
         english: str | None = None,
         hebrew: str | None = None,
-        provenance: str | None = None,
         effective_dates: str | None = None,
         replaces: str | None = None,
         reason: str = "",
@@ -472,11 +471,6 @@ class FactLifecycleService:
                 "meaning": meaning,
                 "renderings": renderings,
                 "tags": tags,
-                "provenance": provenance
-                or (
-                    f"captured from application {application_id} claim {claim_id}; "
-                    "candidate wording, not yet verified"
-                ),
                 "effective_dates": effective_dates,
                 "replaces": replaces,
                 "resume_style": claim.style,

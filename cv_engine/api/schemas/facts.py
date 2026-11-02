@@ -61,7 +61,6 @@ class FactResponse(HttpSchema):
     renderings: dict[str, str]
     tags: list[str]
     status: FactStatus
-    provenance: str
     source: str
     resume_style: str
     confirmed_at: str | None = None
@@ -181,15 +180,14 @@ class FactContentRequest(HttpSchema):
     """What a new fact says. Identity is generated, so it is not accepted here.
 
     `renderings` is the language-keyed display text; English is required by the
-    domain model. Meaning, tags, and provenance require explicit input and are
-    never inferred or AI-written.
+    domain model. Meaning and tags require explicit input and are never
+    inferred or AI-written.
     """
 
     source: FactSource
     meaning: str = Field(min_length=1)
     renderings: dict[str, str]
     tags: list[str] = Field(min_length=1)
-    provenance: str = Field(min_length=1)
     resume_style: Literal["paragraph", "heading", "date", "bullet", "item", "contact"]
     effective_dates: str | None = None
     replaces: str | None = None
@@ -201,7 +199,7 @@ class CaptureClaimFactRequest(HttpSchema):
 
     The claim's exact text is copied without AI rewriting, so `renderings` is
     absent: the English rendering comes from the claim itself. Everything the
-    claim cannot supply - meaning, tags, provenance - is explicit input.
+    claim cannot supply - meaning, tags - is explicit input.
     """
 
     application_id: str
@@ -211,7 +209,6 @@ class CaptureClaimFactRequest(HttpSchema):
     tags: list[str] = Field(min_length=1)
     english: str | None = None
     hebrew: str | None = None
-    provenance: str = Field(min_length=1)
     effective_dates: str | None = None
     replaces: str | None = None
     reason: str = ""
@@ -220,9 +217,7 @@ class CaptureClaimFactRequest(HttpSchema):
 class EditPendingFactRequest(HttpSchema):
     """What a pending fact says, changed before it is confirmed (§17 `edit_pending_fact`).
 
-    Only the fields sent change. Identity, source, style, and provenance are not
-    editable: provenance records where the fact came from (for a gap answer, the
-    user's own answer), and an edit does not change that.
+    Only the fields sent change. Identity, source, and style are not editable.
     """
 
     meaning: str | None = Field(default=None, min_length=1)
