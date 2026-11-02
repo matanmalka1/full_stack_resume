@@ -1,5 +1,5 @@
 import type { ApplicationPreset } from "@/api/contracts";
-import { cx } from "@/ui/cx";
+import { FilterChip } from "@/ui/FilterChip";
 
 type PresetSelection = ApplicationPreset | "all";
 
@@ -9,26 +9,19 @@ interface ApplicationPresetTabsProps {
   value: PresetSelection;
 }
 
-/* The four named slices of the board, drawn as one filter.
+/* The board's named slices, drawn as one row of quick filters - the only narrowing the
+   board offers. Finding one record by name is the quick search's.
 
-   These are the same counts and the same query the metric cards ran. What is gone is
-   the framing: a row of tinted, iconed tiles with display-sized numbers reads as a
-   dashboard the reader is meant to study, while this is the one question the list can
-   be narrowed by - a control, and sized like one. It sits in the page masthead beside
-   the title, ahead of the filter bar, because it is the first cut the reader makes.
-   The screen's weight belongs to the records underneath.
+   "דורש טיפול" is the one slice that asks for the reader rather than describing the board:
+   its count is a filled disc and its edge stronger, while it holds anything.
 
-   Each option is one compact pill. The count stays typographically distinct without
-   becoming a second badge inside the control.
-
-   On a phone the pills stay on one line and the row scrolls sideways, bleeding to the
-   screen's edges so a pill cut off at the edge says there is more. Wrapped, the four
-   pills took two lines of the masthead above the first record. */
+   On a phone the chips stay on one line and the row scrolls sideways, bleeding to the
+   screen's edges so a chip cut off at the edge says there is more. */
 const presetTabs: readonly { id: PresetSelection; label: string }[] = [
   { id: "all", label: "הכל" },
+  { id: "needs_attention", label: "דורש טיפול" },
   { id: "active_interviews", label: "ראיונות פעילים" },
   { id: "ready_to_send", label: "מוכן לשליחה" },
-  { id: "needs_attention", label: "דורש טיפול" },
 ];
 
 export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPresetTabsProps) => (
@@ -36,50 +29,23 @@ export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPr
   // pattern here, and none of the suggested native tags (fieldset, etc.) fit.
   <div
     aria-label="סינון מהיר לפי מצב"
-    className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 py-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
+    className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 py-0.5 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0 [&::-webkit-scrollbar]:hidden"
     // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
     role="group"
   >
     {presetTabs.map(({ id, label }) => {
-      const active = id === value;
-      const count = counts?.[id];
-      /* The one slice that asks for the reader, not just describes the board. While it
-         holds anything and is not already chosen, it is drawn a step louder: a mark, a
-         filled count, and a stronger edge. The count itself stays the accessible fact;
-         the emphasis adds nothing a screen reader would need. */
-      const waiting = id === "needs_attention" && !active && (count ?? 0) > 0;
-
+      const count = counts?.[id] ?? 0;
       return (
-        <button
-          aria-pressed={active}
-          className={cx(
-            "inline-flex min-h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-pill border px-3 text-support font-medium transition-colors",
-            active
-              ? "border-cv-accent bg-cv-accent text-cv-on-accent"
-              : waiting
-                ? "border-cv-border-strong bg-cv-surface-muted font-semibold text-cv-text hover:border-cv-accent"
-                : "border-cv-border bg-cv-surface-muted text-cv-text-muted hover:border-cv-border-strong hover:text-cv-text",
-          )}
-          data-emphasis={waiting ? "waiting" : undefined}
+        <FilterChip
+          count={count}
+          countVariant={id === "needs_attention" && count > 0 ? "badge" : "plain"}
           key={id}
           onClick={() => onSelect(id)}
-          type="button"
+          pressed={id === value}
         >
-          {waiting ? <span aria-hidden="true" className="size-1.5 shrink-0 rounded-pill bg-cv-accent" /> : null}
-          {label}
-          <span
-            className={cx(
-              "text-support font-semibold tabular-nums",
-              active
-                ? "text-cv-on-accent"
-                : waiting
-                  ? "rounded-pill bg-cv-accent px-1.5 text-cv-on-accent"
-                  : "text-cv-text-muted",
-            )}
-          >
-            {count ?? "—"}
-          </span>
-        </button>
+          {/* The space keeps the label and its count two words in the chip's name. */}
+          {label}{" "}
+        </FilterChip>
       );
     })}
   </div>

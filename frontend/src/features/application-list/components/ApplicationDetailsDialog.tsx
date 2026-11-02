@@ -1,209 +1,114 @@
-import { Download, ExternalLink, FileCheck2 } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { documentPdfHref } from "@/api/documents";
 import { routePaths } from "@/navigation/routePaths";
-import { sourceHostname } from "@/features/application-detail";
-import { preparationResumeDestination, preparationStateLabels, trackLabel } from "@/features/preparation";
-import { Button, buttonClasses } from "@/ui/Button";
+import {
+  confidenceText,
+  fitLevelLabel,
+  preparationResumeDestination,
+  preparationStateLabels,
+} from "@/features/preparation";
+import { recruitmentStatusLabel } from "@/features/recruitment";
+import { buttonClasses } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
-import { DateTime } from "@/ui/DateTime";
-import { applicationAttention, preparationProgress } from "../model/applicationListPresentation";
-import { ApplicationFitStatus, ApplicationRecruitmentStatus } from "./ApplicationListStatuses";
-import { ApplicationCardNextAction, nextActionHeading } from "./ApplicationCardNextAction";
+import { InitialTile } from "@/ui/InitialTile";
+import { nextStepText } from "../model/applicationListPresentation";
+import { recruitmentStageOf } from "../model/recruitmentStages";
 
-interface ApplicationDetailsDialogProps {
-  application: ApplicationListItem | null;
-  clearing: boolean;
-  onClearNextAction: (item: ApplicationListItem) => void;
-  onClose: () => void;
-  onRequestUpdate: (item: ApplicationListItem) => void;
-}
-
-/* On a phone each fact is a tile of its own in a two-by-two grid, its value a step
-   larger: the sheet is narrow, and four tiles read faster there than one box of pairs. */
-const Fact = ({ children, detail, label }: { children: ReactNode; detail?: ReactNode; label: string }) => (
-  <div className="flex min-w-0 flex-col items-start gap-1 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-canvas max-lg:px-3.5 max-lg:py-3">
+/* One labelled value on a soft tile - four of them in a two-by-two grid, as the design's
+   details sheet draws the Application's states. */
+const Fact = ({ children, label }: { children: ReactNode; label: string }) => (
+  <div className="flex min-w-0 flex-col gap-0.5 rounded-control border border-cv-hairline bg-cv-field-background px-3.5 py-3">
     <span className="text-support text-cv-text-muted">{label}</span>
-    <span className="text-support font-semibold text-cv-text max-lg:text-body max-lg:font-bold">{children}</span>
-    {detail === undefined ? null : <span className="text-support text-cv-text-muted tabular-nums">{detail}</span>}
+    <span className="text-label font-bold text-cv-text">{children}</span>
   </div>
 );
 
-/* The finished CV and its PDF, as demo_re offers them. The board's list item already says
-   the document is Ready and carries its hash, so the download is the document's own PDF -
-   which the server refuses unless the document is still Ready when it answers. The link to
-   the ready step is drawn only when the footer's primary command is not already that link. */
-const ReadyCv = ({
-  applicationId,
-  documentHash,
-  linkToReady,
-  onClose,
-}: {
-  applicationId: string;
-  documentHash: string;
-  linkToReady: boolean;
-  onClose: () => void;
-}) => (
-  <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-border p-3.5">
-    <span className="inline-flex items-center gap-2 text-support font-medium text-cv-text">
-      <FileCheck2 aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
-      קורות חיים מוכנים למשרה זו
-    </span>
-    <span className="flex flex-wrap items-center gap-2">
-      {linkToReady ? (
-        <Link
-          className={buttonClasses("secondary", undefined, "compact")}
-          onClick={onClose}
-          to={routePaths.ready(applicationId)}
-        >
-          פתיחת קורות החיים המוכנים
-        </Link>
-      ) : null}
-      <a
-        className={buttonClasses("secondary", undefined, "compact")}
-        href={documentPdfHref(applicationId, documentHash)}
-      >
-        <Download aria-hidden="true" className="size-icon-sm" />
-        הורדת PDF
-      </a>
-    </span>
-  </div>
+/* A block with a heading of its own: the next step, the reader's notes. */
+const Block = ({ children, label }: { children: ReactNode; label: string }) => (
+  <section aria-label={label} className="rounded-control border border-cv-hairline px-4 py-3.5">
+    <p className="text-support font-bold text-cv-text-muted">{label}</p>
+    <div className="mt-1 text-body text-cv-text">{children}</div>
+  </section>
 );
 
-/* One Application at a glance, laid out after demo_re's job-details modal: who, its
-   four states side by side, the one thing to do next, the finished CV, the posting, the
-   reader's notes and when it was opened and last changed.
+const fitText = (application: ApplicationListItem): string => {
+  if (application.fit_level == null) return "המשרה טרם נותחה";
+  return application.fit_score == null ? fitLevelLabel(application.fit_level) : confidenceText(application.fit_score);
+};
 
-   Each fact is said once. The finished CV has its own block, so the next-action block
-   leaves it out, and the block does not repeat the ready link when the footer's
-   primary command already goes there. The dialog's own
-   close control and Escape close it; the footer holds only the two ways onward.
-
-   It is read from the board's own list item alone, and every block is the card's own component, so the modal cannot say
-   something the card does not. It opens from a click on a card and from the "פרטי משרה"
-   control every record carries. */
+/* One Application at a glance, opened from a card in the stages view: who it is for, its
+   four states as tiles, the one thing to do next, the reader's notes, and the way into
+   the work. It is read from the board's own list item alone, so the sheet cannot say
+   something the card does not. Status updates, the posting and the record's commands are
+   the Application screen's - the sheet's one command goes there. */
 export const ApplicationDetailsDialog = ({
   application,
-  clearing,
-  onClearNextAction,
   onClose,
-  onRequestUpdate,
-}: ApplicationDetailsDialogProps) => {
+}: {
+  application: ApplicationListItem | null;
+  onClose: () => void;
+}) => {
   if (application === null) {
     return null;
   }
 
-  const { step, total } = preparationProgress(application.preparation_state);
-  const host = sourceHostname(application.source_url);
   const destination = preparationResumeDestination(application);
-  const readyHash = application.preparation_state === "ready" ? (application.document_hash ?? null) : null;
-  const continuesToReady = readyHash !== null && destination === routePaths.ready(application.id);
-  /* The finished CV has its own block below, so the next-action block reads the record
-     as if it had none: it then names only a run, a recommended step or the reminder,
-     and never a second "the CV is ready" or a second link to it. */
-  const hasNextStep =
-    nextActionHeading(application, applicationAttention(application) !== null, { omitReady: true }) !== null;
-
-  const description = (
-    <>
-      <span className="font-medium text-cv-text" dir="auto">
-        {application.target_role}
-      </span>
-      {application.track == null ? null : ` · ${trackLabel(application.track)}`}
-      {host === null || application.source_url == null ? null : (
-        <>
-          {" · "}
-          <a
-            className="inline-flex items-center gap-1 text-cv-accent hover:underline"
-            href={application.source_url}
-            rel="noreferrer"
-            target="_blank"
-          >
-            מודעת המשרה
-            <ExternalLink aria-hidden="true" className="size-icon-sm" />
-          </a>
-        </>
-      )}
-    </>
-  );
+  const toReady = destination === routePaths.ready(application.id);
+  const nextStep = nextStepText(application);
 
   return (
     <Dialog
+      description={<span dir="auto">{application.company}</span>}
       footer={
-        <>
-          <Button
-            className="me-auto"
-            onClick={() => {
-              onClose();
-              onRequestUpdate(application);
-            }}
-            variant="secondary"
-          >
-            עדכון סטטוס גיוס
-          </Button>
-          <Link className={buttonClasses("primary")} onClick={onClose} to={destination}>
-            {continuesToReady ? "פתיחת קורות החיים המוכנים" : "המשך בהכנה"}
-          </Link>
-        </>
+        <Link className={buttonClasses("primary", "w-full", "large")} onClick={onClose} to={destination}>
+          {toReady ? "פתיחת קורות החיים המוכנים" : "המשך בהכנה"}
+          <ChevronLeft aria-hidden="true" className="size-icon-md" />
+        </Link>
       }
-      description={description}
       headingId="application-details-heading"
       onClose={onClose}
       open
-      size="wide"
-      title={<span dir="auto">פרטי משרה: {application.company}</span>}
+      title={
+        <span className="flex items-center gap-3">
+          <InitialTile name={application.company} />
+          <span className="min-w-0">
+            <span className="block text-support font-bold text-cv-text-muted">פרטי משרה</span>{" "}
+            <span className="block">
+              <bdi>{application.target_role}</bdi>
+            </span>
+          </span>
+        </span>
+      }
     >
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-4 rounded-control border border-cv-border bg-cv-canvas p-4 max-lg:gap-2 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 lg:grid-cols-4">
-          <Fact label="סטטוס משרה">{application.is_closed ? "סגורה" : "פתוחה"}</Fact>
-          <Fact detail={`שלב ${step} מתוך ${total}`} label="הכנת קו״ח">
-            {preparationStateLabels[application.preparation_state]}
-          </Fact>
+      <div className="flex flex-col gap-3.5">
+        <div className="grid grid-cols-2 gap-2.5">
           <Fact label="שלב גיוס">
-            <ApplicationRecruitmentStatus item={application} />
+            {recruitmentStageOf(application.recruitment_status)?.label ??
+              recruitmentStatusLabel(application.recruitment_status)}
           </Fact>
-          <Fact label="ציון התאמה">
-            <ApplicationFitStatus item={application} />
-          </Fact>
+          <Fact label="סטטוס משרה">{application.is_closed ? "סגורה" : "פתוחה"}</Fact>
+          <Fact label="הכנת קו״ח">{preparationStateLabels[application.preparation_state]}</Fact>
+          <Fact label="ציון התאמה">{fitText(application)}</Fact>
         </div>
 
-        {hasNextStep ? (
-          <section aria-label="פעולה מומלצת הבאה" className="rounded-control border border-cv-border p-4">
-            <p className="mb-1.5 text-support font-semibold text-cv-text-muted">פעולה מומלצת הבאה</p>
-            <ApplicationCardNextAction
-              clearing={clearing}
-              item={application}
-              omitReady
-              onClearNextAction={onClearNextAction}
-            />
-          </section>
-        ) : null}
-
-        {readyHash === null ? null : (
-          <ReadyCv
-            applicationId={application.id}
-            documentHash={readyHash}
-            linkToReady={!continuesToReady}
-            onClose={onClose}
-          />
+        {nextStep === null ? null : (
+          <Block label="פעולה מומלצת הבאה">
+            <p className="font-bold">
+              <bdi>{nextStep}</bdi>
+            </p>
+          </Block>
         )}
 
         {application.notes === "" ? null : (
-          <div className="rounded-control border border-cv-border p-4">
-            <p className="mb-1 text-support font-semibold text-cv-text-muted">הערות</p>
-            <p className="whitespace-pre-wrap text-support leading-relaxed text-cv-text" dir="auto">
+          <Block label="הערות">
+            <p className="whitespace-pre-wrap" dir="auto">
               {application.notes}
             </p>
-          </div>
+          </Block>
         )}
-
-        <p className="text-support text-cv-text-muted tabular-nums">
-          נוצרה <DateTime format="short" value={application.created_at} /> · עודכנה{" "}
-          <DateTime format="short" value={application.updated_at} />
-        </p>
       </div>
     </Dialog>
   );

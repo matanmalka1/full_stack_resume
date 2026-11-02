@@ -1,99 +1,139 @@
+import { BookOpen, Filter, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { BookOpen, FileText, Plus, X } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import type { ApplicationListItem, RecruitmentStatus } from "@/api/contracts";
+import type { ApplicationListItem, ApplicationListResponse } from "@/api/contracts";
 import { returnedApplicationId } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
-import { RecruitmentUpdateDialog } from "@/features/recruitment";
 import { Button, buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
-import { IconButton } from "@/ui/IconButton";
-import { ErrorCallout } from "@/ui/ErrorCallout";
-import { SuccessNotice } from "@/ui/SuccessNotice";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
-import { LiveRegion } from "@/ui/LiveRegion";
+import { cx } from "@/ui/cx";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
-import { ApplicationCardsSkeleton } from "../components/ApplicationCardsView";
+import { ApplicationCardsSkeleton, ApplicationCardsView } from "../components/ApplicationCardsView";
 import { ApplicationDetailsDialog } from "../components/ApplicationDetailsDialog";
-import { ApplicationListResults } from "../components/ApplicationListResults";
-import { ApplicationListToolbar } from "../components/ApplicationListToolbar";
+import { ApplicationPipelineView } from "../components/ApplicationPipelineView";
 import { ApplicationPresetTabs } from "../components/ApplicationPresetTabs";
-import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
-import { DeleteApplicationDialog } from "../components/DeleteApplicationDialog";
-import { useApplicationListMutations } from "../api/mutations";
+import { BoardSort, BoardViewSwitch } from "../components/BoardControls";
 import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
-import { PAGE_SIZE } from "../model/applicationListParams";
 import { initialViewMode, rememberViewMode, type ViewMode } from "../model/applicationViews";
-import { type RecruitmentStageId, recruitmentStages, selectedStage } from "../model/recruitmentStages";
 
 /* How long the card the reader came back from stays marked. Matches `cv-returned`. */
 const RETURN_HIGHLIGHT_MS = 2_400;
 
-const findApplication = (items: readonly ApplicationListItem[], id: string | null) =>
-  id === null ? null : (items.find((item) => item.id === id) ?? null);
-
-interface ClosedResult {
-  applicationId: string;
-  eventId: string | null;
-  label: string;
-  previousStatus: RecruitmentStatus;
-}
-
-/* A phone's masthead has no room for the new-job command, so below the large breakpoint
-   it floats over the board, above the bottom navigation, where a thumb reaches it. */
+/* A phone's top bar has no room for the new-job command, so below the large breakpoint
+   it floats over the board, above the bottom navigation, where a thumb reaches it. On a
+   wide screen it is the sidebar's. */
 const NewApplicationFab = () => (
   <>
     {/* Room under the last card, so the floating button never covers it. */}
     <div aria-hidden="true" className="h-16 lg:hidden" />
-    <div className="fixed end-4 bottom-[calc(var(--cv-bottom-nav-height)+1rem)] z-(--cv-z-sticky) lg:hidden">
-      <Link
-        aria-label="קליטת משרה חדשה"
-        className={buttonClasses("primary", "h-14 rounded-surface px-5 text-body shadow-floating")}
-        to={routePaths.newApplication}
-      >
-        <Plus aria-hidden="true" className="size-icon-lg" />
-        משרה חדשה
-      </Link>
-    </div>
+    <Link
+      aria-label="קליטת משרה חדשה"
+      className={buttonClasses(
+        "primary",
+        "fixed end-4 bottom-[calc(var(--cv-bottom-nav-height)+1rem)] z-(--cv-z-sticky) h-14 rounded-fab ps-4.5 pe-5 shadow-fab lg:hidden",
+      )}
+      to={routePaths.newApplication}
+    >
+      <Plus aria-hidden="true" className="size-icon-lg" />
+      משרה חדשה
+    </Link>
   </>
 );
 
-/* The empty board's picture on a phone: a page of a CV with a plus on its corner, drawn
-   from the product's own icon and surfaces rather than an image. Decorative. */
+/* The empty board's picture: a page of a CV with a second sheet behind it and a plus on
+   its corner, drawn from the product's own surfaces rather than an image. Decorative. */
 const EmptyBoardMark = () => (
-  <div aria-hidden="true" className="relative mx-auto mb-6 size-24 lg:hidden">
-    <span className="absolute inset-y-1 start-5 end-1 rotate-6 rounded-surface border border-cv-border bg-cv-surface" />
-    <span className="absolute inset-y-0 start-3 end-3 flex items-center justify-center rounded-surface border border-cv-border bg-cv-surface shadow-floating">
-      <FileText className="size-10 text-cv-border-strong" strokeWidth={1.5} />
+  <div aria-hidden="true" className="relative mx-auto mb-6 h-24 w-22">
+    <span className="absolute inset-y-1.5 start-0 end-4 rotate-6 rounded-item border border-cv-border bg-cv-surface" />
+    <span className="absolute inset-y-0 start-3 end-1.5 flex flex-col items-start gap-1.5 rounded-item border border-cv-border bg-cv-surface px-3 pt-4 shadow-surface">
+      <span className="h-1.25 w-8 rounded-pill bg-cv-accent" />
+      <span className="h-1 w-11 rounded-pill bg-cv-border" />
+      <span className="h-1 w-10 rounded-pill bg-cv-border" />
+      <span className="h-1 w-11 rounded-pill bg-cv-border" />
     </span>
-    <span className="absolute -bottom-1 start-0 flex size-10 items-center justify-center rounded-pill bg-cv-accent text-cv-on-accent shadow-floating">
+    <span className="absolute -bottom-2 end-0 flex size-11 items-center justify-center rounded-pill bg-cv-accent text-cv-on-accent shadow-action">
       <Plus className="size-icon-lg" />
     </span>
   </div>
 );
 
-/* The board reads top to bottom as four answers: where the reader is, what is waiting
-   for them, which slice of the work they are looking at, and the work itself.
+/* No Application exists yet: there is no board to act on, so the offer to start one is
+   the whole page - and, since a CV is built from the reader's facts, the way to fill
+   those in first. On a phone it stands unframed on the canvas with a full-width command;
+   on a wide screen it fills the board's frame with the two side by side. */
+const EmptyBoard = () => (
+  <EmptyState className="flex flex-col items-center justify-center max-lg:border-0 max-lg:px-3 max-lg:py-14 lg:min-h-[48rem]">
+    <EmptyBoardMark />
+    <h2 className="text-heading-md font-extrabold text-cv-text lg:text-title">עוד אין מועמדויות</h2>
+    <p className="mt-2 max-w-md text-body text-cv-text-muted">
+      מדביקים מודעת משרה, והמערכת בונה ממנה קורות חיים מותאמים מתוך העובדות שלך.
+    </p>
+    <div className="mt-6 flex w-full flex-col items-center gap-3 lg:w-auto lg:flex-row lg:gap-2.5">
+      <Link
+        className={buttonClasses("primary", "w-full shadow-action lg:w-auto", "large")}
+        to={routePaths.newApplication}
+      >
+        <Plus aria-hidden="true" className="size-icon-md lg:hidden" />
+        קליטת משרה ראשונה
+      </Link>
+      <Link
+        className={cx(
+          buttonClasses("secondary", "lg:min-h-13 lg:rounded-control-lg"),
+          "max-lg:min-h-11 max-lg:border-0 max-lg:bg-transparent max-lg:text-label max-lg:underline max-lg:underline-offset-4",
+        )}
+        to={routePaths.facts}
+      >
+        <BookOpen aria-hidden="true" className="size-icon-md lg:hidden" />
+        קודם למלא את מאגר העובדות
+      </Link>
+    </div>
+  </EmptyState>
+);
 
-   The one action that starts something - a new Application - is the shell's, not this
-   screen's, and is on screen already; repeating it here would give the reader two
-   buttons for one thing. On a phone the shell has no room for it and the board carries
-   it instead (`NewApplicationFab`). The empty database is the exception: there is no
-   board to act on yet, so the offer is the only thing on the page. */
+/* The chosen slice holds nothing - a gap in the board, not an empty product - so the way
+   out is to show everything again. */
+const NoResults = ({ onShowAll, title }: { onShowAll?: () => void; title: string }) => (
+  <EmptyState className="flex flex-col items-center justify-center max-lg:border-0 max-lg:py-24 lg:min-h-[37.5rem]">
+    <span
+      aria-hidden="true"
+      className="mb-4 flex size-16 items-center justify-center rounded-surface border border-cv-border bg-cv-surface text-cv-text lg:size-18"
+    >
+      <Filter className="size-7" />
+    </span>
+    <p className="text-heading-sm font-extrabold text-cv-text lg:text-heading-sheet">{title}</p>
+    {onShowAll === undefined ? null : (
+      <Button className="mt-5" onClick={onShowAll} variant="secondary">
+        הצגת כל המועמדויות
+      </Button>
+    )}
+  </EmptyState>
+);
+
+/* "12 מועמדויות פעילות" - the open board's size, whichever slice is on screen. */
+const activeCountText = (page: ApplicationListResponse): string => {
+  const count = page.preset_counts.all ?? page.matched;
+  return count === 1 ? "מועמדות פעילה אחת" : `${count} מועמדויות פעילות`;
+};
+
+/* The board reads top to bottom as the design draws it: the title with how many processes
+   are live, the named slices, what is waiting on the reader, and the work itself - in
+   cards, or in columns by recruitment stage. A card is a way into its Application; the
+   stages view's cards open a details sheet first.
+
+   The board narrows only by its slices. Finding one Application by name is the quick
+   search's (⌘K, or the search button on a phone), and the commands that change a record -
+   its status, closing, deleting - are its own screen's. */
 export const ApplicationListPage = () => {
-  const { listQuery, query, searchInput, setSearchInput, updateQuery } = useApplicationListQuery();
   const [viewMode, setViewModeState] = useState<ViewMode>(initialViewMode);
   const setViewMode = (next: ViewMode) => {
     rememberViewMode(next);
     setViewModeState(next);
   };
-  const [closingApplicationId, setClosingApplicationId] = useState<string | null>(null);
-  const [closedResult, setClosedResult] = useState<ClosedResult | null>(null);
-  const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
-  const [deletedLabel, setDeletedLabel] = useState<string | null>(null);
-  const [updatingApplicationId, setUpdatingApplicationId] = useState<string | null>(null);
+  const cards = viewMode === "cards";
+  const { listQuery, query, updateQuery } = useApplicationListQuery({ withPreset: cards });
   const [detailsApplicationId, setDetailsApplicationId] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -104,33 +144,12 @@ export const ApplicationListPage = () => {
     if (returnedApplicationId(location.state) === null) return;
     void navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
   }, [location, navigate]);
-  const { clearNextActionMutation, closeMutation, deleteMutation, undoCloseMutation } = useApplicationListMutations({
-    onApplicationClosed: (applicationId, eventId) => {
-      const application = findApplication(items, applicationId);
-      setClosingApplicationId(null);
-      if (application !== null) {
-        setClosedResult({
-          applicationId,
-          eventId: eventId ?? null,
-          label: application.company,
-          previousStatus: application.recruitment_status as RecruitmentStatus,
-        });
-      }
-    },
-    onApplicationDeleted: (applicationId) => {
-      const application = findApplication(items, applicationId);
-      setDeletingApplicationId(null);
-      setDeletedLabel(application?.company ?? null);
-    },
-    onCloseUndone: () => setClosedResult(null),
-    onNextActionCleared: (applicationId) => {
-      if (updatingApplicationId === applicationId) setUpdatingApplicationId(null);
-    },
-  });
 
   const page = listQuery.data;
-  const items = page?.items ?? [];
+  const items: readonly ApplicationListItem[] = page?.items ?? [];
   const loaded = page !== undefined;
+  const empty = page?.total === 0;
+  const preset = cards ? (query.preset ?? "all") : "all";
 
   /* Once the board holds the card, bring it into view if it is not, and let its mark go
      after a moment. The board's order is untouched: the reader finds the card where it
@@ -150,147 +169,95 @@ export const ApplicationListPage = () => {
     const timeout = window.setTimeout(() => setReturnedId(null), RETURN_HIGHLIGHT_MS);
     return () => window.clearTimeout(timeout);
   }, [loaded, returnedId]);
-  const closingApplication = findApplication(items, closingApplicationId);
-  const deletingApplication = findApplication(items, deletingApplicationId);
-  const updatingApplication = findApplication(items, updatingApplicationId);
-  const detailsApplication = findApplication(items, detailsApplicationId);
-  const clearingApplicationId = clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null;
-  const recruitmentStageCounts = Object.fromEntries(
-    recruitmentStages.map((stage) => [
-      stage.id,
-      stage.statuses.reduce((count, status) => count + (page?.recruitment_status_counts[status] ?? 0), 0),
-    ]),
-  ) as Partial<Record<RecruitmentStageId, number>>;
 
-  /* Sorting orders the page rather than narrowing it, so it is neither part of "the
-     list is filtered" nor undone by clearing the filters. */
-  const filtered =
-    query.preset !== undefined ||
-    searchInput !== "" ||
-    (query.activity ?? "open") !== "open" ||
-    (query.stages?.length ?? 0) > 0 ||
-    (query.recruitmentStatuses?.length ?? 0) > 0;
-  const clearFilters = () => updateQuery({ sort: query.sort });
-  const undoClose = () => {
-    if (closedResult === null || closedResult.eventId === null) return;
-    undoCloseMutation.mutate({ ...closedResult, eventId: closedResult.eventId });
-  };
+  const detailsApplication = items.find((item) => item.id === detailsApplicationId) ?? null;
+  const showAll = () => updateQuery({ ...query, preset: undefined });
+  const sort = query.sort ?? "updated";
+  const setSort = (next: typeof sort) => updateQuery({ ...query, sort: next });
 
-  /* The named slices sit in the masthead, beside the title: they are the first choice
-     the reader makes, and reading them on the same line as the page name says which
-     board is on screen. They appear once there is a board to slice. */
-  const presetTabs =
-    page === undefined || page.total === 0 ? undefined : (
-      <div className="w-full min-w-0 self-center sm:w-auto">
-        <ApplicationPresetTabs
-          counts={page.preset_counts}
-          onSelect={(preset) => updateQuery({ ...query, preset: preset === "all" ? undefined : preset })}
-          value={query.preset ?? "all"}
-        />
-      </div>
+  /* The wide screen's controls sit on the title's row: the view switch, and in the cards
+     view the order; on a phone they move into the body - see below. The cards view's
+     slices are the masthead's next line, at every width: they are the first choice the
+     reader makes, and the masthead's own row gap is the design's distance from the
+     title. */
+  const actions =
+    page === undefined || empty ? undefined : (
+      <>
+        <div className="flex items-center gap-2.5 max-lg:hidden">
+          <BoardViewSwitch onChange={setViewMode} value={viewMode} variant="compact" />
+          {cards ? <BoardSort onChange={setSort} value={sort} variant="boxed" /> : null}
+        </div>
+        {cards ? (
+          <div className="min-w-0 basis-full lg:mt-2.5">
+            <ApplicationPresetTabs
+              counts={page.preset_counts}
+              onSelect={(next) => updateQuery({ ...query, preset: next === "all" ? undefined : next })}
+              value={preset}
+            />
+          </div>
+        ) : null}
+      </>
     );
 
-  return (
-    <PageShell
-      actions={presetTabs}
-      description="איפה עומד כל תהליך גיוס, ומה עוד צריך לקורות החיים."
-      measure="wide"
-      title="לוח מועמדויות"
-    >
-      {/* The closed card leaves the board, so the way back floats where the reader's eye
-          already is rather than at the top of a list they may have scrolled away from.
-          It has no timer: the correction stays valid, so the offer stays until the
-          reader takes it or puts it away. */}
-      {closedResult === null ? null : (
-        <div className="fixed inset-x-4 bottom-4 z-(--cv-z-toast) mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface-raised px-3.5 py-2.5 text-support text-cv-text shadow-floating">
-          <LiveRegion className="min-w-0 flex-1" visuallyHidden={false}>
-            <span dir="auto">המועמדות של {closedResult.label} נסגרה והועברה למועמדויות הסגורות.</span>
-          </LiveRegion>
-          <div className="flex items-center gap-1">
-            {closedResult.eventId === null ? null : (
-              <Button
-                onClick={undoClose}
-                pending={undoCloseMutation.isPending}
-                pendingLabel="מבטל סגירה…"
-                size="compact"
-                variant="secondary"
-              >
-                ביטול הסגירה
-              </Button>
-            )}
-            <IconButton aria-label="סגירת ההודעה" onClick={() => setClosedResult(null)}>
-              <X aria-hidden="true" className="size-icon-md" />
-            </IconButton>
+  const description =
+    page === undefined || empty ? undefined : cards ? activeCountText(page) : "מועמדויות לפי שלב גיוס";
+
+  const results = () => {
+    if (page === undefined) return null;
+
+    if (!cards) {
+      return (
+        <>
+          <div className="lg:hidden">
+            <BoardViewSwitch onChange={setViewMode} value={viewMode} variant="stretch" />
+          </div>
+          <ApplicationPipelineView
+            items={items}
+            onRequestDetails={(item) => setDetailsApplicationId(item.id)}
+            recruitmentStatusCounts={page.recruitment_status_counts}
+            returnedId={returnedId}
+          />
+        </>
+      );
+    }
+
+    /* Every Application is closed: the board is empty, but the product is not. */
+    if (items.length === 0 && preset === "all") {
+      return <NoResults title="אין מועמדויות פעילות. מועמדויות סגורות נמצאות בחיפוש המהיר." />;
+    }
+    if (items.length === 0) {
+      return <NoResults onShowAll={showAll} title="אין מועמדות שמתאימה לסינון." />;
+    }
+
+    /* On a phone the action hub comes before the cards; on a wide screen it is a column
+       at the row's far end, beside them. */
+    return (
+      <>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+          <div className="lg:order-last">
+            <ApplicationAttentionSummary />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-3 lg:hidden">
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-heading-card font-extrabold text-cv-text">מועמדויות</h2>
+                <BoardViewSwitch onChange={setViewMode} value={viewMode} variant="compact" />
+              </div>
+              <BoardSort onChange={setSort} value={sort} variant="plain" />
+            </div>
+            <ApplicationCardsView items={items} returnedId={returnedId} />
           </div>
         </div>
-      )}
-      {deletedLabel === null ? null : (
-        <SuccessNotice
-          onDismiss={() => setDeletedLabel(null)}
-          title={`המועמדות של ${deletedLabel} נמחקה והוסרה מהלוח`}
-        />
-      )}
-      <ApplicationAttentionSummary
-        boardHasApplications={page !== undefined && page.total > 0}
-        clearingApplicationId={clearingApplicationId}
-        filterActive={query.preset === "needs_attention"}
-        onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
-        onOpenStatusDialog={(application) => setUpdatingApplicationId(application.id)}
-        onShowAll={() => updateQuery({ ...query, preset: "needs_attention" })}
-      />
-      {clearNextActionMutation.error === null ? null : (
-        <ErrorCallout error={clearNextActionMutation.error} fallbackDetail="אפשר לנסות שוב." title="התזכורת לא הוסרה" />
-      )}
-      {closeMutation.error === null ? null : (
-        <ErrorCallout error={closeMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נסגרה" />
-      )}
-      {undoCloseMutation.error === null ? null : (
-        <ErrorCallout
-          error={undoCloseMutation.error}
-          fallbackDetail="המועמדות נשארה סגורה. אפשר לנסות שוב או לתקן את האירוע מתוך המועמדות."
-          title="הסגירה לא בוטלה"
-        />
-      )}
-      {deleteMutation.error === null ? null : (
-        <ErrorCallout error={deleteMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נמחקה" />
-      )}
+        <NewApplicationFab />
+      </>
+    );
+  };
 
+  return (
+    <PageShell actions={actions} description={description} measure="wide" title="לוח המועמדויות">
       <QueryState
-        empty={page?.total === 0}
-        emptyState={
-          /* On a phone the empty board is the whole screen's one message, so it stands on
-             the canvas without a frame, under a drawn sheet of paper with a plus: a large
-             title, the sentence, a full-width command, and - since a CV is built from the
-             reader's facts - the way to fill those in first. */
-          <EmptyState className="bg-cv-surface max-lg:border-0 max-lg:bg-transparent max-lg:px-4 max-lg:py-16">
-            <EmptyBoardMark />
-            <p className="text-body text-cv-text max-lg:text-heading-md max-lg:font-extrabold">
-              עוד לא נוצרה אף מועמדות.
-            </p>
-            <p className="mt-1 text-support text-cv-text-muted max-lg:mt-2 max-lg:text-body">
-              מועמדות חדשה מתחילה בהדבקת מודעת המשרה.
-            </p>
-            <div className="mt-5 flex justify-center max-lg:mt-6">
-              <Link
-                className={buttonClasses(
-                  "primary",
-                  "max-lg:min-h-13 max-lg:w-full max-lg:text-body max-lg:shadow-floating",
-                )}
-                to={routePaths.newApplication}
-              >
-                <Plus aria-hidden="true" className="size-icon-md lg:hidden" />
-                משרה חדשה
-              </Link>
-            </div>
-            <Link
-              className="mt-5 inline-flex min-h-11 items-center gap-1.5 text-support font-bold text-cv-text underline underline-offset-4 lg:hidden"
-              to={routePaths.facts}
-            >
-              <BookOpen aria-hidden="true" className="size-icon-md" />
-              קודם למלא את מאגר העובדות
-            </Link>
-          </EmptyState>
-        }
+        empty={empty}
+        emptyState={<EmptyBoard />}
         error={listQuery.error}
         errorTitle="לא ניתן לטעון את המועמדויות"
         loading={listQuery.isPending}
@@ -299,79 +266,21 @@ export const ApplicationListPage = () => {
            a string that never renders. The skeleton announces the wait itself. */
         loadingState={<ApplicationCardsSkeleton />}
       >
-        {page === undefined ? null : (
-          <div className="flex flex-col gap-4">
-            <ApplicationListToolbar
-              activity={query.activity ?? "open"}
-              filtered={filtered}
-              onActivityChange={(activity) => updateQuery({ ...query, activity })}
-              onClearFilters={clearFilters}
-              onPreparationStateChange={(stage) => updateQuery({ ...query, stages: stage ? [stage] : [] })}
-              onRecruitmentStageChange={(stageId) => {
-                const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
-                updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
-              }}
-              onSearchChange={setSearchInput}
-              onSortChange={(sort) => updateQuery({ ...query, sort })}
-              onViewModeChange={setViewMode}
-              preparationState={query.stages?.[0]}
-              recruitmentStage={selectedStage(query.recruitmentStatuses)}
-              recruitmentStageCounts={recruitmentStageCounts}
-              resultSummary={
-                page.matched === page.total
-                  ? `${page.total} מועמדויות`
-                  : !filtered
-                    ? `${page.matched} מתוך ${page.total} מועמדויות · תהליכים סגורים מוסתרים`
-                    : `${page.matched} מתוך ${page.total} מועמדויות`
-              }
-              search={searchInput}
-              sort={query.sort ?? "updated"}
-              stageCounts={page.stage_counts}
-              viewMode={viewMode}
-            />
-            <ApplicationListResults
-              clearingApplicationId={clearingApplicationId}
-              replacing={listQuery.isPlaceholderData}
-              items={items}
-              matchedCount={page.matched}
-              offset={query.offset ?? 0}
-              onClearFilters={clearFilters}
-              onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
-              onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
-              onRequestClose={(item) => setClosingApplicationId(item.id)}
-              onRequestDelete={(item) => setDeletingApplicationId(item.id)}
-              onRequestDetails={(item) => setDetailsApplicationId(item.id)}
-              onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
-              pageSize={PAGE_SIZE}
-              recruitmentStatusCounts={page.recruitment_status_counts}
-              recruitmentStatusFilter={query.recruitmentStatuses}
-              returnedId={returnedId}
-              viewMode={viewMode}
-            />
-            <NewApplicationFab />
-          </div>
-        )}
+        {/* A changed slice dims the board it is replacing instead of unmounting it, so a
+            chip press does not drop the reader back to a blank region. A re-read of the
+            same board does not dim it: the board re-reads on focus and after every action,
+            and dimming on each of those made it flash for nothing. */}
+        <div
+          aria-busy={listQuery.isPlaceholderData ? true : undefined}
+          className={cx(
+            "flex flex-col gap-4 transition-opacity lg:gap-5.5",
+            listQuery.isPlaceholderData && "opacity-60",
+          )}
+        >
+          {results()}
+        </div>
       </QueryState>
-      <CloseApplicationDialog
-        application={closingApplication}
-        onCancel={() => setClosingApplicationId(null)}
-        onConfirm={() => closingApplicationId && closeMutation.mutate(closingApplicationId)}
-        pending={closeMutation.isPending}
-      />
-      <DeleteApplicationDialog
-        application={deletingApplication}
-        onCancel={() => setDeletingApplicationId(null)}
-        onConfirm={() => deletingApplicationId && deleteMutation.mutate(deletingApplicationId)}
-        pending={deleteMutation.isPending}
-      />
-      <ApplicationDetailsDialog
-        application={detailsApplication}
-        clearing={detailsApplication !== null && clearingApplicationId === detailsApplication.id}
-        onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
-        onClose={() => setDetailsApplicationId(null)}
-        onRequestUpdate={(application) => setUpdatingApplicationId(application.id)}
-      />
-      <RecruitmentUpdateDialog application={updatingApplication} onClose={() => setUpdatingApplicationId(null)} />
+      <ApplicationDetailsDialog application={detailsApplication} onClose={() => setDetailsApplicationId(null)} />
     </PageShell>
   );
 };
