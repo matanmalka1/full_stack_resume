@@ -2,32 +2,32 @@ import { Check, CloudAlert, CloudUpload, History } from "lucide-react";
 
 import { LiveRegion } from "@/ui/LiveRegion";
 import { cx } from "@/ui/cx";
-import { type Tone, toneTextClasses } from "@/ui/tone";
 import type { IntakeDraftStatus as Status } from "../hooks/useApplicationIntakeDraft";
 
+/* The form is kept in this browser until the Application is created, and this line says
+   where that stands in a few words - the design's quiet "saved" mark, not a paragraph. A
+   failure keeps its warning: the reader must not close the page then. */
 const labels: Record<Status, string> = {
-  idle: "הטופס נשמר אוטומטית בדפדפן הזה עד ליצירת המועמדות.",
-  restored: "פרטים שהוזנו קודם שוחזרו מהדפדפן הזה.",
-  saving: "שומר את הפרטים בדפדפן הזה…",
-  saved: "הפרטים נשמרו בדפדפן הזה עד ליצירת המועמדות.",
-  failed: "לא ניתן לשמור את הפרטים בדפדפן. אין לסגור את העמוד לפני יצירת המועמדות.",
+  idle: "הטיוטה נשמרת בדפדפן",
+  restored: "הטיוטה שוחזרה מהדפדפן",
+  saving: "שומר את הטיוטה…",
+  saved: "הטיוטה נשמרה",
+  failed: "לא ניתן לשמור את הטיוטה בדפדפן - אין לסגור את העמוד",
 };
 
-const statusTones: Record<Status, Tone> = {
-  idle: "neutral",
-  restored: "info",
-  saving: "neutral",
-  saved: "success",
-  failed: "blocker",
-};
-
-export const IntakeDraftStatus = ({ status }: { status: Status }) => {
+export const IntakeDraftStatus = ({ className, status }: { className?: string; status: Status }) => {
   const Icon =
     status === "failed" ? CloudAlert : status === "saved" ? Check : status === "restored" ? History : CloudUpload;
 
   return (
-    <div className="flex items-center gap-2 text-support text-cv-text-muted">
-      <Icon aria-hidden="true" className={cx("size-icon-md shrink-0", toneTextClasses[statusTones[status]])} />
+    <div
+      className={cx(
+        "flex items-center gap-1.5 text-caption",
+        status === "failed" ? "font-bold text-cv-blocker" : "text-cv-text-muted",
+        className,
+      )}
+    >
+      <Icon aria-hidden="true" className="size-3.5 shrink-0" />
       <LiveRegion visuallyHidden={false}>{labels[status]}</LiveRegion>
     </div>
   );
