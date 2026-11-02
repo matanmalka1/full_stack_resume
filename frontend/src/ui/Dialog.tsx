@@ -80,6 +80,11 @@ export const Dialog = ({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const openedWith = useRef("");
+  /* Set while the dialog closes itself on unmount (below), so the `close` event that
+     close() queues is not read as the reader closing it. Under StrictMode the dialog is
+     unmounted and remounted in place, and that event would otherwise arrive after the
+     remount and close the dialog the reader just opened. */
+  const closedForUnmount = useRef(false);
   const heightClass = size === "wide" ? "max-h-[85dvh]" : "max-h-[calc(100dvh-2rem)]";
   const sheet = presentation === "sheet";
 
@@ -110,7 +115,10 @@ export const Dialog = ({
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     return () => {
-      if (dialog?.open) dialog.close();
+      if (dialog?.open) {
+        closedForUnmount.current = true;
+        dialog.close();
+      }
     };
   }, []);
 
@@ -154,6 +162,10 @@ export const Dialog = ({
            close event, so without stopping it here the child's event reaches an owning
            dialog and dismisses that one as well. */
         event.stopPropagation();
+        if (closedForUnmount.current) {
+          closedForUnmount.current = false;
+          return;
+        }
         onClose();
         restoreFocusTo?.current?.focus();
       }}
