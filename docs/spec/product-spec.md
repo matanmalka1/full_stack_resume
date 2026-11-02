@@ -251,8 +251,8 @@ checked; that, and everything else the answer does not say, is the prompt's rule
 the user's confirmation.
 
 A passing draft is saved as a `pending` fact in `situational_skills.json`, tagged with
-the track and `situational` plus the known tags it chose, with the user's question and
-answer, verbatim, as its provenance; the answer is also kept on the question. A pending
+the track and `situational` plus the known tags it chose; the user's answer is kept,
+verbatim, on the question, together with the fact's ID. A pending
 fact reaches no CV: the user edits it (`edit_pending_fact`) and confirms it, or
 `Confirm and use`s it into a Profile section, before the next draft can choose it
 (§17).
@@ -568,8 +568,8 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
   `he` optional.
 - **Confirm.** `pending -> canonical` on explicit confirmation.
 - **Edit.** A `pending` fact's meaning, renderings, tags, and dates can be edited in
-  place before it is confirmed (`edit_pending_fact`); its identity, source, style, and
-  provenance cannot. *Not built:* editing a canonical fact in place. Today a correction
+  place before it is confirmed (`edit_pending_fact`); its identity, source, and style
+  cannot. *Not built:* editing a canonical fact in place. Today a correction
   is a new fact with `replaces`; confirming it raises `FACT_SUPERSEDED` on documents
   using the original.
 - **Delete.** Confirmed soft delete, allowed even when in use; affected documents
@@ -578,7 +578,7 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
 - **Confirm and use.** Confirms and attaches in one command; the next draft can use it.
 - **From a claim.** Creates a pending fact from a claim's exact text.
 - **From a gap answer.** AI drafts a pending fact from the user's answer to a gap
-  question; the answer is its provenance (§9.1).
+  question; the answer stays on the question (§9.1).
 
 A fact change moves the basis of documents that use it; a change during a running
 analysis fails it with `SOURCE_CHANGED`.

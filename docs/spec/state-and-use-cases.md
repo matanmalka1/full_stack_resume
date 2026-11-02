@@ -500,8 +500,8 @@ blank); Operation (`202`), requires a provider.
 - Activation, in one transaction under the Application lock: the question still has no
   outcome (else `SOURCE_CHANGED`); creates a `pending` fact in `situational_skills.json`
   (§17 `create_pending_fact` rules, a `fact_created` event naming the Application) with
-  tags `[track, "situational", ...known proposed tags]` and the question and answer as
-  provenance; records the outcome `answered` with the answer and the fact ID; outputs the
+  tags `[track, "situational", ...known proposed tags]`; records the outcome `answered`
+  with the answer and the fact ID; outputs the
   `fact`.
 
 ### `skip_gap_question(application_id, gap_question_id)`
@@ -650,7 +650,7 @@ Facts are per user in PostgreSQL; each mutation is one transaction (architecture
 ### `create_pending_fact`
 
 Creates a pending fact with a generated ID (client IDs refused). Input: source file,
-meaning, renderings (`en` required, `he` optional), tags, provenance, `resume_style`,
+meaning, renderings (`en` required, `he` optional), tags, `resume_style`,
 optional dates, optional `replaces`, reason. With `replaces` it is a pending correction.
 
 ### `confirm_fact(fact_id)`
@@ -664,14 +664,14 @@ documents using the original.
 `PATCH /facts/{fact_id}` with any of `meaning`, `renderings` (`en` required), `tags`
 (non-empty), `effective_dates`, and an optional `reason`. Changes a `pending` fact in
 place and appends a `fact_edited` event carrying the fact as it now reads. Identity,
-source, style, provenance, and status are unchanged. A canonical or deleted fact, an
+source, style, and status are unchanged. A canonical or deleted fact, an
 empty edit, or an edit that changes nothing is `KNOWLEDGE_REJECTED` (412); another
 user's fact is 404. A document that links the fact sees its basis move (§6).
 
 ### `edit_fact(fact_id, changes, confirm)`
 
 *Not built* for a canonical fact. Changes meaning, renderings, tags,
-provenance, dates, `resume_style`, or link target in place; not the ID or source. A
+dates, `resume_style`, or link target in place; not the ID or source. A
 canonical fact needs `confirm: true` and stays canonical. Deleted facts and empty edits
 are refused. Appends a `fact_edited` event; dependent documents' basis moves.
 
@@ -694,7 +694,7 @@ document; the next `create_draft` can use the fact.
 
 ### `create_fact_from_claim(application_id, claim_id, ...)`
 
-Creates a pending fact from a claim's exact text. Meaning, tags, and provenance are
+Creates a pending fact from a claim's exact text. Meaning and tags are
 supplied; a Hebrew document also needs the English rendering. The headline cannot
 become a fact.
 
