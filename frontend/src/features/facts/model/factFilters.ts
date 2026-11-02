@@ -20,9 +20,7 @@ export const emptyFactFilters: FactFilters = {
    knowledge source and tags. The facts screen and the global search palette
    both search with this, so the same words find the same facts in either. */
 export const factSearchText = (fact: Fact): string =>
-  [fact.meaning, ...Object.values(fact.renderings), fact.source, ...fact.tags]
-    .join(" ")
-    .toLocaleLowerCase();
+  [fact.meaning, ...Object.values(fact.renderings), fact.source, ...fact.tags].join(" ").toLocaleLowerCase();
 
 export const filterFactEntries = (entries: FactPoolEntry[], filters: FactFilters): FactPoolEntry[] => {
   const query = filters.query.trim().toLocaleLowerCase();
