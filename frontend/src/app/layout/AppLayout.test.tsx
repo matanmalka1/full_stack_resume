@@ -104,3 +104,24 @@ it("gives every route the brand, the new-job command, the quick switcher, the ar
   expect(navigation).toContainElement(screen.getByRole("link", { name: "הגדרות" }));
   expect(screen.getByRole("button", { name: "התנתקות" })).toBeInTheDocument();
 });
+
+/* An Application is reached from the board, so the board stays marked on its screens -
+   as the reader's location, not as the page they are on. */
+it("keeps the board marked on an Application's screens", () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  client.setQueryData(settingsQueryKey, { settings: settings(), etag: '"settings-1"' });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={["/applications/app-1"]}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route element={<p>content</p>} path="applications/:applicationId" />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+
+  expect(screen.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute("aria-current", "true");
+  expect(screen.getByRole("link", { name: "מאגר העובדות" })).not.toHaveAttribute("aria-current");
+});
