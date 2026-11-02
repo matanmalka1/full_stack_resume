@@ -101,9 +101,10 @@ Below the large breakpoint the sidebar becomes a top bar of the brand and a roun
 search button. The three destinations move to a tab bar pinned to the bottom of the
 viewport: icon over a short visible label, the active one marked by a pill behind its
 icon and a bold label. The new-job command becomes a
-floating button over the board, above the bottom bar; sign-out moves to the Settings
-account card. The board's action hub is a dark accent frame around a light list at every
-width: above the cards on a phone, a column beside them from the large breakpoint. The bar's
+floating button over the board, above the bottom bar; sign-out moves to the account
+list at the end of Settings. The board's action hub is a dark accent frame around a light
+list at every width: above the cards on a phone, a column beside them from the large
+breakpoint. The bar's
 height is `--cv-bottom-nav-height` (zero at the large breakpoint), and every other
 bottom-pinned surface - `CommitBar`, a sticky `ActionBar`, the Settings save row, the
 page's own bottom padding and scroll padding - stands on top of it by that height.
@@ -161,7 +162,12 @@ components through `max-lg:` utilities - never a second tree, which would double
 name a test or a screen reader finds:
 
 - List screens (the board, the facts pool, Settings) draw their groups as rounded
-  white cards on the canvas under plain labels.
+  white cards on the canvas under plain labels. A wide Settings puts each area's name
+  and a line about it in a column beside its card, with a rule between areas; a setting
+  is a row whose control sits at its end, and the save row appears only while something
+  is unsaved. The one place the account commands are drawn twice is Settings: the wide
+  account card holds them under the email, a phone lists them last, and CSS shows one;
+  only the hidden copy is out of the accessibility tree, but a component test sees both.
   A filter used often becomes chips (`FilterChip`); the board has no other filter -
   finding a record by name is the quick search's. A list and its record are two views
   chosen by the URL, and the

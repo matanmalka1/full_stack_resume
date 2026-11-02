@@ -34,11 +34,28 @@ describe("SettingsPage", () => {
     );
 
     renderRoute("/settings", "/settings", <SettingsPage />);
-    await screen.findByRole("button", { name: "שמירת הגדרות" });
+    await screen.findByRole("radio", { name: "כהה" });
 
     expect(screen.queryByRole("button", { name: "הפעלת בדיקת תקינות" })).not.toBeInTheDocument();
     expect(screen.queryByText("מאגר העובדות")).not.toBeInTheDocument();
     expect(requestedUrls).not.toContain("/api/v1/facts");
+  });
+
+  it("changes the password in a dialog of its own, apart from the settings form", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(json(settings(), 200, { ETag: '"settings-0"' }))),
+    );
+    renderRoute("/settings", "/settings", <SettingsPage />);
+    await screen.findByRole("radio", { name: "כהה" });
+    expect(screen.queryByLabelText("סיסמה נוכחית")).not.toBeInTheDocument();
+
+    /* The wide screen's button and the phone's row open the same dialog; CSS shows one. */
+    const [openPassword] = screen.getAllByRole("button", { name: "שינוי סיסמה" });
+    fireEvent.click(openPassword!);
+
+    const dialog = await screen.findByRole("dialog", { name: "שינוי סיסמה" });
+    expect(dialog).toContainElement(screen.getByLabelText("סיסמה נוכחית"));
   });
 
   it("saves all product settings under the read ETag", async () => {
@@ -50,10 +67,10 @@ describe("SettingsPage", () => {
     const autoGenerate = await screen.findByRole("switch", {
       name: "יצירת טיוטה אוטומטית כשלא נדרשת סקירה",
     });
-    const saveButton = screen.getByRole("button", { name: "שמירת הגדרות" });
-    expect(saveButton).toBeDisabled();
+    /* Nothing to save, nothing to press: the save row appears with the first edit. */
+    expect(screen.queryByRole("button", { name: "שמירת הגדרות" })).not.toBeInTheDocument();
     fireEvent.click(autoGenerate);
-    expect(saveButton).toBeEnabled();
+    const saveButton = screen.getByRole("button", { name: "שמירת הגדרות" });
     fireEvent.click(screen.getByRole("switch", { name: "תצוגה צפופה" }));
     fireEvent.click(screen.getByRole("switch", { name: "טקסט גדול" }));
     fireEvent.change(screen.getByLabelText("מודל AI"), {
@@ -62,20 +79,11 @@ describe("SettingsPage", () => {
     fireEvent.change(screen.getByLabelText("מאמץ חשיבה"), {
       target: { value: "high" },
     });
-    // Each template is a radio with its own preview of the sample CV.
-    const deedy = screen.getByRole("radio", { name: /Deedy/ });
-    expect(screen.getByRole("radio", { name: /תבנית המסלול/ })).toBeChecked();
-    expect(screen.getByTitle("תצוגה מקדימה: Deedy")).toHaveAttribute(
-      "src",
-      "/api/v1/templates/deedy/sample?language=en",
-    );
-    fireEvent.click(deedy);
-    expect(deedy).toBeChecked();
-    fireEvent.click(screen.getByRole("button", { name: "עברית" }));
-    expect(screen.getByTitle("תצוגה מקדימה: Deedy")).toHaveAttribute(
-      "src",
-      "/api/v1/templates/deedy/sample?language=he",
-    );
+    // The template is chosen by name; the track's own design is the empty choice.
+    const template = screen.getByLabelText("תבנית עיצוב");
+    expect(template).toHaveValue("");
+    fireEvent.change(template, { target: { value: "deedy" } });
+    expect(template).toHaveValue("deedy");
     fireEvent.click(saveButton);
     await screen.findByRole("status");
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");
@@ -90,7 +98,7 @@ describe("SettingsPage", () => {
       default_template: "deedy",
     });
     await waitFor(() => expect(autoGenerate).not.toBeChecked());
-    expect(saveButton).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "שמירת הגדרות" })).not.toBeInTheDocument();
   });
 });
 
@@ -141,7 +149,7 @@ it("preserves edits through refresh failure and repeated conflict, and merges on
   await screen.findByRole("alert");
   expect(screen.getByRole("radio", { name: "כהה" })).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
-  fireEvent.click(await screen.findByRole("checkbox", { name: "החלת העריכה: ערכת נושא" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: "החלת העריכה: ערכת צבעים" }));
   fireEvent.click(screen.getByRole("button", { name: "החלת הבחירה על הגרסה העדכנית" }));
   expect(screen.getByLabelText("מאמץ חשיבה")).toHaveValue("high");
   expect(screen.getByRole("switch", { name: "תצוגה צפופה" })).toBeChecked();
@@ -149,7 +157,7 @@ it("preserves edits through refresh failure and repeated conflict, and merges on
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
   await screen.findByText("ההגדרות השתנו מאז שפתחת את הטופס");
   fireEvent.click(screen.getByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
-  fireEvent.click(await screen.findByRole("checkbox", { name: "החלת העריכה: ערכת נושא" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: "החלת העריכה: ערכת צבעים" }));
   fireEvent.click(screen.getByRole("button", { name: "החלת הבחירה על הגרסה העדכנית" }));
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
   await screen.findByText("ההגדרות נשמרו");
@@ -184,7 +192,7 @@ it("discards local edits only by explicit choice and adopts the current server v
   fireEvent.click(await screen.findByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
   fireEvent.click(await screen.findByRole("button", { name: "טעינת ערכי השרת והשלכת העריכות שלי" }));
   expect(screen.getByRole("radio", { name: "כהה" })).not.toBeChecked();
-  expect(screen.getByRole("button", { name: "שמירת הגדרות" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "שמירת הגדרות" })).not.toBeInTheDocument();
 });
 
 it("keeps a non-conflict 412 as a validation failure and retains unsaved edits", async () => {

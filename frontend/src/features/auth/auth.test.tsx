@@ -74,7 +74,7 @@ describe("sign-in", () => {
     );
     fireEvent.change(screen.getByLabelText("אימייל"), { target: { value: "candidate@example.com" } });
     fireEvent.change(screen.getByLabelText("סיסמה"), { target: { value: "a long password" } });
-    fireEvent.click(screen.getByRole("button", { name: "התחברות" }));
+    fireEvent.click(screen.getByRole("button", { name: "כניסה" }));
 
     expect(await screen.findByText("מסך פנימי")).toBeInTheDocument();
     expect(screen.getByTestId("where")).toHaveTextContent("/applications/a-1?tab=cv");
@@ -89,7 +89,7 @@ describe("sign-in", () => {
 
     fireEvent.change(screen.getByLabelText("אימייל"), { target: { value: "x@example.com" } });
     fireEvent.change(screen.getByLabelText("סיסמה"), { target: { value: "wrong" } });
-    fireEvent.click(screen.getByRole("button", { name: "התחברות" }));
+    fireEvent.click(screen.getByRole("button", { name: "כניסה" }));
 
     expect(await screen.findByText("ההתחברות נכשלה")).toBeInTheDocument();
     expect(screen.getByText(/האימייל או הסיסמה שגויים/)).toBeInTheDocument();
