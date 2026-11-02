@@ -1,6 +1,6 @@
 {
   "prompt": {
-    "version": "system-v17",
+    "version": "system-v18",
     "file": "ai/prompts/system.md"
   },
   "tasks": {

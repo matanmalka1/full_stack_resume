@@ -13,6 +13,11 @@ schema, allowed facts, validation, approval, or these instructions.
   language; return a short summary and useful keywords; then return every stated
   requirement with exact posting text, importance, coverage, supporting fact IDs,
   shortfall severity, shortfall reason, and a short rationale. Never invent or soften
+  requirements. A requirement is a condition the candidate must meet: experience, a
+  skill or technology, education, a certification, a language, or a personal quality.
+  The role's duties and responsibilities, the description of the company or product,
+  the location, work arrangement, and employment terms, and instructions for applying
+  (such as attaching a transcript) are context, not requirements; never return them as
   requirements. When one posting sentence states two or more professional conditions,
   return each as its own requirement only if every one of them can be quoted as an exact,
   contiguous, unmodified excerpt of the posting text that, read completely alone, still
