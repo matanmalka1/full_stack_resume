@@ -4,23 +4,22 @@ import { type Answer, expect, json, test } from "./fixtures";
 
 test.describe("the application shell", () => {
   test("moves focus to the page heading after a route change", async ({ api, page }) => {
-    /* Landing on the board reads its list and, separately, its attention summary. */
+    /* Landing on the board reads its open list once; the action hub is drawn from it. */
     const emptyList = {
       items: [],
       matched: 0,
       total: 0,
-      limit: 24,
+      limit: 200,
       offset: 0,
       preset_counts: {},
       recruitment_status_counts: {},
       stage_counts: {},
     };
-    api.stub("GET /api/v1/applications?activity=open&limit=24&sort=updated", json(emptyList));
-    api.stub("GET /api/v1/applications?preset=needs_attention&limit=3", json({ ...emptyList, limit: 3 }));
+    api.stub("GET /api/v1/applications?activity=open&limit=200&sort=updated", json(emptyList));
     await page.goto("/settings");
     await page.getByRole("link", { name: "לוח המועמדויות" }).click();
 
-    await expect(page.getByRole("heading", { level: 1, name: "לוח מועמדויות" })).toBeFocused();
+    await expect(page.getByRole("heading", { level: 1, name: "לוח המועמדויות" })).toBeFocused();
   });
 });
 

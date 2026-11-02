@@ -33,7 +33,7 @@ const detail = {
   },
 };
 
-test.describe("the Job Detail screen", () => {
+test.describe("the Application hub", () => {
   test.beforeEach(({ api }) => {
     api.stub("GET /api/v1/applications/app-1", json(detail));
   });
@@ -45,9 +45,8 @@ test.describe("the Job Detail screen", () => {
 
     expect(results.violations).toEqual([]);
 
-    await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
-    await page.getByRole("button", { name: "עדכון נוסח המשרה" }).click();
-    const updateDialog = page.getByRole("dialog", { name: "עריכת נוסח המשרה" });
+    await page.getByRole("button", { name: "עדכון סטטוס" }).click();
+    const updateDialog = page.getByRole("dialog", { name: "עדכון סטטוס ומשימות" });
     await expect(updateDialog).toBeVisible();
     await expect(updateDialog).toHaveCSS("opacity", "1");
     const dialogResults = await new AxeBuilder({ page })

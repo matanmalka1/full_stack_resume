@@ -7,7 +7,7 @@ import { expect, json, test } from "./fixtures";
 
 /* Axe scans of the screens whose own specs are Vitest-only: the board, the Resume
    resolver, the draft editor, the Ready screen, Settings, and Not Found. New Application,
-   Job Detail, and the Facts integrity check carry their scans in their own specs. Every
+   the Application hub, and the Facts integrity check carry their scans in their own specs. Every
    API read is stubbed through the shared fixture, which fails a test on any other. */
 
 const scan = async (page: Page, exclude: string[] = []) => {
@@ -66,7 +66,7 @@ const board = (): ApplicationListResponse => {
     items,
     matched: items.length,
     total: items.length,
-    limit: 24,
+    limit: 200,
     offset: 0,
     preset_counts: { all: 2, active_interviews: 1, ready_to_send: 1, needs_attention: 0 },
     recruitment_status_counts: { saved: 1, interview: 1 },
@@ -76,13 +76,11 @@ const board = (): ApplicationListResponse => {
 
 test.describe("accessibility", () => {
   test("the application board has no automatically detectable violations", async ({ api, page }) => {
-    /* The board asks two questions of one endpoint: the list itself and the attention
-       summary beside it. Each gets its own answer. */
-    api.stub("GET /api/v1/applications?activity=open&limit=24&sort=updated", json(board()));
-    api.stub("GET /api/v1/applications?preset=needs_attention&limit=3", json({ ...board(), items: [], matched: 0 }));
+    /* The board reads its open list once; the action hub is drawn from the same answer. */
+    api.stub("GET /api/v1/applications?activity=open&limit=200&sort=updated", json(board()));
 
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1, name: "לוח מועמדויות" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "לוח המועמדויות" })).toBeVisible();
     await expect(page.getByText("Globex").first()).toBeVisible();
 
     await scan(page);
@@ -192,13 +190,19 @@ test.describe("accessibility", () => {
     api.stub("GET /api/v1/facts/history", json({ events: [] }));
 
     await page.goto("/applications/app-1/draft");
-    await expect(page.getByRole("button", { name: "עריכה ותצוגה" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTitle("תצוגה מקדימה של הטיוטה")).toBeVisible();
     await expect(page.getByText("Owned the CRM migration.").first()).toBeVisible();
+
+    await scan(page);
+
+    /* The rendered document is behind the heading's preview toggle. */
+    const preview = page.getByRole("button", { name: "תצוגה מקדימה" });
+    await preview.click();
+    await expect(preview).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTitle("תצוגה מקדימה של הטיוטה")).toBeVisible();
 
     await scan(page, [DRAFT_PREVIEW]);
 
-    await page.getByRole("button", { name: "בדיקה והכנת PDF" }).click();
+    await page.getByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" }).click();
     const approval = page.getByRole("dialog", { name: "אישור והכנת PDF" });
     await expect(approval).toBeVisible();
     await expect(approval).toHaveCSS("opacity", "1");
@@ -246,13 +250,25 @@ test.describe("accessibility", () => {
       json({ application_id: "app-1", document_id: "doc-1", markdown: "# Decision" }),
     );
 
+    api.stub(
+      `GET ${documentPath}/page-count`,
+      json({
+        application_id: "app-1",
+        document_id: "doc-1",
+        document_hash: HASH,
+        template: null,
+        pages: 1,
+        maximum: 1,
+      }),
+    );
+
     await page.goto("/applications/app-1/ready");
-    await expect(page.getByRole("heading", { name: "מוכן למסירה" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "קורות החיים מוכנים" })).toBeVisible();
     await expect(page.getByRole("link", { name: "הורדת PDF" }).first()).toBeVisible();
 
     await scan(page);
 
-    await page.getByRole("button", { name: "רישום ההגשה" }).click();
+    await page.getByRole("button", { name: "רישום הגשה" }).first().click();
     const submission = page.getByRole("dialog", { name: "רישום הגשה קבועה" });
     await expect(submission).toBeVisible();
     await expect(submission).toHaveCSS("opacity", "1");
