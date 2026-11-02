@@ -172,9 +172,10 @@ name a test or a screen reader finds:
   finding a record by name is the quick search's. A list and its record are two views
   chosen by the URL, and the
   record's one command is pinned above the bottom bar.
-  The facts pool is one `<table>` at every width: a phone turns each knowledge file's
-  `tbody` into a card of rows under a heading row only it shows, and stretches each
-  row's link over the row. It has no "סינון" toggle - its search field, pending banner
+  The facts pool is one `<table>` at every width: each knowledge file is a `tbody`
+  opened by a heading row naming the file and how many facts it holds - a label over a
+  card of rows on a phone, a row across the table on a wide screen - and a phone
+  stretches each row's link over the row. It has no "סינון" toggle - its search field, pending banner
   and knowledge-file chips are its only filters - and an open fact is its own page on
   both widths (`/facts?fact=…`), with its rare command (deletion) behind a ⋮ menu.
 - `Dialog` is a bottom sheet (`presentation="sheet"`, the default): grab handle,
@@ -204,11 +205,17 @@ name a test or a screen reader finds:
   becomes a row of tiles, and the reminder, the record's facts and the PDF stand in a
   300px side column. The preparation steps have addresses of their own: the analysis
   (`/analysis`), its matching settings (`/analysis/matching`) and the verification
-  (`/verification`).
+  (`/verification`). On the analysis step a requirement no fact supports offers "הוסף
+  עובדה" in its row (the table's evidence cell on a wide screen), and the gap questions
+  stand under the requirements table as a card per question - in the main column beside
+  the verdict on a wide screen, after the rows on a phone.
 - The draft and ready steps draw no stage bar: their heading row carries the way back.
   The draft editor shows one part of the CV at a time - a card of part rows beside it on
-  a wide screen, a segmented strip above it on a phone; every part stays mounted - with the job fit, the save state and the approval's notes in a side
-  column that a phone stacks in order (fit first). Its approval is in the heading row on
+  a wide screen, a segmented strip above it on a phone; every part stays mounted - with
+  the job fit, the folded card of the job's requirements marked against the lines on
+  screen, the save state and the approval's notes in a side column that a phone stacks
+  in order (fit first, requirements last). A regeneration's before and after open as a
+  card above the lines. Its approval is in the heading row on
   a wide screen and a pinned bar on a phone; the rendered document is behind the
   heading's preview toggle. A line is a bullet, its text and a quiet status line; its
   tools appear on hover or focus (a tap on a phone). A line nothing authorizes sits on a
