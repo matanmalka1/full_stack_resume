@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail } from "@/api/contracts";
@@ -40,6 +40,9 @@ const stubReads = (projection: ApplicationDetail) => {
     if (url.endsWith("/document/decision-markdown")) {
       return Promise.resolve(json({ application_id: "app-1", document_id: "doc-1", markdown: "# Decision" }));
     }
+    if (url.endsWith("/document/page-count")) {
+      return Promise.resolve(json({ pages: 2, limit: 2 }));
+    }
     if (url.endsWith("/document")) {
       return Promise.resolve(
         json(cvDocument({ preparation_state: projection.preparation_state, approved_at: projection.approved_at })),
@@ -58,8 +61,10 @@ describe("ReadyPage", () => {
     stubReads(readyDetail());
     renderReady();
 
-    expect(await screen.findByRole("heading", { name: "מוכן למסירה" })).toBeInTheDocument();
-    /* Once, in the file card: the pinned bar carries only the step's own command. */
+    expect(await screen.findByRole("heading", { name: "קורות החיים מוכנים" })).toBeInTheDocument();
+    /* The file's facts, its length read from the render's own count. */
+    expect(await screen.findByText(/2 עמודים/)).toBeInTheDocument();
+    /* Once, beside the step's own command. */
     const downloads = await screen.findAllByRole("link", { name: "הורדת PDF" });
     expect(downloads).toHaveLength(1);
     expect(downloads[0]).toHaveAttribute("href", `/api/v1/applications/app-1/document/pdf?v=${HASH}`);
@@ -76,14 +81,14 @@ describe("ReadyPage", () => {
     const fetchMock = stubReads(readyDetail());
     renderReady();
 
-    fireEvent.click(await screen.findByRole("button", { name: "רישום ההגשה" }));
+    fireEvent.click(await screen.findByRole("button", { name: "רישום הגשה" }));
     fireEvent.click(screen.getByRole("button", { name: "אישור ורישום ההגשה" }));
 
     /* The flow's end is announced at the top of the step, ahead of the file it sent. */
     const done = (await screen.findByText("ההגשה נרשמה")).closest("output");
     expect(done).not.toBeNull();
     expect(
-      done!.compareDocumentPosition(screen.getByRole("heading", { name: "קובץ קורות החיים" })) &
+      done!.compareDocumentPosition(screen.getByRole("link", { name: "חזרה לעריכת הטיוטה" })) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByRole("link", { name: "סיום וחזרה ללוח" })).toHaveAttribute("href", "/");
@@ -118,8 +123,9 @@ describe("ReadyPage", () => {
     );
     renderReady();
 
-    const aside = await screen.findByRole("complementary", { name: "פרטי המסמך והבדיקה" });
-    fireEvent.click(await within(aside).findByText("אפשרויות נוספות"));
+    /* The step's command is now the way back to the board; another send of the same
+       file is a row of its own among the ways into the document. */
+    expect(await screen.findByRole("link", { name: "סיום וחזרה ללוח" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "רישום הגשה נוספת" }));
     expect(await screen.findByText("קורות החיים האלה כבר נרשמו כמוגשים")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "אישור ורישום ההגשה" })).toBeDisabled();
@@ -139,6 +145,6 @@ describe("ReadyPage", () => {
       "/applications/app-1/draft",
     );
     expect(screen.queryByRole("link", { name: "הורדת PDF" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "רישום ההגשה" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "רישום הגשה" })).not.toBeInTheDocument();
   });
 });
