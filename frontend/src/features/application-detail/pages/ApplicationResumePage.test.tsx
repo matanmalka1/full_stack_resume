@@ -83,10 +83,10 @@ describe("ApplicationResumePage", () => {
         )
         .mockImplementationOnce(() => Promise.resolve(json(detail())));
       renderResume(detail(), fetchMock);
-      expect(screen.getByRole("status")).toHaveTextContent("בודק מהו השלב הפעיל");
+      expect(screen.getByRole("status")).toHaveTextContent("טוען את פרטי המועמדות");
       expect(await screen.findByRole("alert")).toBeInTheDocument();
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(screen.queryByText("בודק מהו השלב הפעיל…")).not.toBeInTheDocument();
+      expect(screen.queryByText("טוען את פרטי המועמדות…")).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "ניסיון חוזר" }));
       expect(await screen.findByRole("heading", { name: "טיוטה" })).toBeInTheDocument();
       expect(fetchMock).toHaveBeenCalledTimes(3);

@@ -11,16 +11,16 @@ import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
 
-/* The read before the redirect. On a wide screen it is the one sentence it always was;
-   on a phone the sentence leads the shape of the step the reader is about to land on -
-   the spine's segments, the step's opening banner and two cards under it - so the swap
-   to that step reads as the page filling in rather than as one screen replacing another. */
+/* The read before the redirect: one sentence over the shape of the step the reader is
+   about to land on - the spine's segments, the step's opening banner and two cards under
+   it - so the swap to that step reads as the page filling in rather than as one screen
+   replacing another. */
 const resumeLoading = (
   <div className="flex flex-col gap-4">
     <LiveRegion className="text-body text-cv-text-muted max-lg:text-support" visuallyHidden={false}>
-      בודק מהו השלב הפעיל…
+      טוען את פרטי המועמדות…
     </LiveRegion>
-    <div aria-hidden="true" className="flex flex-col gap-3 lg:hidden">
+    <div aria-hidden="true" className="flex flex-col gap-3">
       <div className="grid grid-cols-4 gap-1.5">
         {[0, 1, 2, 3].map((segment) => (
           <span className="h-1 rounded-pill bg-cv-border" key={segment} />
