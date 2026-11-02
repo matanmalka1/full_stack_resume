@@ -17,11 +17,15 @@ const scan = async (page: Page, exclude: string[] = []) => {
   expect(results.violations).toEqual([]);
 };
 
-/* The draft preview is the server-rendered CV in a `sandbox=""` frame. Axe cannot run
+/* A CV preview is the server-rendered document in a `sandbox=""` frame. Axe cannot run
    scripts there and waits on the frame until the test times out; the document inside is
    the backend's render output, checked by its render validation, not this app's UI. The
    frame's title is asserted by the test itself. */
 const DRAFT_PREVIEW = 'iframe[title="תצוגה מקדימה של הטיוטה"]';
+const READY_PREVIEW = 'iframe[title="קורות החיים המוכנים"]';
+
+const previewHtml =
+  '<!doctype html><html lang="en"><head><title>Preview</title></head><body><main><h1>Account Manager</h1><p>Owned the CRM migration.</p></main></body></html>';
 
 const listItem = (overrides: Partial<ApplicationListItem>): ApplicationListItem => ({
   id: "app-1",
@@ -169,10 +173,7 @@ test.describe("accessibility", () => {
     api.stub(`GET ${documentPath}`, json(draft, { headers: { ETag: `"${HASH}"` } }));
     /* The preview frame's source carries the document hash as its cache key. */
     api.stub(`GET ${documentPath}/preview?v=${HASH}`, (route) =>
-      route.fulfill({
-        contentType: "text/html",
-        body: '<!doctype html><html lang="en"><head><title>Preview</title></head><body><main><h1>Account Manager</h1><p>Owned the CRM migration.</p></main></body></html>',
-      }),
+      route.fulfill({ contentType: "text/html", body: previewHtml }),
     );
     api.stub(
       `GET ${documentPath}/page-count`,
@@ -262,17 +263,23 @@ test.describe("accessibility", () => {
       }),
     );
 
+    /* The Ready document itself, framed like the draft's preview. */
+    api.stub(`GET ${documentPath}/preview?v=${HASH}`, (route) =>
+      route.fulfill({ contentType: "text/html", body: previewHtml }),
+    );
+
     await page.goto("/applications/app-1/ready");
     await expect(page.getByRole("heading", { level: 1, name: "קורות החיים מוכנים" })).toBeVisible();
     await expect(page.getByRole("link", { name: "הורדת PDF" }).first()).toBeVisible();
+    await expect(page.locator(READY_PREVIEW)).toBeVisible();
 
-    await scan(page);
+    await scan(page, [READY_PREVIEW]);
 
     await page.getByRole("button", { name: "רישום הגשה" }).first().click();
     const submission = page.getByRole("dialog", { name: "רישום הגשה קבועה" });
     await expect(submission).toBeVisible();
     await expect(submission).toHaveCSS("opacity", "1");
 
-    await scan(page);
+    await scan(page, [READY_PREVIEW]);
   });
 });

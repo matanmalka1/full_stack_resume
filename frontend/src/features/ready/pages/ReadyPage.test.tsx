@@ -64,6 +64,11 @@ describe("ReadyPage", () => {
     expect(await screen.findByRole("heading", { name: "קורות החיים מוכנים" })).toBeInTheDocument();
     /* The file's facts, its length read from the render's own count. */
     expect(await screen.findByText(/2 עמודים/)).toBeInTheDocument();
+    /* The page itself, framed from the document's own preview. */
+    expect(screen.getByTitle("קורות החיים המוכנים")).toHaveAttribute(
+      "src",
+      `/api/v1/applications/app-1/document/preview?v=${HASH}`,
+    );
     /* Once, beside the step's own command. */
     const downloads = await screen.findAllByRole("link", { name: "הורדת PDF" });
     expect(downloads).toHaveLength(1);

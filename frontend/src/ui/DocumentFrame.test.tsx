@@ -37,6 +37,17 @@ describe("DocumentFrame", () => {
     expect(screen.getByText("80%")).toBeInTheDocument();
   });
 
+  it("sketches the page until the document first paints, and not on a later src", () => {
+    const { container, rerender } = render(<DocumentFrame src="/preview?v=1" title="מסמך לבדיקה" />);
+    expect(container.querySelector(".cv-skeleton")).not.toBeNull();
+
+    fireEvent.load(screen.getByTitle("מסמך לבדיקה"));
+    expect(container.querySelector(".cv-skeleton")).toBeNull();
+
+    rerender(<DocumentFrame src="/preview?v=2" title="מסמך לבדיקה" />);
+    expect(container.querySelector(".cv-skeleton")).toBeNull();
+  });
+
   it("offers fixed, incremental, and keyboard-accessible scrolling controls", () => {
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
     render(<DocumentFrame src="/preview" title="מסמך לבדיקה" />);
