@@ -30,6 +30,9 @@ export const routePaths = {
      other one canonical would have bounced the majority of navigation through a redirect
      - and because it stays honest if what this screen does changes again. */
   application,
+  /* The analysis step of the wizard: the verdict, the matching and the draft's creation.
+     The hub at `application` names the record and links here; it used to be this step. */
+  analysis: (applicationId: string): string => `${application(applicationId)}/analysis`,
   resumeApplication: (applicationId: string): string => `${application(applicationId)}/resume`,
   draft: (applicationId: string): string => `${application(applicationId)}/draft`,
   /* The ready step: the Application's rendered document, its file and its submission.

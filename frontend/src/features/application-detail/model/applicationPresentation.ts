@@ -10,6 +10,18 @@ export const applicationLabel = (company?: string | null, targetRole?: string | 
     ? "פרטי משרה"
     : `${company} — ${targetRole}`;
 
+/* An Application as a confirmation names it: the two fields every reading of one carries,
+   the board's list item and the hub's projection alike. */
+export interface NamedApplication {
+  company: string;
+  target_role: string;
+}
+
+/* The record as the subject of a sentence - the company, a middle dot, the role - the way
+   a confirmation opens on what it is about to change. */
+export const applicationSubject = ({ company, target_role: targetRole }: NamedApplication): string =>
+  `${company} · ${targetRole}`;
+
 /* The posting's origin as the host alone, without `www.`. A URL the browser cannot
    parse is not guessed at; each presentation can provide the fallback appropriate to
    its available source data. */

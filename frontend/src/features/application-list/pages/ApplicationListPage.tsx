@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { ApplicationListItem, RecruitmentStatus } from "@/api/contracts";
 import { returnedApplicationId } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
+import { CloseApplicationDialog, DeleteApplicationDialog } from "@/features/application-detail";
 import { RecruitmentUpdateDialog } from "@/features/recruitment";
 import { Button, buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
@@ -20,8 +21,6 @@ import { ApplicationDetailsDialog } from "../components/ApplicationDetailsDialog
 import { ApplicationListResults } from "../components/ApplicationListResults";
 import { ApplicationListToolbar } from "../components/ApplicationListToolbar";
 import { ApplicationPresetTabs } from "../components/ApplicationPresetTabs";
-import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
-import { DeleteApplicationDialog } from "../components/DeleteApplicationDialog";
 import { useApplicationListMutations } from "../api/mutations";
 import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
 import { PAGE_SIZE } from "../model/applicationListParams";

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { json, renderRoute } from "@/test/fixtures";
-import { ApplicationPage } from "./ApplicationPage";
+import { AnalysisPage } from "./AnalysisPage";
 
 const APPLY_PATH = "/api/v1/analyses/analysis-1/apply-decisions";
 
@@ -76,7 +76,8 @@ const problemResponse = (code: string, detailText: string, status = 412): Respon
     { status, headers: { "Content-Type": "application/problem+json" } },
   );
 
-const renderPage = () => renderRoute("/applications/app-1", "/applications/:applicationId", <ApplicationPage />);
+const renderPage = () =>
+  renderRoute("/applications/app-1/analysis", "/applications/:applicationId/analysis", <AnalysisPage />);
 
 /* The form lives in a dialog opened from the summary under the analysis heading. */
 const openMatchingDialog = async () => {

@@ -1,16 +1,18 @@
 import { Archive } from "lucide-react";
 
-import type { ApplicationListItem } from "@/api/contracts";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { applicationLabel } from "@/features/application-detail";
+import { type NamedApplication, applicationSubject } from "../model/applicationPresentation";
 
 interface CloseApplicationDialogProps {
-  application: ApplicationListItem | null;
+  application: NamedApplication | null;
   pending: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
 
+/* Closing ends the process with the employer and takes the card off the active board; it
+   deletes nothing. The copy says both, so the question reads as the light one of the
+   record's two endings. Asked from the board and from the hub alike. */
 export const CloseApplicationDialog = ({ application, pending, onCancel, onConfirm }: CloseApplicationDialogProps) => (
   <ConfirmDialog
     confirmLabel="סגירת המועמדות"
@@ -23,12 +25,10 @@ export const CloseApplicationDialog = ({ application, pending, onCancel, onConfi
     pendingLabel="סוגר…"
     title="לסגור את המועמדות?"
   >
-    <p dir="auto">
-      {application === null
-        ? null
-        : `${applicationLabel(application.company, application.target_role)} תסומן כסגורה ותרד מלוח המועמדויות הפעילות.`}
+    <p className="text-label leading-relaxed text-cv-text" dir="auto">
+      {application === null ? null : `${applicationSubject(application)} תסומן כסגורה ותרד מלוח המועמדויות הפעילות.`}
     </p>
-    <p className="mt-2 text-support text-cv-text-muted">
+    <p className="mt-2 text-label leading-relaxed text-cv-text-muted">
       שום דבר לא נמחק. נוסח המשרה, מסמך קורות החיים וההגשות נשמרים כפי שהם, והמועמדות נשארת נגישה דרך הסינון.
     </p>
   </ConfirmDialog>
