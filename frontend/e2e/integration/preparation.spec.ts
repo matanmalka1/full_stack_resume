@@ -28,11 +28,10 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   test.setTimeout(120_000);
   const applications = "/api/v1/applications";
   await page.goto("/applications/new");
-  await expect(page.getByText("יצירת המועמדות תשמור את נוסח המשרה ותתחיל את הניתוח.")).toBeVisible();
-  await page.getByLabel("שם החברה", { exact: true }).fill("Browser Preparation Co");
-  await page.getByLabel("תפקיד היעד", { exact: true }).fill("Account Manager");
+  await page.getByLabel("חברה", { exact: true }).fill("Browser Preparation Co");
+  await page.getByLabel("תפקיד", { exact: true }).fill("Account Manager");
   const jobText = "Experience owning the full sales cycle.\nFluent English.";
-  await page.getByLabel("טקסט המשרה", { exact: true }).fill(jobText);
+  await page.getByLabel("טקסט המודעה", { exact: true }).fill(jobText);
 
   const createdResponse = postResponse(page, applications);
   // Intake starts analysis itself; capture it before pressing Create.
@@ -41,7 +40,7 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
       /\/applications\/[^/]+\/analyses$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "יצירת מועמדות", exact: true }).click();
+  await page.getByRole("button", { name: "שמירה וניתוח המשרה", exact: true }).click();
   const created = await createdResponse;
   expect(created.status()).toBe(201);
   const { application_id: id, job_text_hash: jobTextHash } = await created.json();
@@ -54,7 +53,8 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
     .poll(async () => (await (await request.get(`/api/v1/operations/${firstAnalysisId}`)).json()).status)
     .toBe("failed");
   const retryResponse = postResponse(page, `/api/v1/operations/${firstAnalysisId}/retry`);
-  await page.getByRole("button", { name: "ניסיון חוזר", exact: true }).click();
+  // The failed run is the analysis step's whole screen, with the run again as its command.
+  await page.getByRole("button", { name: "הרצה מחדש", exact: true }).click();
   const retried = await retryResponse;
   expect(retried.status()).toBe(202);
   const retriedOperation = await retried.json();
@@ -68,6 +68,9 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
     job_posting: { job_text: jobText, job_text_hash: jobTextHash, locked: false },
   });
 
+  // The draft is created on the verification step the analysis leads on to.
+  await page.getByRole("link", { name: "המשך לטיוטה" }).click();
+  await expect(page).toHaveURL(new RegExp(`/applications/${id}/verification$`));
   const draftedResponse = postResponse(page, `${documentPath}/draft`);
   await page.getByRole("button", { name: "יצירת טיוטה", exact: true }).click();
   const drafted = await draftedResponse;
@@ -90,6 +93,14 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
         claim.claim_type === "canonical" && claim.fact_ids.length === 1,
     );
   expect(target).toBeDefined();
+  // The editor shows one part of the CV at a time; open the one holding the target line.
+  const targetSection = beforeDocument.outline.sections.find((section: { claims: { claim_id: string }[] }) =>
+    section.claims.some((claim) => claim.claim_id === target.claim_id),
+  );
+  await page
+    .getByRole("navigation", { name: "חלקי קורות החיים" })
+    .getByRole("button", { name: targetSection.name, exact: true })
+    .click();
   const row = page.locator(`[id="draft-claim-${target.claim_id}"]`);
   await row.getByRole("button", { name: "עריכת השורה", exact: true }).click();
   const concurrentText = "Managed a fictional division of 9999 people.";
@@ -112,26 +123,29 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   const conflict = page.getByRole("dialog", { name: "הטיוטה השתנתה בזמן העריכה" });
   await expect(conflict.getByText(localText, { exact: true })).toBeVisible();
   await expect(conflict.getByText(concurrentText, { exact: true })).toBeVisible();
-  await conflict.getByRole("button", { name: "שמירה על הגרסה הנוכחית" }).click();
+  await conflict.getByRole("button", { name: "השארת הגרסה הנוכחית" }).click();
   await expect(conflict).not.toBeVisible();
-  await expect(row.getByText("הטקסט הזה חוסם אישור", { exact: true })).toBeVisible();
+  // A line waiting on the reader says why it holds approval back.
+  const blocking = row.getByText(/אין עובדה שמאשרת את השורה הזו|הבדיקה מצאה טענה שאינה נתמכת בעובדות/);
+  await expect(blocking).toBeVisible();
   const blockedCheck = postResponse(page, `${documentPath}/check`);
-  await page.getByRole("button", { name: "בדיקה והכנת PDF", exact: true }).click();
+  await page.getByRole("button", { name: "אישור הטיוטה ויצירת הקובץ", exact: true }).click();
   expect((await (await blockedCheck).json()).passed).toBe(false);
   await expect(page.getByRole("dialog", { name: "אישור והכנת PDF" })).not.toBeVisible();
   // Correct through the UI using the original canonical wording; it must unblock
   // the same document, without an AI key or a bypass of the approval boundary.
   const editing = row.getByRole("textbox", { name: "טקסט השורה" });
-  if (!(await editing.isVisible())) await row.getByRole("button", { name: "עריכת השורה", exact: true }).click();
+  // A line waiting on the reader is edited through its "עריכה" pill.
+  if (!(await editing.isVisible())) await row.getByRole("button", { name: "עריכה", exact: true }).click();
   const savedCorrection = page.waitForResponse(
     (response) => response.request().method() === "PATCH" && new URL(response.url()).pathname === documentPath,
   );
   await editing.fill(target.text);
   await editing.blur();
   expect((await savedCorrection).status()).toBe(200);
-  await expect(row.getByText("הטקסט הזה חוסם אישור", { exact: true })).not.toBeVisible();
+  await expect(blocking).not.toBeVisible();
   const checkResponse = postResponse(page, `${documentPath}/check`);
-  await page.getByRole("button", { name: "בדיקה והכנת PDF", exact: true }).click();
+  await page.getByRole("button", { name: "אישור הטיוטה ויצירת הקובץ", exact: true }).click();
   const checked = await checkResponse;
   expect(checked.status()).toBe(200);
   expect((await checked.json()).passed).toBe(true);
@@ -151,7 +165,7 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   await operationSucceeded(request, (await rendered.json()).id);
   await expect(page).toHaveURL(new RegExp(`/applications/${id}/ready$`), { timeout: 30_000 });
   await page.reload();
-  await expect(page.getByRole("heading", { name: "מוכן למסירה" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "קורות החיים מוכנים" })).toBeVisible();
   const readyResponse = await request.get(documentPath);
   expect(readyResponse.status()).toBe(200);
   const ready = await readyResponse.json();
@@ -167,10 +181,10 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   const pdf = await readFile(pdfPath!);
   expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
 
-  await page.getByRole("button", { name: "רישום ההגשה", exact: true }).click();
+  await page.getByRole("button", { name: "רישום הגשה", exact: true }).first().click();
   const submission = page.getByRole("dialog", { name: "רישום הגשה קבועה" });
   const submittedResponse = postResponse(page, `${applicationPath}/submissions`);
-  await submission.getByRole("button", { name: "אישור ורישום ההגשה", exact: true }).click();
+  await submission.getByRole("button", { name: "רישום הגשה", exact: true }).click();
   const submitted = await submittedResponse;
   expect(submitted.status()).toBe(201);
   const record = await submitted.json();
