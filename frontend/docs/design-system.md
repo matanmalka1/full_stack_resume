@@ -175,9 +175,17 @@ name a test or a screen reader finds:
   is a page in its report sheet - warning mark, the catalogue's title, a "מה קרה" card
   and the steps with the failed one marked.
 - The application screen opens on the recruitment stage card and the dark next-action
-  card at every width; the draft step opens with the job-fit card. On phones a draft's
-  sections are cards under a pinned segmented strip of anchors - every section stays
-  mounted - and a claim's edit and remove are labelled pills.
+  card at every width. The draft and ready steps draw no stage bar: their heading row
+  carries the way back. The draft editor shows one part of the CV at a time - a card of
+  part rows beside it on a wide screen, a segmented strip above it on a phone; every part
+  stays mounted - with the job fit, the save state and the approval's notes in a side
+  column that a phone stacks in order (fit first). Its approval is in the heading row on
+  a wide screen and a pinned bar on a phone; the rendered document is behind the
+  heading's preview toggle. A line is a bullet, its text and a quiet status line; its
+  tools appear on hover or focus (a tap on a phone). A line nothing authorizes sits on a
+  recessed ground with "השארה / עריכה / הסרה" pills. The ready step is the finished page
+  (a sketch) beside its facts, its two commands and a `ListCard` of ways into how it was
+  made; a phone shrinks the page to a thumbnail and pins the two commands.
 - Every touch target is at least 44px.
 
 Route frames are centred in the content column, as the design draws them: 70rem for a
