@@ -54,7 +54,6 @@ const fact: Fact = {
   fact_id: "fact.active",
   meaning: "עובדת אישור",
   renderings: { he: "עובדת אישור" },
-  provenance: "אישור המועמד",
   source: "common.json",
   resume_style: "bullet",
   status: "canonical",

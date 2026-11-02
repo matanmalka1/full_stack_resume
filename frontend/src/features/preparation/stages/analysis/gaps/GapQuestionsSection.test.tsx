@@ -94,7 +94,6 @@ describe("GapQuestionsSection", () => {
           fact: {
             fact_id: "fact-1",
             meaning: "Sold cloud deals",
-            provenance: "answer",
             renderings: { en: "Sold cloud deals to enterprise buyers" },
             resume_style: "bullet",
             source: "situational_skills.json",

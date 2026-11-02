@@ -18,15 +18,14 @@ const formFrom = (fact: Fact): FactFormFields => ({
   english: fact.renderings.en ?? "",
   hebrew: fact.renderings.he ?? "",
   meaning: fact.meaning,
-  provenance: fact.provenance,
   source: fact.source as FactFormFields["source"],
   style: fact.resume_style as FactFormFields["style"],
   tags: fact.tags.join(", "),
 });
 
 /* §17 `edit_pending_fact`: what a drafted fact says, corrected before it is confirmed.
-   Only meaning, renderings and tags are offered - the fact's source, style and provenance
-   (the user's own answer) are not editable, so they are not fields here. The same field
+   Only meaning, renderings and tags are offered - the fact's source and style are not
+   editable, so they are not fields here. The same field
    components as every other fact form, so the rules and wording cannot drift. */
 export const GapFactEditDialog = ({
   applicationId,

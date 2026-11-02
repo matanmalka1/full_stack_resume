@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { UpdateSettingsRequest } from "@/api/contracts";
 import type { SettingsRead } from "@/api/settings";
 import { Button } from "@/ui/Button";
+import { Checkbox } from "@/ui/Checkbox";
 import { editableSettings, settingsFieldLabels, settingValueLabel } from "../settings.model";
 
 export const SettingsConflict = ({
@@ -49,21 +50,19 @@ export const SettingsConflict = ({
                 <td>{settingValueLabel(local[key])}</td>
                 <td>
                   {base[key] !== local[key] && (
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(key)}
-                        onChange={(event) =>
-                          setSelected((previous) => {
-                            const next = new Set(previous);
-                            if (event.target.checked) next.add(key);
-                            else next.delete(key);
-                            return next;
-                          })
-                        }
-                      />{" "}
+                    <Checkbox
+                      checked={selected.has(key)}
+                      onChange={(event) =>
+                        setSelected((previous) => {
+                          const next = new Set(previous);
+                          if (event.target.checked) next.add(key);
+                          else next.delete(key);
+                          return next;
+                        })
+                      }
+                    >
                       החלת העריכה: {settingsFieldLabels[key]}
-                    </label>
+                    </Checkbox>
                   )}
                 </td>
               </tr>

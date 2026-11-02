@@ -30,7 +30,6 @@ const question = (overrides: Partial<GapQuestion> = {}): GapQuestion => ({
 const fact = (overrides: Partial<Fact> = {}): Fact => ({
   fact_id: "fact-1",
   meaning: "Sold cloud deals",
-  provenance: "gap answer",
   renderings: { en: "Sold cloud deals", he: "מכר עסקאות ענן" },
   resume_style: "bullet",
   source: "situational_skills.json",

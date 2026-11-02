@@ -10,7 +10,6 @@ const item = (factId: string, status: FactStatus, recorded: string | null): Fact
     fact_id: factId,
     link_target: null,
     meaning: "Led a B2B sales team",
-    provenance: "Confirmed by candidate",
     renderings: { en: "Led a B2B sales team" },
     replaces: null,
     resume_style: "bullet",

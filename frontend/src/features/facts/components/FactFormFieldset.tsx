@@ -47,12 +47,6 @@ export const FactTagsField = ({ errors, register }: FactFormControl) => (
   </Field>
 );
 
-export const FactProvenanceField = ({ errors, register }: FactFormControl) => (
-  <Field error={errors.provenance?.message} label="מקור ואימות העובדה">
-    {(control) => <Textarea {...control} {...register("provenance", factFieldRules.provenance)} dir="auto" />}
-  </Field>
-);
-
 export const FactSourceField = ({ register }: Pick<FactFormControl, "register">) => (
   <Field label="מקור הידע">
     {(control) => (

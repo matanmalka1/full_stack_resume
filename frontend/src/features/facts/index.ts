@@ -10,7 +10,6 @@ export { FactCreationDialog } from "./components/FactCreationDialog";
 export {
   FactCoreFields,
   FactHebrewRenderingField,
-  FactProvenanceField,
   FactSourceField,
   FactTagsField,
 } from "./components/FactFormFieldset";

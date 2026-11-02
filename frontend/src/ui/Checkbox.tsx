@@ -3,13 +3,15 @@ import { type InputHTMLAttributes, type ReactNode, useId } from "react";
 
 import { cx } from "./cx";
 
-interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
+type CheckboxInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
+
+interface CheckboxProps extends CheckboxInputProps {
   children: ReactNode;
   hint?: ReactNode;
 }
 
-/* A.5: every control carries a visible Hebrew label, so the label is a required child
-   rather than an optional prop.
+/* The box alone, for a row that lays out its own label - a settings row, a table cell.
+   Every checkbox in the app is drawn by this, so they all share one look.
 
    The box is drawn by a sibling `<span>`, not by the input itself. A native checkbox
    styled only with `accent-color` is still the browser's own control underneath: its
@@ -22,6 +24,26 @@ interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "typ
    `display:none`), so it keeps its place in the tab order and its native toggle behaviour
    while every visible pixel is drawn by the box and tick beside it, from the same tokens
    as everywhere else. */
+export const CheckboxBox = ({ className, ...rest }: CheckboxInputProps) => (
+  <span className={cx("relative inline-flex size-5 shrink-0", className)}>
+    <input
+      className="peer absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+      type="checkbox"
+      {...rest}
+    />
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 rounded-check border-2 border-cv-border-strong bg-cv-surface transition-colors peer-hover:border-cv-text peer-checked:border-cv-accent peer-checked:bg-cv-accent peer-focus-visible:ring-2 peer-focus-visible:ring-cv-accent peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-cv-surface peer-disabled:border-cv-border peer-disabled:bg-cv-surface-muted"
+    />
+    <Check
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 m-auto size-icon-sm text-cv-on-accent opacity-0 [stroke-width:var(--stroke-icon-strong)] transition-opacity peer-checked:opacity-100"
+    />
+  </span>
+);
+
+/* A.5: every control carries a visible Hebrew label, so the label is a required child
+   rather than an optional prop. */
 export const Checkbox = ({
   "aria-describedby": describedBy,
   "aria-labelledby": labelledBy,
@@ -45,24 +67,13 @@ export const Checkbox = ({
         className,
       )}
     >
-      <span className="relative mt-1 inline-flex size-5 shrink-0">
-        <input
-          aria-describedby={descriptionIds}
-          aria-labelledby={labelIds}
-          className="peer absolute inset-0 size-5 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-          id={inputId}
-          type="checkbox"
-          {...rest}
-        />
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-control border-2 border-cv-border-strong bg-cv-surface transition-colors peer-hover:border-cv-text peer-checked:border-cv-accent peer-checked:bg-cv-accent peer-focus-visible:ring-2 peer-focus-visible:ring-cv-accent peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-cv-surface peer-disabled:border-cv-border peer-disabled:bg-cv-surface-muted"
-        />
-        <Check
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 m-auto size-icon-sm text-cv-on-accent opacity-0 [stroke-width:var(--stroke-icon-strong)] transition-opacity peer-checked:opacity-100"
-        />
-      </span>
+      <CheckboxBox
+        aria-describedby={descriptionIds}
+        aria-labelledby={labelIds}
+        className="mt-1"
+        id={inputId}
+        {...rest}
+      />
       <span className="flex flex-col gap-1">
         <span id={labelId}>{children}</span>
         {hint === undefined ? null : (

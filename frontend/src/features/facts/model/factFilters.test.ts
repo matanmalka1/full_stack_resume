@@ -10,7 +10,6 @@ const entries = toFactPool({
       fact: {
         fact_id: "fact.backend",
         meaning: "Built backend services",
-        provenance: "candidate notes",
         renderings: { en: "Built APIs", he: "בניית ממשקי API" },
         resume_style: "bullet",
         source: "development.json",
@@ -23,7 +22,6 @@ const entries = toFactPool({
       fact: {
         fact_id: "fact.sales",
         meaning: "Managed enterprise accounts",
-        provenance: "candidate notes",
         renderings: { en: "Managed accounts" },
         resume_style: "bullet",
         source: "sales.json",

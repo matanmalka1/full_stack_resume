@@ -41,7 +41,7 @@ export const StatusBadge = ({ children, className, icon, tone, variant = "soft" 
   return (
     <span
       className={cx(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-pill border px-2.5 py-1 text-caption font-bold",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border px-2.5 py-1 text-caption font-bold",
         variantClasses(variant, tone),
         className,
       )}

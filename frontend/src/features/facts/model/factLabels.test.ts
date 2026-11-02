@@ -9,7 +9,6 @@ const fact = (overrides: Partial<Fact> = {}): Fact => ({
   fact_id: "fact.a",
   link_target: null,
   meaning: "Led a B2B sales team",
-  provenance: "Confirmed by candidate",
   renderings: { en: "Led a B2B sales team of six" },
   replaces: null,
   resume_style: "bullet",

@@ -24,7 +24,6 @@ describe("the fact form's starting state", () => {
       english: "",
       hebrew: "",
       meaning: "Delivered 30% growth.",
-      provenance: "",
       source: "development.json",
       style: "bullet",
       tags: "",
@@ -39,7 +38,6 @@ describe("the fact form's starting state", () => {
     const fact = {
       fact_id: "fact.original",
       meaning: "Built APIs",
-      provenance: "candidate notes",
       renderings: { en: "Built APIs", he: "בניית ממשקים" },
       resume_style: "bullet",
       source: "development.json",
@@ -50,7 +48,6 @@ describe("the fact form's starting state", () => {
       english: "Built APIs",
       hebrew: "בניית ממשקים",
       meaning: "Built APIs",
-      provenance: "candidate notes",
       source: "development.json",
       style: "bullet",
       tags: "backend, api",
@@ -76,7 +73,6 @@ describe("what the form refuses before the round trip", () => {
   it("refuses a field holding only whitespace, and names it in Hebrew", () => {
     expect(factFieldRules.meaning.validate("   ")).toBe("יש להזין משמעות.");
     expect(factFieldRules.english.validate("")).toBe("יש להזין ניסוח באנגלית.");
-    expect(factFieldRules.provenance.validate(" \n ")).toBe("יש להזין מקור ואימות.");
   });
 
   it("requires at least one real tag, not just punctuation", () => {
@@ -86,6 +82,5 @@ describe("what the form refuses before the round trip", () => {
 
   it("accepts a filled field", () => {
     expect(factFieldRules.meaning.validate("Led a B2B sales team")).toBe(true);
-    expect(factFieldRules.provenance.validate("Confirmed by candidate")).toBe(true);
   });
 });
