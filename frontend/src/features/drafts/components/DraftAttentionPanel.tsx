@@ -4,6 +4,7 @@ import type { ApplicationDetail, DraftClaim } from "@/api/contracts";
 import { outlineClaims } from "@/api/documents";
 import { ReasonCallout } from "@/features/preparation";
 import { Button } from "@/ui/Button";
+import { cardClasses } from "@/ui/surface";
 import type { EditableDocument } from "../model/drafts.types";
 
 type ReviewReason = ApplicationDetail["review_reasons"][number];
@@ -103,25 +104,19 @@ const DraftReasonCallout = ({
   );
 };
 
-/* Everything standing between this draft and its approval, in one place, each with the
-   way to it.
+/* What the projection says stands between this draft and its approval, each reason with
+   the way to it.
 
-   Two sources, both the server's: the projection's review reasons, and the lines the
-   outline itself marks as backed by nothing. The reasons were a card of their own and the
-   unsupported lines were only findable by scrolling the whole document for a red badge;
-   the reader now sees the full list first and jumps to each line from it. Silent when
-   there is nothing to do. */
+   The lines the outline marks as backed by nothing are not listed here on their own: the
+   design marks them where they stand - a dot on their part in the navigation, a recessed
+   row with its answers under it. They are listed only inside the projection's own
+   pending-fact reason, which is about exactly them. Silent when the projection names
+   nothing. */
 export const DraftAttentionPanel = ({ detail, draft, onShowClaim, unsupportedClaims }: DraftAttentionPanelProps) => {
-  if (detail.review_reasons.length === 0 && unsupportedClaims.length === 0) return null;
-  /* The projection's pending-fact reason is about exactly these lines, so they are listed
-     inside it rather than a second time beneath it. */
-  const pendingReasonShown = detail.review_reasons.some((reason) => reason.code === "PENDING_FACT_REQUIRES_RESOLUTION");
+  if (detail.review_reasons.length === 0) return null;
 
   return (
-    <section
-      aria-labelledby="draft-attention-heading"
-      className="flex flex-col gap-3 border border-cv-border border-s-4 border-s-cv-blocker bg-cv-surface p-card-padding"
-    >
+    <section aria-labelledby="draft-attention-heading" className={cardClasses("flex flex-col gap-3 p-4 max-lg:p-3.5")}>
       <h2 className="flex items-center gap-2 text-body font-semibold text-cv-text" id="draft-attention-heading">
         <OctagonAlert aria-hidden="true" className="size-icon-md text-cv-blocker" />
         לטיפול לפני אישור
@@ -136,10 +131,6 @@ export const DraftAttentionPanel = ({ detail, draft, onShowClaim, unsupportedCla
           unsupportedClaims={unsupportedClaims}
         />
       ))}
-
-      {pendingReasonShown || unsupportedClaims.length === 0 ? null : (
-        <UnsupportedLines claims={unsupportedClaims} onShowClaim={onShowClaim} />
-      )}
     </section>
   );
 };

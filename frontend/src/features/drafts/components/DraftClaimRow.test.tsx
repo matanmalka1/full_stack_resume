@@ -101,8 +101,25 @@ describe("DraftClaimRow", () => {
     render(<DraftClaimRow actions={rowActions} claim={pending} facts={facts} removal={{ route: "none" }} />);
 
     expect(screen.getByText(pending.pending_reason ?? "")).not.toBeVisible();
+    /* Keeping the line is what opens the ways to give it something to stand on. */
+    expect(screen.queryByRole("button", { name: "בדיקת הניסוח מול העובדות" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "השארה" }));
     fireEvent.click(screen.getByRole("button", { name: "בדיקת הניסוח מול העובדות" }));
     expect(rowActions.onReview).toHaveBeenCalledWith(pending);
+  });
+
+  it("says where a line came from and which requirement it answers", () => {
+    render(
+      <DraftClaimRow
+        actions={actions()}
+        answers={["Python", "FastAPI"]}
+        claim={claim}
+        facts={facts}
+        removal={{ route: "none" }}
+      />,
+    );
+
+    expect(screen.getByText("עונה על Python ועוד 1")).toBeInTheDocument();
   });
 
   it("offers no wording review for a pending headline", () => {

@@ -1,6 +1,4 @@
 import type { ClaimType } from "@/api/contracts";
-import type { ClaimOrigin } from "./draftOverview";
-import type { Tone } from "@/ui/tone";
 
 /* Exhaustive over the generated union. A claim type added to the backend fails this
    build rather than reaching a screen as an untranslated value. This is the same reason
@@ -10,24 +8,16 @@ import type { Tone } from "@/ui/tone";
    content's, and both the preparation screen and this editor say them, so they live
    with the selection in `@/features/preparation`. */
 
+/* Where a line came from, in the few words its row's status line spends on it, as the
+   design words it: a line copied, combined or derived from facts is "from the pool"; one
+   reworded for the role says it was checked; free text says it has nothing behind it. */
 export const claimTypeLabels: Record<ClaimType, string> = {
-  canonical: "מבוסס עובדה",
-  composite: "מורכב מכמה עובדות",
-  derived: "נוסח נגזר מעובדות",
-  reviewed: "נבדק מול העובדות",
+  canonical: "מתוך המאגר",
+  composite: "משולב מכמה עובדות",
+  derived: "נגזר מהמאגר",
+  reviewed: "נוסח מחדש ונבדק",
   pending: "ללא ביסוס",
-  headline: "כותרת",
-};
-
-export const claimTypeTones: Record<ClaimType, Tone> = {
-  canonical: "success",
-  composite: "success",
-  derived: "success",
-  reviewed: "success",
-  /* Free text nothing could authorize. A.4: it is preserved, marked unsafe at once, and
-     blocks approval - not the save. */
-  pending: "blocker",
-  headline: "neutral",
+  headline: "מהפרופיל",
 };
 
 export const claimTypeExplanations: Record<ClaimType, string> = {
@@ -37,13 +27,4 @@ export const claimTypeExplanations: Record<ClaimType, string> = {
   reviewed: "השורה נוסחה מחדש לתפקיד, והניסוח נבדק בנפרד מול העובדות במאגר כדי לוודא שהמשמעות זהה.",
   pending: "אין עובדה שמאשרת את הטקסט הזה. הוא נשמר כפי שנכתב, ואינו מאפשר אישור של הגרסה.",
   headline: "שורת הכותרת של קורות החיים. היא נבנית מהפרופיל ולא מהעובדות שנבחרו לטיוטה.",
-};
-
-/* Where a line came from, in the words the content summary counts it under. Keyed by
-   `ClaimOrigin`, which folds the claim types into what the reader asks. */
-export const claimOriginLabels: Record<ClaimOrigin, string> = {
-  verbatim: "כלשון העובדה",
-  reworded: "נוסח מחדש",
-  unsupported: "ללא עובדה מאחוריה",
-  structural: "מבנה המסמך",
 };

@@ -1,55 +1,42 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronLeft, Download, FileCheck2, PencilLine, Send, ShieldCheck } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { BookOpen, Check, ChevronRight, CircleHelp, Download, PencilLine, Send } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
-import { decisionExportQueryOptions, documentPdfHref, documentQueryOptions } from "@/api/documents";
+import {
+  decisionExportQueryOptions,
+  documentPageCountQueryOptions,
+  documentPdfHref,
+  documentQueryOptions,
+} from "@/api/documents";
 import { boardPath, boardReturnState } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
-import { applicationLabel } from "@/features/application-detail";
-import { ValidationReportView } from "@/features/drafts";
-import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
+import { PreparationAlerts } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { Card } from "@/ui/Card";
-import { cx } from "@/ui/cx";
-import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
-import { Disclosure } from "@/ui/Disclosure";
+import { CommitBar } from "@/ui/CommitBar";
+import { Dialog } from "@/ui/Dialog";
 import { ErrorCallout } from "@/ui/ErrorCallout";
+import { ListCard, ListRow } from "@/ui/ListCard";
 import { LiveRegion } from "@/ui/LiveRegion";
+import { PageHeading } from "@/ui/PageHeading";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
 import { SuccessNotice } from "@/ui/SuccessNotice";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { DecisionDocument } from "../components/DecisionDocument";
-import { ReadyDocumentSummary } from "../components/ReadyDocumentSummary";
+import { ReadyFileFacts, ReadyPageSketch } from "../components/ReadyDocumentSummary";
 import { SubmissionDialog } from "../components/SubmissionDialog";
 
 const readyLoading = (
-  <div className="flex flex-col gap-6">
+  <div className="flex flex-col gap-4">
     <LiveRegion>טוען את קורות החיים המוכנים…</LiveRegion>
-    <Skeleton className="block h-40 w-full" />
-    <Skeleton className="block h-64 w-full" />
+    <Skeleton className="block h-24 w-full" />
+    <Skeleton className="block h-48 w-full" />
   </div>
-);
-
-const CardHeading = ({
-  children,
-  className,
-  icon: Icon,
-  id,
-}: {
-  children: ReactNode;
-  className?: string;
-  icon: typeof FileCheck2;
-  id: string;
-}) => (
-  <h2 className={cx("flex items-center gap-2 font-semibold text-cv-text", className)} id={id}>
-    <Icon aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
-    {children}
-  </h2>
 );
 
 const downloadMarkdown = (markdown: string, filename: string) => {
@@ -72,13 +59,21 @@ const downloadMarkdown = (markdown: string, filename: string) => {
    the rendered files, the approval and the current basis agree. So this screen reads the
    state rather than deciding it, and the editor is always one press away - editing a
    Ready document is allowed and simply returns it to draft. What is frozen is what left
-   the system: recording a submission copies the content and files it sent. */
+   the system: recording a submission copies the content and files it sent.
+
+   Drawn as the design draws it, without the wizard's stage bar: the finished page at the
+   start of a wide screen, and beside it the statement, the file's facts, the two things
+   done with it, and the ways into how it was made. On a phone the page shrinks to a
+   thumbnail beside those facts and the two commands pin to the screen's bottom edge. */
 export const ReadyPage = () => {
   const applicationId = useRequiredParam("applicationId");
+  const isPhone = useIsPhone();
   const [submissionOpen, setSubmissionOpen] = useState(false);
   const [submissionRecorded, setSubmissionRecorded] = useState(false);
   const [submissionNoticeOpen, setSubmissionNoticeOpen] = useState(false);
   const [downloadStarted, setDownloadStarted] = useState(false);
+  const [decisionOpen, setDecisionOpen] = useState(false);
+  const [factsOpen, setFactsOpen] = useState(false);
 
   const applicationQuery = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = applicationQuery.data;
@@ -90,6 +85,12 @@ export const ReadyPage = () => {
   });
   const decisionQuery = useQuery({
     ...decisionExportQueryOptions(applicationId, documentHash ?? ""),
+    enabled: ready && documentHash !== null,
+  });
+  /* The render's own measure of the file. A count the server could not make leaves the
+     format to stand alone. */
+  const pagesQuery = useQuery({
+    ...documentPageCountQueryOptions(applicationId, documentHash ?? ""),
     enabled: ready && documentHash !== null,
   });
   const document = documentQuery.data?.document;
@@ -112,244 +113,275 @@ export const ReadyPage = () => {
   const canSubmit = ready && detail?.available_actions.includes("submit") === true && documentHash !== null;
   const canDownload = ready && documentHash !== null;
 
-  /* The way back to the editor is one of the ways into the document, listed with the
-     decision and the facts behind it, rather than the bar's opening edge: the bar keeps
-     the two things done with the file - download it, record the send - and on a phone the
-     three together left none of them room to read. */
-  const backLink = (
-    <Link
-      className={buttonClasses(
-        "ghost",
-        "w-fit max-lg:min-h-14 max-lg:w-full max-lg:justify-start max-lg:gap-2.5 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:px-4 max-lg:text-body max-lg:font-bold",
-      )}
-      to={routePaths.draft(applicationId)}
-    >
-      <PencilLine aria-hidden="true" className="size-icon-md" />
-      <span className="max-lg:flex-1">חזרה לעריכת הטיוטה</span>
-      <ChevronLeft aria-hidden="true" className="size-icon-md lg:hidden" />
-    </Link>
-  );
+  if (applicationQuery.error !== null) {
+    /* A failed read owns the whole route surface, including its 404 frame. */
+    return (
+      <QueryState
+        error={applicationQuery.error}
+        errorTitle="לא ניתן לטעון את קורות החיים המוכנים"
+        onRetry={() => void applicationQuery.refetch()}
+      />
+    );
+  }
 
-  /* Download is a secondary action beside recording the submission, never a gate in front
-     of it: both are offered together - download the file, and record the send it was for. */
+  const role = detail?.application.target_role;
+
+  /* Download is the secondary command beside recording the submission, never a gate in
+     front of it: both are offered together - download the file, and record the send it
+     was for. */
   const downloadButton =
     !canDownload || documentHash === null ? null : (
       <a
-        className={buttonClasses("secondary")}
+        className={buttonClasses("secondary", "w-full", isPhone ? "large" : "default")}
         href={documentPdfHref(applicationId, documentHash)}
         key="download-pdf"
         onClick={() => setDownloadStarted(true)}
       >
-        <Download aria-hidden="true" className="size-icon-md" />
+        <Download aria-hidden="true" className="size-icon-lg" />
         {downloadStarted || submissionExists ? "הורדת PDF שוב" : "הורדת PDF"}
       </a>
     );
 
-  const nextStep = !ready
-    ? null
+  const primary = !ready ? null : submissionExists ? (
+    <Link
+      className={buttonClasses("primary", "w-full shadow-action", isPhone ? "large" : "default")}
+      state={boardReturnState(applicationId)}
+      to={boardPath()}
+    >
+      <Check aria-hidden="true" className="size-icon-lg" />
+      סיום וחזרה ללוח
+    </Link>
+  ) : (
+    <Button
+      className="w-full shadow-action"
+      disabled={!canSubmit}
+      onClick={() => setSubmissionOpen(true)}
+      size={isPhone ? "large" : "default"}
+    >
+      <Send aria-hidden="true" className="size-icon-lg" />
+      רישום הגשה
+    </Button>
+  );
+
+  const statement = !ready
+    ? "קורות החיים יחזרו להיות מוכנים לאחר בדיקה, אישור ויצירת הקבצים מחדש בעורך. הגשות שכבר נרשמו אינן משתנות."
     : submissionExists
-      ? {
-          note: "ההגשה נרשמה. תהליך הכנת קורות החיים הושלם.",
-          primary: (
-            <Link className={buttonClasses("primary")} state={boardReturnState(applicationId)} to={boardPath()}>
-              סיום וחזרה ללוח
-            </Link>
-          ),
-        }
-      : {
-          note: "הורידו את הקובץ ומסרו אותו למגייס, ואז רשמו כאן שההגשה בוצעה.",
-          primary: (
-            <Button disabled={!canSubmit} onClick={() => setSubmissionOpen(true)}>
-              <Send aria-hidden="true" className="size-icon-md" />
-              רישום ההגשה
-            </Button>
-          ),
-        };
+      ? "ההגשה נרשמה. תהליך הכנת קורות החיים הושלם."
+      : "הורידו את הקובץ ומסרו אותו למגייס, ואז רשמו כאן שההגשה בוצעה.";
 
   return (
-    <WizardStepShell
-      applicationId={applicationId}
-      description="המסמך המוכן נשאר זמין כל עוד לא שונה. עריכה מחזירה אותו לטיוטה, וההגשות שנרשמו נשמרות כפי שנשלחו."
-      detail={detail}
-      eyebrow={
-        detail === undefined ? (
-          <Skeleton className="inline-block w-56 max-w-full align-middle" />
-        ) : (
-          <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
-        )
-      }
-      measure="wide"
-      /* The design keeps this step's own title and line under the phone header: the
-         finished document is the step's statement, not just its position. */
-      phoneHeading="full"
-      queryError={applicationQuery.error}
-      stage="ready"
-      title={detail !== undefined && !ready ? "קורות החיים אינם מוכנים כרגע" : undefined}
+    <section
+      aria-labelledby="route-heading"
+      className="page-frame max-lg:flex max-lg:min-h-[calc(100dvh-2.5rem)] max-lg:flex-col"
     >
-      <QueryState
-        error={applicationQuery.error}
-        errorTitle="לא ניתן לטעון את קורות החיים המוכנים"
-        loading={detail === undefined}
-        loadingState={readyLoading}
-        onRetry={() => void applicationQuery.refetch()}
-      >
+      {/* Where the screen sits: on a phone the top bar's way back to the Application with
+          who the CV is for beside it, on a wide screen the trail from the board. */}
+      <header className="-mx-2 -mt-1.5 mb-1 flex items-center gap-1 lg:hidden">
+        <Link
+          aria-label="חזרה לפרטי המועמדות"
+          className="flex size-11 shrink-0 items-center justify-center rounded-control text-cv-text"
+          to={routePaths.application(applicationId)}
+        >
+          <ChevronRight aria-hidden="true" className="size-icon-lg" />
+        </Link>
         {detail === undefined ? null : (
-          <>
-            {/* A phone's mark that the step is done, at the top of the body: the wide
-                screen's spine shows it as its last step filled. */}
+          <p className="min-w-0 truncate text-caption text-cv-text-muted" dir="auto">
+            {`${detail.application.target_role} · ${detail.application.company}`}
+          </p>
+        )}
+      </header>
+      <nav aria-label="מיקום" className="mb-5.5 text-support text-cv-text-muted max-lg:hidden">
+        <ol className="flex flex-wrap items-center gap-1.5">
+          <li>
+            <Link className="underline hover:text-cv-text" state={boardReturnState(applicationId)} to={boardPath()}>
+              לוח המועמדויות
+            </Link>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li>
+            {role === undefined ? (
+              <Skeleton className="inline-block w-32 align-middle" />
+            ) : (
+              <Link className="underline hover:text-cv-text" dir="auto" to={routePaths.application(applicationId)}>
+                {role}
+              </Link>
+            )}
+          </li>
+          <li aria-hidden="true">/</li>
+          <li aria-current="page">מוכן למסירה</li>
+        </ol>
+      </nav>
+
+      <div className="flex items-start gap-8">
+        {ready ? <ReadyPageSketch className="max-w-130 flex-1 max-lg:hidden" size="large" /> : null}
+
+        <div className="flex min-w-0 flex-1 flex-col gap-4.5 max-lg:gap-4 lg:max-w-150">
+          <div>
             {ready ? (
-              <p className="-mb-3 flex w-fit items-center gap-1 rounded-pill bg-cv-surface-muted px-2.5 py-0.5 text-caption font-bold text-cv-text lg:hidden">
+              <p className="mb-2 inline-flex items-center gap-1.25 rounded-pill bg-cv-surface-muted px-2.5 py-1 text-caption font-bold text-cv-text lg:mb-2.5">
                 <Check aria-hidden="true" className="size-icon-sm" />
                 מוכן
               </p>
             ) : null}
+            <PageHeading description={detail === undefined ? undefined : statement} id="route-heading">
+              {detail !== undefined && !ready ? "קורות החיים אינם מוכנים כרגע" : "קורות החיים מוכנים"}
+            </PageHeading>
+          </div>
 
-            <PreparationAlerts detail={detail} screen="ready" />
+          <QueryState loading={detail === undefined} loadingState={readyLoading} />
 
-            {/* The end of the flow, at the top of the step where the eye lands after the
-                dialog closes. It used to be an edge-marked line under the cards and the
-                folded extras, the same weight as any other notice on the page. */}
-            {submissionNoticeOpen ? (
-              <SuccessNotice emphasis="milestone" onDismiss={() => setSubmissionNoticeOpen(false)} title="ההגשה נרשמה">
-                התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.
-              </SuccessNotice>
-            ) : null}
+          {detail === undefined ? null : (
+            <>
+              <PreparationAlerts detail={detail} screen="ready" />
 
-            {ready ? null : (
-              /* Reached from a link or the rail after the document changed. Nothing here is
-                 lost: the editor holds the document as it is now, and approving and
-                 rendering it again brings this step back. */
-              <Callout
-                action={
-                  <Link className={buttonClasses("primary")} to={routePaths.draft(applicationId)}>
-                    <PencilLine aria-hidden="true" className="size-icon-md" />
-                    מעבר לעורך הטיוטה
-                  </Link>
-                }
-                title="המסמך השתנה מאז שהופק"
-                tone="neutral"
-              >
-                קורות החיים יחזרו להיות מוכנים לאחר בדיקה, אישור ויצירת הקבצים מחדש בעורך. הגשות שכבר נרשמו אינן משתנות.
-              </Callout>
-            )}
-
-            {!ready ? null : (
-              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(19rem,1fr)]">
-                <Card
-                  aria-labelledby="ready-file-heading"
-                  className="flex min-w-0 flex-col gap-4 rounded-surface bg-cv-surface p-5 max-lg:p-4"
+              {/* The end of the flow, at the top of the step where the eye lands after the
+                  dialog closes. */}
+              {submissionNoticeOpen ? (
+                <SuccessNotice
+                  emphasis="milestone"
+                  onDismiss={() => setSubmissionNoticeOpen(false)}
+                  title="ההגשה נרשמה"
                 >
-                  {/* On a phone the file speaks through its summary below; the heading stays
-                      for assistive tech, which reads the card by it. */}
-                  <CardHeading className="max-lg:sr-only" icon={FileCheck2} id="ready-file-heading">
-                    קובץ קורות החיים
-                  </CardHeading>
-                  {document === undefined ? null : (
-                    <ReadyDocumentSummary approvedAt={detail.approved_at ?? null} language={document.language} />
-                  )}
-                  <p className="text-support leading-6 text-cv-text-muted max-lg:hidden">
-                    הקובץ נוצר מהמסמך כפי שאושר
-                    {detail.approved_at == null ? "" : ` ב־${formatDateTime(detail.approved_at)}`}. השרת בודק בעת ההורדה
-                    שהמסמך עדיין מוכן, ולכן הקובץ שיורד הוא תמיד זה שמתאים לו.
-                  </p>
-                  {submittedAt === null ? null : (
-                    <p className="text-support text-cv-text-muted">
-                      ההגשה האחרונה של המסמך הזה נרשמה ב־{formatDateTime(submittedAt)}.
-                    </p>
-                  )}
-                </Card>
+                  התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.
+                </SuccessNotice>
+              ) : null}
 
-                <aside aria-label="פרטי המסמך והבדיקה" className="flex min-w-0 flex-col gap-4">
-                  <Card
-                    aria-labelledby="ready-validation-heading"
-                    className="flex flex-col gap-4 rounded-surface bg-cv-surface p-4"
-                  >
-                    <CardHeading icon={ShieldCheck} id="ready-validation-heading">
-                      בדיקת התוכן
-                    </CardHeading>
-                    {document?.content_report == null ? (
-                      <p className="text-support text-cv-text-muted">דוח הבדיקה נטען…</p>
+              {ready ? null : (
+                /* Reached from a link after the document changed. Nothing here is lost: the
+                   editor holds the document as it is now, and approving and rendering it
+                   again brings this step back. */
+                <Callout
+                  action={
+                    <Link className={buttonClasses("primary")} to={routePaths.draft(applicationId)}>
+                      <PencilLine aria-hidden="true" className="size-icon-md" />
+                      מעבר לעורך הטיוטה
+                    </Link>
+                  }
+                  title="המסמך השתנה מאז שהופק"
+                  tone="neutral"
+                >
+                  הגשות שכבר נרשמו אינן משתנות.
+                </Callout>
+              )}
+
+              {!ready ? null : (
+                <>
+                  <div className="flex items-stretch gap-3.5">
+                    <ReadyPageSketch className="lg:hidden" size="small" />
+                    {document === undefined ? (
+                      <Skeleton className="block h-24 w-full" />
                     ) : (
-                      <ValidationReportView report={document.content_report} />
+                      <ReadyFileFacts
+                        approvedAt={detail.approved_at ?? null}
+                        language={document.language}
+                        pages={pagesQuery.data?.pages ?? null}
+                      />
                     )}
-                  </Card>
+                  </div>
 
-                  {submittedAt === null ? null : (
-                    <Disclosure summary="אפשרויות נוספות" variant="card">
-                      <div className="pt-2">
-                        <p className="mb-3 text-support text-cv-text-muted">
-                          הפעולות כאן אינן חלק מהשלמת המסירה הנוכחית ואינן משנות את המסמך.
-                        </p>
-                        <Button disabled={!canSubmit} onClick={() => setSubmissionOpen(true)} variant="secondary">
-                          <Send aria-hidden="true" className="size-icon-md" />
-                          רישום הגשה נוספת
-                        </Button>
-                      </div>
-                    </Disclosure>
+                  {/* A wide screen's two commands, under the file they act on. A phone pins
+                      the same two to its bottom edge instead. */}
+                  {isPhone ? null : (
+                    <div className="flex gap-2.5 *:flex-1">
+                      {downloadButton}
+                      {primary}
+                    </div>
                   )}
 
-                  <Disclosure flush summary="הסבר ההחלטות" variant="card">
-                    <Card className="rounded-surface bg-cv-surface p-4 max-lg:border-0 max-lg:p-0 max-lg:pt-1">
-                      {decisionQuery.error === null ? (
-                        <DecisionDocument
-                          decision={decisionQuery.data}
-                          onDownload={() => {
-                            if (decisionQuery.data !== undefined) {
-                              downloadMarkdown(decisionQuery.data.markdown, "decision.md");
-                            }
-                          }}
-                          pending={decisionQuery.isPending}
-                        />
-                      ) : (
-                        <ErrorCallout
-                          error={decisionQuery.error}
-                          fallbackDetail="קורות החיים עצמם זמינים. אפשר לרענן את העמוד ולנסות שוב."
-                          title="לא ניתן לטעון את הסבר ההחלטה"
-                        />
-                      )}
-                    </Card>
-                  </Disclosure>
+                  <ListCard label="על המסמך">
+                    <ListRow
+                      icon={isPhone ? CircleHelp : undefined}
+                      label="הסבר ההחלטות"
+                      onClick={() => setDecisionOpen(true)}
+                    />
+                    {chosenFacts.length === 0 ? null : (
+                      <ListRow
+                        icon={isPhone ? BookOpen : undefined}
+                        label="העובדות שנבחרו לקורות החיים"
+                        onClick={() => setFactsOpen(true)}
+                        trailing={String(chosenFacts.length)}
+                      />
+                    )}
+                    {/* Another send of the same file is a record of its own, kept out of
+                        the way of the first. */}
+                    {submissionExists ? (
+                      <ListRow
+                        icon={isPhone ? Send : undefined}
+                        label="רישום הגשה נוספת"
+                        onClick={canSubmit ? () => setSubmissionOpen(true) : undefined}
+                      />
+                    ) : null}
+                    <ListRow
+                      icon={isPhone ? PencilLine : undefined}
+                      label="חזרה לעריכת הטיוטה"
+                      to={routePaths.draft(applicationId)}
+                    />
+                  </ListCard>
 
-                  {/* The facts the document was built from, by their own words. */}
-                  {chosenFacts.length === 0 ? null : (
-                    <Disclosure summary={`העובדות שנבחרו לקורות החיים (${chosenFacts.length})`} variant="card">
-                      <ul className="flex list-disc flex-col gap-1.5 ps-4 text-support text-cv-text">
-                        {chosenFacts.map((fact) => (
-                          <li dir="auto" key={fact.fact_id}>
-                            {fact.text}
-                          </li>
-                        ))}
-                      </ul>
-                    </Disclosure>
-                  )}
-
-                  {backLink}
-                </aside>
-              </div>
-            )}
-          </>
-        )}
-      </QueryState>
-
-      {/* The ready step's own bar, the same surface the two steps before it close with:
-          what to do with the finished CV. */}
-      {detail === undefined ? null : (
-        <CommitBar
-          label={NEXT_STEP_LABEL}
-          /* The step's one command, with the download as its secondary beside it - the
-             two things done with the finished file, in one place. The download once sat
-             here beside the same button in the file card - two equal buttons for one
-             action - so the card no longer carries one. */
-          primary={nextStep === null ? undefined : nextStep.primary}
-          {...(downloadButton === null ? {} : { secondary: downloadButton })}
-        >
-          {nextStep === null ? undefined : (
-            <p className="text-support leading-6 text-cv-text-muted" dir="auto">
-              {nextStep.note}
-            </p>
+                  <p className="text-support leading-6 text-cv-text-muted">
+                    המסמך המוכן נשאר זמין כל עוד לא שונה. עריכה מחזירה אותו לטיוטה, וההגשות שנרשמו נשמרות כפי שנשלחו.
+                    {submittedAt === null
+                      ? null
+                      : ` ההגשה האחרונה של המסמך הזה נרשמה ב־${formatDateTime(submittedAt)}.`}
+                  </p>
+                </>
+              )}
+            </>
           )}
-        </CommitBar>
-      )}
+        </div>
+      </div>
+
+      {/* A phone's two commands: the bar pinned to the screen's bottom edge. */}
+      {isPhone && ready && primary !== null ? (
+        <>
+          {/* Takes what a short page leaves of the screen, so the bar stands at its bottom
+              edge; the bar stays a child of the frame so `sticky` can pin it. */}
+          <div aria-hidden="true" className="min-h-6 flex-1" />
+          <CommitBar primary={primary} {...(downloadButton === null ? {} : { secondary: downloadButton })} />
+        </>
+      ) : null}
+
+      <Dialog
+        headingId="ready-decision-heading"
+        onClose={() => setDecisionOpen(false)}
+        open={decisionOpen}
+        size="wide"
+        title="הסבר ההחלטות"
+      >
+        {decisionQuery.error === null ? (
+          <DecisionDocument
+            decision={decisionQuery.data}
+            onDownload={() => {
+              if (decisionQuery.data !== undefined) {
+                downloadMarkdown(decisionQuery.data.markdown, "decision.md");
+              }
+            }}
+            pending={decisionQuery.isPending}
+          />
+        ) : (
+          <ErrorCallout
+            error={decisionQuery.error}
+            fallbackDetail="קורות החיים עצמם זמינים. אפשר לרענן את העמוד ולנסות שוב."
+            title="לא ניתן לטעון את הסבר ההחלטה"
+          />
+        )}
+      </Dialog>
+
+      <Dialog
+        headingId="ready-facts-heading"
+        onClose={() => setFactsOpen(false)}
+        open={factsOpen}
+        title="העובדות שנבחרו לקורות החיים"
+      >
+        {/* The facts the document was built from, by their own words. */}
+        <ul className="flex list-disc flex-col gap-1.5 ps-4 text-support text-cv-text">
+          {chosenFacts.map((fact) => (
+            <li dir="auto" key={fact.fact_id}>
+              {fact.text}
+            </li>
+          ))}
+        </ul>
+      </Dialog>
 
       {documentHash === null ? null : (
         <SubmissionDialog
@@ -364,6 +396,6 @@ export const ReadyPage = () => {
           previousSubmittedAt={submittedAt}
         />
       )}
-    </WizardStepShell>
+    </section>
   );
 };

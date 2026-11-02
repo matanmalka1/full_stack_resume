@@ -1,60 +1,38 @@
-import type { ReactNode } from "react";
-
 import type { DocumentFacts, EditableDocument } from "../model/drafts.types";
 import type { ClaimFactContext, DraftClaimActions } from "../model/drafts.types";
+import type { ClaimRequirements } from "../model/draftFit";
+import { IDENTITY_PART, sectionPartId } from "../model/draftParts";
 import { DraftIdentityCard } from "./DraftIdentityCard";
 import { DraftSectionCard } from "./DraftSectionCard";
-import { DraftSectionNav } from "./DraftSectionNav";
 
 interface DraftOutlineEditorProps {
   actions: DraftClaimActions;
+  /* The part on screen - see `draftParts`. */
+  active: string;
   draft: EditableDocument;
   factContext: ClaimFactContext;
   facts: DocumentFacts | undefined;
-  /* The undo/redo controls, placed beside the heading of the text they act on. */
-  history: ReactNode;
   onRegenerateSection: (section: string) => void;
   onMoveClaim: (section: string, index: number, offset: -1 | 1) => void;
+  requirements: ClaimRequirements;
 }
 
-const sectionHeadingId = (index: number): string => `draft-section-${index}`;
-
-/* The draft itself, in reading order: a heading with the tools that act on the whole
-   text, the opening lines, then every section of the outline the projection named.
-   Everything said *about* the draft - how it was built, what blocks it, the errors - is
-   the page's to place around this. */
+/* The draft itself, one part on screen at a time: the opening lines and every section of
+   the outline, all mounted so text typed into one survives a visit to another. Everything
+   said *about* the draft - its fit, its saving, what blocks it - is the page's to place
+   around this. */
 export const DraftOutlineEditor = ({
   actions,
+  active,
   draft,
   factContext,
   facts,
-  history,
   onRegenerateSection,
   onMoveClaim,
+  requirements,
 }: DraftOutlineEditorProps) => (
-  <section aria-labelledby="draft-outline-heading" className="flex flex-col gap-section-gap">
-    {/* Dissolved on a phone so the section tabs' sticky box is the whole outline rather
-        than this heading block, which ended before the tabs could pin. */}
-    <div className="flex flex-col gap-3 max-lg:contents">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-heading-sm font-bold text-cv-text" id="draft-outline-heading">
-          תוכן קורות החיים
-        </h2>
-        {history}
-      </div>
-      {/* One section needs no way to jump between sections. */}
-      {draft.outline.sections.length > 1 ? (
-        <DraftSectionNav
-          sections={draft.outline.sections.map((section, index) => ({
-            claims: section.claims.length,
-            id: sectionHeadingId(index),
-            name: section.name,
-          }))}
-        />
-      ) : null}
-    </div>
-
-    <DraftIdentityCard actions={actions} draft={draft} facts={facts} />
+  <>
+    <DraftIdentityCard actions={actions} draft={draft} facts={facts} hidden={active !== IDENTITY_PART} />
 
     {draft.outline.sections.map((section, index) => (
       <DraftSectionCard
@@ -62,12 +40,14 @@ export const DraftOutlineEditor = ({
         draft={draft}
         factContext={factContext}
         facts={facts}
-        headingId={sectionHeadingId(index)}
+        headingId={`${sectionPartId(index)}-heading`}
+        hidden={active !== sectionPartId(index)}
         key={section.name}
         onRegenerate={() => onRegenerateSection(section.name)}
         onMoveClaim={(claimIndex, offset) => onMoveClaim(section.name, claimIndex, offset)}
+        requirements={requirements}
         section={section}
       />
     ))}
-  </section>
+  </>
 );

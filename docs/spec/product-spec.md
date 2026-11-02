@@ -398,8 +398,9 @@ basis.
 In the Web editor, rendering starts automatically after the user approves. No chained
 flow bypasses a blocker.
 
-The Ready screen shows the preview, PDF download, content report, and provenance, and
-offers editing and submission.
+The Ready screen shows the file's facts, PDF download, and provenance (the decision
+explanation and the chosen facts), and offers editing and submission. The content
+report stays with the editor.
 
 ## 12. AI behavior
 

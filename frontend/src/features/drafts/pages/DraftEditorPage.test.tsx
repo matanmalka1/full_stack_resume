@@ -225,10 +225,16 @@ const renderPage = (aiEnabled = true, search = "") => {
   );
 };
 
-/* The screen shows the draft as text; a line becomes a field when its own pencil is
-   pressed. Tests that type into a line open that line first, the way a user does. */
+/* The screen shows the draft as text, one part of it at a time - the first section
+   until another is chosen. A line becomes a field when its own pencil is pressed. Tests
+   that type into a line open that line first, the way a user does. */
 const editRow = async (index = 0) => {
   fireEvent.click((await screen.findAllByRole("button", { name: "עריכת השורה" }))[index]!);
+};
+
+/* A line waiting on the reader is opened through its "עריכה" pill instead. */
+const editPendingRow = async () => {
+  fireEvent.click(await screen.findByRole("button", { name: "עריכה" }));
 };
 
 // Failure scenarios deliberately retain buffers; a new test represents a fresh session.
@@ -246,28 +252,34 @@ describe("DraftEditorPage", () => {
     renderPage(true, `?claim=${encodeURIComponent(firstClaim().claim_id)}`);
     await waitFor(() => expect(document.activeElement?.id).toBe(`draft-claim-${firstClaim().claim_id}`));
   });
-  it("opens in the split editing workspace with a focused preview option", async () => {
+  it("opens on the lines, with the rendered document one press away", async () => {
     stubReads({});
 
     renderPage();
 
-    expect(await screen.findByRole("button", { name: "עריכה ותצוגה" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "תצוגה מלאה" })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
+    const preview = await screen.findByRole("button", { name: "תצוגה מקדימה" });
+    expect(preview).toHaveAttribute("aria-pressed", "false");
     expect(screen.getAllByRole("button", { name: "עריכת השורה" }).length).toBeGreaterThan(0);
+    /* The document stays mounted behind the button, so it is there the moment it is asked
+       for; the lines stay mounted behind it in turn, so typed text survives the trip. */
+    expect(screen.queryByRole("heading", { name: "תצוגה מקדימה" })).not.toBeInTheDocument();
+    fireEvent.click(preview);
+    expect(preview).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("heading", { name: "תצוגה מקדימה" })).toBeInTheDocument();
+    expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "עריכת השורה" })).not.toBeInTheDocument();
   });
 
-  it("reports a requested check in the pinned commit bar", async () => {
+  it("reports a requested check beside the lines, with what it found", async () => {
     stubReads({
       check: () =>
         checkResponse(HASH, false, [{ code: "MISSING_FACT", group: "facts", hard: true, message: "Missing fact" }]),
     });
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "בדיקה והכנת PDF" }));
+    fireEvent.click(await screen.findByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" }));
 
-    const result = await screen.findByText("הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים לצד הטיוטה.");
-    expect(result.closest(".sticky")).not.toBeNull();
+    const result = await screen.findByText("הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים כאן, לצד הטיוטה.");
     expect(result.closest('[role="status"]')).not.toBeNull();
   });
 
@@ -275,10 +287,12 @@ describe("DraftEditorPage", () => {
     const fetchMock = stubReads({ check: () => checkResponse(HASH, true) });
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "בדיקה והכנת PDF" }));
+    fireEvent.click(await screen.findByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" }));
 
-    expect(await screen.findByRole("dialog", { name: "אישור והכנת PDF" })).toBeInTheDocument();
-    expect(screen.getByText(/אני מאשר\/ת את הגרסה הזו להפקת PDF/)).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "אישור והכנת PDF" });
+    /* What is being approved, by its own words. */
+    expect(within(dialog).getByText("Acme")).toBeInTheDocument();
+    expect(within(dialog).getByText("Account Manager")).toBeInTheDocument();
     /* The check is addressed to the exact document on screen, and nothing approved yet. */
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]) === `${DOC_PATH}/check`);
     expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))).toEqual({ expected_document_hash: HASH });
@@ -302,17 +316,16 @@ describe("DraftEditorPage", () => {
 
     expect(await screen.findByText("Owned the CRM migration.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "עדכון סטטוס ומשימות" })).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 3, name: "Core Skills" })).toBeInTheDocument();
-    expect(screen.getAllByText("מבוסס עובדה").length).toBeGreaterThan(0);
-    /* The headline is a line of the document rather than a field: it is drawn as text
-       under its own "כותרת" status. The identity card also names the target role. */
-    expect(screen.getByText("כותרת", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Core Skills" })).toBeInTheDocument();
+    expect(screen.getByText("מתוך המאגר")).toBeInTheDocument();
+    /* The headline is a line of the document rather than a field, in the opening part:
+       it is drawn as text, said to come from the Profile. */
+    fireEvent.click(screen.getByRole("button", { name: "פרטים" }));
+    expect(screen.getAllByText("מהפרופיל", { selector: "span" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Account Manager", { selector: "p" })).toBeInTheDocument();
-    /* The wizard's own navigation, and no trail beside it: the step back is on the bar
-       that carries the step's action, and the way out is on the spine. */
+    /* One way out, at the heading: back to the Application. No trail, no stage bar. */
     expect(screen.queryByRole("navigation", { name: "פירורי לחם" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "חזרה לניתוח והתאמה" })).toHaveAttribute("href", "/applications/app-1");
-    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "חזרה לפרטי המועמדות" })).toHaveAttribute("href", "/applications/app-1");
   });
 
   it("offers in-page navigation once the outline carries more than one section", async () => {
@@ -330,11 +343,21 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    /* Plain anchors to the section headings: a tailored CV runs long enough that reaching
-       the third section meant scrolling past the first two every time. */
-    const sectionNav = await screen.findByRole("navigation", { name: "מעבר לסעיפי הטיוטה" });
-    expect(within(sectionNav).getByRole("link", { name: "Core Skills 1" })).toHaveAttribute("href", "#draft-section-0");
-    expect(within(sectionNav).getByRole("link", { name: "Experience 0" })).toHaveAttribute("href", "#draft-section-1");
+    /* One part at a time: the opening lines, then each section, the first section open. */
+    const parts = await screen.findByRole("navigation", { name: "חלקי קורות החיים" });
+    expect(
+      within(parts)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["פרטים", "Core Skills", "Experience"]);
+    expect(within(parts).getByRole("button", { name: "Core Skills" })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("heading", { name: "Core Skills" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Experience" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(parts).getByRole("button", { name: "Experience" }));
+    expect(within(parts).getByRole("button", { name: "Experience" })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("heading", { name: "Experience" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Core Skills" })).not.toBeInTheDocument();
   });
 
   it("names the facts behind a claim by their text, never by their identifier", async () => {
@@ -371,15 +394,19 @@ describe("DraftEditorPage", () => {
     });
 
     renderPage();
-    /* The unsupported line itself, after the headline and the contact: opening it shows
-       the same text twice - once in the row, once copied verbatim into the fact the
-       resolution flow would capture from it. */
-    await editRow(2);
+    /* The unsupported line itself, opened through its pill: it shows the same text twice
+       - once in the row, once copied verbatim into the fact the resolution flow would
+       capture from it. */
+    await editPendingRow();
 
     expect(await screen.findAllByDisplayValue("Delivered 30% growth.")).toHaveLength(2);
     expect(screen.getByText("ללא ביסוס")).toBeInTheDocument();
     expect(screen.getByText("no canonical fact authorizes this wording")).toBeInTheDocument();
-    expect(screen.getByText("הפיכת הטקסט לעובדה מאושרת")).toBeInTheDocument();
+    /* Keeping it opens the way to make it a fact. */
+    fireEvent.click(screen.getByRole("button", { name: "השארה" }));
+    expect(screen.getByText("הפיכת הטקסט לעובדה מאושרת")).toBeVisible();
+    /* Its part is marked in the navigation as holding a line to decide. */
+    expect(screen.getByRole("button", { name: /^Core Skills.*שורה ממתינה להחלטה/ })).toBeInTheDocument();
   });
 
   it("uses the canonical Hebrew lifecycle labels for a claim fact and its history", async () => {
@@ -452,6 +479,7 @@ describe("DraftEditorPage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "השארה" }));
 
     expect(await screen.findByText("מצב: מקור אמת", {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פתיחת העובדה במאגר העובדות" })).toHaveAttribute(
@@ -461,25 +489,6 @@ describe("DraftEditorPage", () => {
     expect(screen.getByText("ממתינה לאישור ← מקור אמת · explicit confirmation")).toBeInTheDocument();
     expect(screen.queryByText(/\bpending\b|\bcanonical\b/)).not.toBeInTheDocument();
   }, 10_000);
-
-  it("says how the content was built without duplicating fact lifecycle management", async () => {
-    stubReads({});
-
-    renderPage();
-
-    const summary = (await screen.findByRole("heading", { name: "איך נבנה התוכן" })).closest("section")!;
-    /* The one body line is its fact's canonical wording: counted as taken verbatim, with
-       nothing reworded and nothing unsupported. */
-    expect(within(summary).getByText("כלשון העובדה").nextElementSibling).toHaveTextContent("1");
-    expect(within(summary).getByText("נוסח מחדש").nextElementSibling).toHaveTextContent("0");
-    expect(within(summary).getByText("ללא עובדה מאחוריה").nextElementSibling).toHaveTextContent("0");
-    expect(within(summary).getByText(/עובדה אחת נכנסה לקורות החיים/)).toBeInTheDocument();
-    /* The summary reports the writer's choice; there is no separate selection to change. */
-    expect(within(summary).queryByRole("link")).not.toBeInTheDocument();
-    expect(within(summary).queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "מחזור חיי העובדות" })).not.toBeInTheDocument();
-    expect(screen.queryByText("יצירת עובדה ממתינה חדשה")).not.toBeInTheDocument();
-  });
 
   it("refreshes the conflict comparison and reapplies against the current ETag", async () => {
     let documentReads = 0;
@@ -509,7 +518,7 @@ describe("DraftEditorPage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
-    await editRow(2);
+    await editRow();
     const editor = await screen.findByDisplayValue("Owned the CRM migration.");
     fireEvent.change(editor, { target: { value: "My local wording." } });
     fireEvent.blur(editor);
@@ -569,9 +578,11 @@ describe("DraftEditorPage", () => {
     });
     renderPage();
     expect(await screen.findByText("טענה בלי עובדה מאושרת")).toBeVisible();
+    /* From another part: the jump opens the line's own part first. */
+    fireEvent.click(screen.getByRole("button", { name: "פרטים" }));
     fireEvent.click(screen.getByRole("button", { name: "מעבר לפתרון השורה" }));
     await waitFor(() => expect(document.activeElement?.id).toBe("draft-claim-c-1"));
-    expect(screen.getByText("הפיכת הטקסט לעובדה מאושרת")).toBeVisible();
+    expect(screen.getByRole("button", { name: "השארה" })).toBeVisible();
   });
 
   it("takes a deleted dependency to its row and withholds unrelated fact confirmation", async () => {
@@ -697,10 +708,11 @@ describe("DraftEditorPage", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
       renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: "השארה" }));
       fireEvent.click(await screen.findByText("הפיכת הטקסט לעובדה מאושרת"));
       fireEvent.click(await screen.findByRole("checkbox"));
       if (outcome === "edit-during-confirmation") {
-        fireEvent.click(screen.getAllByRole("button", { name: "עריכת השורה" })[2]!);
+        fireEvent.click(screen.getByRole("button", { name: "עריכה" }));
         fireEvent.change(await screen.findByDisplayValue(wording), { target: { value: "Saved before confirmation." } });
       }
       fireEvent.click(screen.getByRole("button", { name: "אישור העובדה ושימוש בה" }));
@@ -715,7 +727,7 @@ describe("DraftEditorPage", () => {
       expect(await screen.findByText("העובדה אושרה וצורפה לפרופיל")).toBeInTheDocument();
       if (outcome.endsWith("error")) {
         const retryButton = await screen.findByRole("button", { name: "ניסיון נוסף לעדכון מצב הטיוטה" });
-        expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" })).toBeDisabled();
         retry = true;
         fireEvent.click(retryButton);
         await waitFor(() => expect(screen.queryByRole("button", { name: "ניסיון נוסף לעדכון מצב הטיוטה" })).toBeNull());
@@ -727,11 +739,12 @@ describe("DraftEditorPage", () => {
           await screen.findByText("אין בעורך פעולה שסוגרת את הסיבה הזו. יש לפתור את התלות במקור לפני המשך."),
         ).toBeInTheDocument();
         expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/check`)).toBe(false);
-        expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" })).toBeDisabled();
       } else {
-        await screen.findByRole("heading", {
-          name: outcome === "failed" ? "נדרשים תיקונים בקובץ" : "הקובץ עבר בדיקה",
-        });
+        /* A failed check is reported beside the lines; a passing one says so where the
+           approval waits. */
+        if (outcome === "failed") await screen.findByRole("heading", { name: "נדרשים תיקונים בקובץ" });
+        else await screen.findByText(/^הבדיקה (הושלמה בהצלחה|עברה על הגרסה המוצגת)/);
         const request = fetchMock.mock.calls.find((call) => String(call[0]) === `${DOC_PATH}/check`);
         expect(JSON.parse(String(request![1]!.body))).toEqual({
           expected_document_hash: hashAt(outcome === "edit-during-confirmation" ? 6 : 4),
@@ -763,11 +776,11 @@ describe("DraftEditorPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     renderPage();
-    await editRow(2);
+    await editRow();
     fireEvent.change(await screen.findByDisplayValue("Owned the CRM migration."), {
       target: { value: "Keep my text." },
     });
-    fireEvent.click(screen.getByRole("link", { name: "חזרה לניתוח והתאמה" }));
+    fireEvent.click(screen.getByRole("link", { name: "חזרה לפרטי המועמדות" }));
     expect(await screen.findByText("לא ניתן להמשיך לפני שמירת העריכות")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "הכנת קורות החיים" })).toBeNull();
     expect(screen.getByDisplayValue("Keep my text.")).toBeInTheDocument();
@@ -809,7 +822,7 @@ describe("DraftEditorPage", () => {
 
     expect(await screen.findByText("לקורות החיים של המועמדות הזו אין עדיין טיוטה")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "עריכת השורה" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "בדיקה והכנת PDF" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" })).not.toBeInTheDocument();
   });
 
   /* Approval is a state of the one document, not a record that replaces it: the editor
@@ -828,7 +841,7 @@ describe("DraftEditorPage", () => {
     /* A visit to an approved document queues nothing by itself, and the finish action it
        already passed is not offered a second time. */
     expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/render"))).toBe(false);
-    expect(screen.queryByRole("button", { name: "בדיקה והכנת PDF" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" })).not.toBeInTheDocument();
   });
 
   /* The render is the step's own last act, so it is reported in the step, once. It used to
@@ -990,15 +1003,17 @@ describe("DraftEditorPage regeneration", () => {
     const fetchMock = stubReads({ regenerate: () => accepted() });
 
     renderPage();
-    const regenerate = await screen.findByRole("button", { name: "יצירה מחדש של השורה" });
+    /* The opening lines are edited by hand only: no regeneration offered there. */
+    fireEvent.click(await screen.findByRole("button", { name: "פרטים" }));
     const identity = screen.getByRole("heading", { name: "כותרת ופרטי קשר" }).closest("section")!;
     expect(within(identity).queryByRole("button", { name: "יצירה מחדש של השורה" })).not.toBeInTheDocument();
     expect(within(identity).getAllByRole("button", { name: "עריכת השורה" })).toHaveLength(2);
-    fireEvent.click(regenerate);
+    fireEvent.click(screen.getByRole("button", { name: "Core Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "יצירה מחדש של השורה" }));
 
     /* The overlay, not the route: the editor's own heading is still on screen under it. */
     expect(await screen.findByRole("heading", { name: "הרצת ניסוח או בדיקה של שורה" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "טיוטה ואימות" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "טיוטת קורות החיים" })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/regenerate-claim"));
     /* The document's hash is its whole identity: a save landing mid flight changes it, so
        activation discards the result instead of overwriting the user's edit. */
@@ -1127,6 +1142,7 @@ describe("DraftEditorPage preview", () => {
     stubReads({});
 
     renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "תצוגה מקדימה" }));
 
     const frame = await screen.findByTitle("תצוגה מקדימה של הטיוטה");
     expect(frame).toHaveAttribute("src", `${DOC_PATH}/preview?v=${HASH}`);
@@ -1142,6 +1158,7 @@ describe("DraftEditorPage preview", () => {
     stubReads({});
 
     renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "תצוגה מקדימה" }));
 
     const link = await screen.findByRole("link", { name: "PDF הטיוטה" });
     expect(link).toHaveAttribute("href", `${DOC_PATH}/preview.pdf?v=${HASH}`);
@@ -1161,15 +1178,14 @@ describe("DraftEditorPage preview", () => {
     expect(screen.queryByLabelText("טקסט השורה")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "עריכת השורה" }).length).toBeGreaterThan(0);
     const row = document.getElementById("draft-claim-c-1")!;
-    expect(within(row).getByText("המקור: עובדה אחת")).toBeVisible();
+    const source = within(row).getByRole("button", { name: "מתוך המאגר" });
+    expect(source).toHaveAttribute("aria-expanded", "false");
     expect(within(row).getByText("Owned the CRM migration end to end.")).not.toBeVisible();
-    expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
-    /* The single finish action is pinned rather than left at the foot of a column. It
-       starts with the check and changes to explicit approval only after that passes. */
-    expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
-    expect(
-      screen.getByText("זה הצעד הסופי: בדיקה ואז אישור שמכין את ה־PDF. כדי רק לראות PDF, פתחו את PDF הטיוטה."),
-    ).toBeInTheDocument();
+    fireEvent.click(source);
+    expect(within(row).getByText("Owned the CRM migration end to end.")).toBeVisible();
+    /* The single finish action, in the heading's row: it starts with the check and opens
+       the explicit approval only after that passes. */
+    expect(screen.getByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" })).toBeEnabled();
   });
 
   it("keeps an outdated report on screen, marked as such, with the check still offered", async () => {
@@ -1194,14 +1210,11 @@ describe("DraftEditorPage preview", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" })).toBeEnabled();
     expect(screen.getByText("תוצאת הבדיקה אינה מעודכנת")).toBeInTheDocument();
     expect(
       within(screen.getByRole("heading", { name: "בדיקת הקובץ" }).closest("section")!).getByText("Earlier warning"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("זה הצעד הסופי: בדיקה ואז אישור שמכין את ה־PDF. כדי רק לראות PDF, פתחו את PDF הטיוטה."),
-    ).toBeVisible();
   });
 
   it("shows the text just typed when the line is closed, not the version on the server", async () => {

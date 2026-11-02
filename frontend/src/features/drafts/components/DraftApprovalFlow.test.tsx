@@ -9,7 +9,7 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { documentQueryOptions } from "@/api/documents";
 import { HASH, OTHER_HASH, cvDocument, detail, documentCheck, json, operation, renderRoute } from "@/test/fixtures";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
-import { DraftApprovalBar } from "./DraftApprovalBar";
+import { DraftApproveButton } from "./DraftApproval";
 import { DraftRenderPanel } from "./DraftRenderPanel";
 import { DraftValidationPanel } from "./DraftValidationPanel";
 import { useDocumentCheck } from "../hooks/useDocumentCheck";
@@ -112,19 +112,21 @@ describe("DraftValidationPanel", () => {
   it("keeps the check available after a stale approval refusal", () => {
     render(
       <MemoryRouter>
-        <DraftApprovalBar
-          applicationHref="/applications/app-1"
-          onApprove={vi.fn()}
-          onValidate={vi.fn()}
-          passing={false}
-          reviewBlocked={false}
-          stale
-          validationPending={false}
+        <DraftApproveButton
+          state={{
+            onApprove: vi.fn(),
+            onValidate: vi.fn(),
+            passing: false,
+            reviewBlocked: false,
+            stale: true,
+            unavailable: false,
+            validationPending: false,
+          }}
         />
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("button", { name: "בדיקה מחדש והכנת PDF" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "אישור הטיוטה ויצירת הקובץ" })).toBeEnabled();
   });
 
   it("renders hard issues as blockers and soft issues as warnings without dropping unknown values", async () => {

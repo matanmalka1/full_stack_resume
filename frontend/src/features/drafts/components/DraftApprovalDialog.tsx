@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import { ApiProblem } from "@/api/client";
@@ -6,10 +7,9 @@ import type { ApplicationDetail, DocumentCheck } from "@/api/contracts";
 import { approveDocument, invalidateDocumentViews } from "@/api/documents";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
-import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
 import { Dialog } from "@/ui/Dialog";
-import { SummaryList } from "@/ui/SummaryList";
+import { LtrText } from "@/ui/LtrText";
 import type { EditableDocument } from "../model/drafts.types";
 
 interface DraftApprovalDialogProps {
@@ -67,20 +67,36 @@ export const DraftApprovalDialog = ({
     },
   });
 
+  /* What is being approved, as the design lists it: term at the start, value at the end,
+     each pair a row of one recessed panel. */
+  const facts =
+    detail === undefined || draft === undefined
+      ? []
+      : [
+          { term: "חברה", value: <span dir="auto">{detail.application.company}</span> },
+          { term: "תפקיד", value: <span dir="auto">{detail.application.target_role}</span> },
+          { term: "מזהה המסמך", value: <LtrText mono>{draft.document_hash.slice(0, 12)}</LtrText> },
+        ];
+
   return (
     <Dialog
       dismissible={false}
       footer={
         <>
-          <Button onClick={onClose} variant="secondary">
-            חזרה
+          <Button onClick={onClose} size="default" variant="secondary">
+            ביטול
           </Button>
           <Button
             disabled={warnings.length > 0 && !acknowledged}
             onClick={() => approval.mutate()}
             pending={approval.isPending}
             pendingLabel="מאשר ומכין…"
+            /* The design gives the command the wider share of a phone's row; tightened,
+               its label holds one line in an equal half. */
+            className="max-lg:px-3 max-lg:whitespace-nowrap"
+            size="default"
           >
+            <Check aria-hidden="true" className="size-icon-md" />
             אישור והכנת PDF
           </Button>
         </>
@@ -90,50 +106,48 @@ export const DraftApprovalDialog = ({
       open={open}
       title="אישור והכנת PDF"
     >
-      <p>
-        בדקתי את קורות החיים ואני מאשר/ת את הגרסה הזו להפקת PDF. עריכה אחרי האישור תחזיר את המסמך לטיוטה ותדרוש אישור
-        חדש.
-      </p>
-      {/* What is being approved, set apart from the sentence that approves it: it ran
-          straight on from the paragraph with no space between the two. */}
-      {detail === undefined || draft === undefined ? null : (
-        /* On a phone, where the sheet is narrower than a term beside its value, the list
-           reads as rows - term at the start, value at the end - in a muted panel, rather
-           than as stacked pairs that pushed the command below the fold. */
-        <div className="mt-section-gap rounded-control border border-cv-border bg-cv-surface p-card-padding max-sm:bg-cv-surface-muted max-sm:px-card-padding max-sm:py-3">
-          <SummaryList
-            className="max-sm:grid-cols-[max-content_minmax(0,1fr)] max-sm:items-baseline max-sm:[&_dd]:text-end max-sm:[&_dd]:font-semibold"
-            items={[
-              { term: "חברה", value: detail.application.company },
-              { term: "תפקיד", value: detail.application.target_role },
-              { term: "מזהה המסמך", value: draft.document_hash.slice(0, 12), ltr: true, mono: true },
-            ]}
-          />
-        </div>
-      )}
-      {approval.error === null ||
-      (approval.error instanceof ApiProblem && approval.error.problem.code === "DOCUMENT_CHANGED") ? null : (
-        <ErrorCallout
-          className="mt-4"
-          error={approval.error}
-          fallbackDetail="המסמך לא השתנה. אפשר לנסות שוב."
-          title="המסמך לא אושר"
-        />
-      )}
-      {warnings.length === 0 ? null : (
-        <Callout className="mt-4" title="נותרו אזהרות לא חוסמות" tone="warning">
-          <ul className="mb-3 list-disc ps-5">
-            {warnings.map((warning) => (
-              <li dir="auto" key={`${warning.code}:${warning.message}`}>
-                {warning.message}
-              </li>
+      <div className="flex flex-col gap-4.5">
+        {facts.length === 0 ? null : (
+          <dl className="overflow-hidden rounded-control-lg border border-cv-hairline bg-cv-canvas">
+            {facts.map((fact) => (
+              <div
+                className="flex items-baseline justify-between gap-3 border-t border-cv-hairline px-4 py-3 text-label first:border-t-0 max-lg:px-3.5"
+                key={fact.term}
+              >
+                <dt className="text-cv-text-muted">{fact.term}</dt>
+                <dd className="min-w-0 truncate font-bold">{fact.value}</dd>
+              </div>
             ))}
-          </ul>
-          <Checkbox checked={acknowledged} onChange={(event) => setAcknowledged(event.currentTarget.checked)}>
-            קראתי את האזהרות ואני רוצה להמשיך באישור
-          </Checkbox>
-        </Callout>
-      )}
+          </dl>
+        )}
+        {approval.error === null ||
+        (approval.error instanceof ApiProblem && approval.error.problem.code === "DOCUMENT_CHANGED") ? null : (
+          <ErrorCallout error={approval.error} fallbackDetail="המסמך לא השתנה. אפשר לנסות שוב." title="המסמך לא אושר" />
+        )}
+        {/* The warnings the check left standing are the one thing to read before the
+            command: the approval acknowledges them explicitly. */}
+        {warnings.length === 0 ? null : (
+          <section
+            aria-labelledby="approval-warnings-heading"
+            className="flex flex-col gap-2.5 rounded-control-lg bg-cv-surface-muted px-3.5 py-3 text-label"
+          >
+            <h3 className="flex items-center gap-2.5 font-bold" id="approval-warnings-heading">
+              <TriangleAlert aria-hidden="true" className="size-icon-md shrink-0" />
+              נותרו אזהרות לא חוסמות
+            </h3>
+            <ul className="list-disc ps-5 text-support leading-6">
+              {warnings.map((warning) => (
+                <li dir="auto" key={`${warning.code}:${warning.message}`}>
+                  {warning.message}
+                </li>
+              ))}
+            </ul>
+            <Checkbox checked={acknowledged} onChange={(event) => setAcknowledged(event.currentTarget.checked)}>
+              קראתי את האזהרות ואני רוצה להמשיך באישור
+            </Checkbox>
+          </section>
+        )}
+      </div>
     </Dialog>
   );
 };
