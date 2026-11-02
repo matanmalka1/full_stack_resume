@@ -179,9 +179,7 @@ export const ApplicationListPage = () => {
       ? null
       : {
           label:
-            detailsDestination === routePaths.ready(detailsApplication.id)
-              ? "פתיחת קורות החיים המוכנים"
-              : "המשך בהכנה",
+            detailsDestination === routePaths.ready(detailsApplication.id) ? "פתיחת קורות החיים המוכנים" : "המשך בהכנה",
           to: detailsDestination,
         };
   const showAll = () => updateQuery({ ...query, preset: undefined });

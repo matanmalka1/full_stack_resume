@@ -189,7 +189,14 @@ test.describe("dialogs", () => {
     api.stub(`GET ${documentPath}`, json(cvDocument({ content_check: "none" }), { headers: { ETag: `"${HASH}"` } }));
     api.stub(
       `GET ${documentPath}/page-count`,
-      json({ application_id: "app-1", document_id: "doc-1", document_hash: HASH, template: null, pages: 1, maximum: 1 }),
+      json({
+        application_id: "app-1",
+        document_id: "doc-1",
+        document_hash: HASH,
+        template: null,
+        pages: 1,
+        maximum: 1,
+      }),
     );
     api.stub(`GET ${documentPath}/preview?v=${HASH}`, (route) =>
       route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Preview</title>" }),

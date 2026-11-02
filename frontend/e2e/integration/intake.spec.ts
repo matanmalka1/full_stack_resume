@@ -46,7 +46,10 @@ test("intake persists through reload and duplicate creation requires acknowledge
   await expect(page.getByRole("main")).toContainText(company);
   await expect(page.getByRole("main")).toContainText(role);
   // The whole card is the link, into the step the work waits on.
-  await page.getByRole("list", { name: "כרטיסי מועמדויות" }).getByRole("link", { name: new RegExp(company) }).click();
+  await page
+    .getByRole("list", { name: "כרטיסי מועמדויות" })
+    .getByRole("link", { name: new RegExp(company) })
+    .click();
   await expect(page).toHaveURL(new RegExp(`/applications/${applicationId}/analysis$`));
   await expect(page.getByRole("main")).toContainText(company);
 

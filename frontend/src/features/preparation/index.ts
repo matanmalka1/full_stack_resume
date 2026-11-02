@@ -23,10 +23,7 @@ export { PreparationAlerts } from "./stages/verification/PreparationAlerts";
 /* What the projection is asking the reader to decide, for a caller that counts it into a
    badge. Where those decisions are taken stays inside. */
 
-export {
-  preparationResumeDestination,
-  preparationResumeDestinationFromDetail,
-} from "./model/actionDestinations";
+export { preparationResumeDestination, preparationResumeDestinationFromDetail } from "./model/actionDestinations";
 export {
   classificationFieldLabels,
   emphasisLabels,
@@ -41,9 +38,4 @@ export { ReasonCallout, ReasonDetails } from "./components/ReasonCallout";
    supports, which the analysis step's rows offer too. */
 export { documentRequirements } from "./model/documentRequirements";
 export { RequirementFactAction } from "./components/RequirementFactAction";
-export {
-  actionLabel,
-  preparationStateLabels,
-  reasonTitle,
-  warningTitle,
-} from "./model/preparationLabels";
+export { actionLabel, preparationStateLabels, reasonTitle, warningTitle } from "./model/preparationLabels";

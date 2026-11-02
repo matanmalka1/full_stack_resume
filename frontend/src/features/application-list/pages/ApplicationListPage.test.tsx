@@ -395,7 +395,10 @@ describe("ApplicationListPage", () => {
     expect(within(details).getByText("Referral from Dana")).toBeInTheDocument();
     expect(within(details).getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(within(details).getByText("פתוחה")).toBeInTheDocument();
-    expect(within(details).getByRole("link", { name: "המשך בהכנה" })).toHaveAttribute("href", "/applications/app-2/analysis");
+    expect(within(details).getByRole("link", { name: "המשך בהכנה" })).toHaveAttribute(
+      "href",
+      "/applications/app-2/analysis",
+    );
   });
 
   it("offers a first job and the fact pool when no Application exists", async () => {
