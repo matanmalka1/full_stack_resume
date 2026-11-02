@@ -3,6 +3,7 @@ import { RouterProvider } from "react-router-dom";
 
 import { onSessionLost } from "@/api/client";
 import { routePaths } from "@/navigation/routePaths";
+import { Toaster } from "@/ui/Toaster";
 import { queryClient } from "./queryClient";
 import { router } from "./router";
 
@@ -26,6 +27,7 @@ export const AppProviders = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      <Toaster />
     </QueryClientProvider>
   );
 };

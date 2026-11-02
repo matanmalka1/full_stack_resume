@@ -5,6 +5,8 @@ import { afterEach } from "vitest";
 
 import "@testing-library/jest-dom/vitest";
 
+import { clearToasts } from "@/ui/toast";
+
 /* `reportError` writes a failure's code, status and detail to the console on purpose -
    that is where the page sends what it does not show. The tests that drive failure paths
    therefore print one diagnostic per refusal, and a green run read as a wall of stderr
@@ -41,6 +43,9 @@ for (const level of ["warn", "error"] as const) {
 /* Testing Library only auto-cleans when Vitest globals are on. They are off here, so
    the teardown is explicit rather than absent. */
 afterEach(cleanup);
+
+/* The toast store is module state, so one test's success message would otherwise show in the next. */
+afterEach(clearToasts);
 
 /* The other half of the starvation `fileParallelism: false` addresses in the Vitest
    config. Serial file scheduling stopped whole jsdom environments from competing, but
