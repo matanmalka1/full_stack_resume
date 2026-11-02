@@ -397,8 +397,8 @@ Each renders in both directions. A two-column template places list sections (eve
 line an `item`: education, skills, tools, languages) in its side column, and its
 reading order is checked per column. The template is part of the document hash but
 not of the basis (state-and-use-cases.md §3): changing it keeps the content check and
-approval and outdates Ready, and the Web editor then renders the PDF again by itself. The editor's
-picker shows the user's own CV in each template; Settings choose the default by name.
+approval and outdates Ready, and the Web editor then renders the PDF again by itself.
+The editor's picker shows the user's own CV in each template; Settings show a sample CV.
 
 Rendering is an Operation, available while the document is approved. It revalidates,
 renders HTML and PDF, and checks layout, page count, extracted text, links, direction,
