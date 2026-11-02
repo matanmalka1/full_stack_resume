@@ -13,10 +13,10 @@ import {
   type PendingWork,
   isOperationLive,
   operationTypeLabels,
-  useIsPhone,
   useWatchedOperation,
 } from "@/features/operations";
 import { routePaths } from "@/navigation/routePaths";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";

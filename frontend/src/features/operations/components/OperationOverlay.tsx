@@ -23,7 +23,7 @@ import {
   statusTones,
   withheldLabel,
 } from "../model/operationLabels";
-import { useIsPhone } from "../hooks/useIsPhone";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { failureSummary } from "../model/failureSummary";
 import { durationLabel } from "../model/operationElapsed";
 import { isOperationStarting } from "../model/operationLive";

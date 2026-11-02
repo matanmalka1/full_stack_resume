@@ -43,8 +43,7 @@ export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPr
           onClick={() => onSelect(id)}
           pressed={id === value}
         >
-          {/* The space keeps the label and its count two words in the chip's name. */}
-          {label}{" "}
+          {label}
         </FilterChip>
       );
     })}

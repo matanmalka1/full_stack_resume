@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { useIsPhone } from "@/features/operations";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { PhoneActionBar } from "@/ui/PhoneActionBar";
 import { Skeleton } from "@/ui/Skeleton";
 import { cx } from "@/ui/cx";

@@ -6,7 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { type Classification, applyAnalysisDecisions, classificationFromAnalysis } from "@/api/analyses";
 import { invalidateApplicationViews, watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
-import { useIsPhone } from "@/features/operations";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
 import { Button, buttonClasses } from "@/ui/Button";

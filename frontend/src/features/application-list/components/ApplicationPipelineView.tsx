@@ -46,7 +46,7 @@ const PipelineCard = ({
             <bdi>{item.target_role}</bdi>
           </span>
           {attention === null ? null : (
-            <StatusBadge className="px-2 py-0.5 [&>svg]:hidden" tone="progress" variant="solid">
+            <StatusBadge icon={false} className="px-2 py-0.5" tone="progress" variant="solid">
               <span title={attention.label}>דורש טיפול</span>
             </StatusBadge>
           )}

@@ -27,15 +27,16 @@ interface StatusBadgeProps {
   /* A more specific mark than the tone's own. The tone says how loud the badge is -
      four of them across the whole app - while a closed set like the recruitment axis
      has a face per member. A.2 is unaffected either way: the badge still carries its
-     Hebrew word, and the icon repeats what the word says rather than replacing it. */
-  icon?: LucideIcon;
+     Hebrew word, and the icon repeats what the word says rather than replacing it.
+     `false` draws the word alone, for a chip whose place already says what it is. */
+  icon?: LucideIcon | false;
   tone: Tone;
   variant?: BadgeVariant;
 }
 
 export const StatusBadge = ({ children, className, icon, tone, variant = "soft" }: StatusBadgeProps) => {
   const { icon: toneIcon, label } = tonePresentation[tone];
-  const Icon = icon ?? toneIcon;
+  const Icon = icon === false ? null : (icon ?? toneIcon);
 
   return (
     <span
@@ -48,10 +49,12 @@ export const StatusBadge = ({ children, className, icon, tone, variant = "soft" 
       {/* Only the tone's own loader spins. An overridden icon is a static mark for a
           state that happens to be tinted like live work - a spinning telephone would
           claim the row was working when it is not. */}
-      <Icon
-        aria-hidden="true"
-        className={cx("size-3.5 shrink-0", icon === undefined && tone === "progress" && "animate-spin")}
-      />
+      {Icon === null ? null : (
+        <Icon
+          aria-hidden="true"
+          className={cx("size-3.5 shrink-0", icon === undefined && tone === "progress" && "animate-spin")}
+        />
+      )}
       {children ?? label}
     </span>
   );

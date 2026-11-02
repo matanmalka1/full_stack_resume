@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
-import { OperationOverlay, isOperationLive, useIsPhone, useWatchedOperation } from "@/features/operations";
+import { OperationOverlay, isOperationLive, useWatchedOperation } from "@/features/operations";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
 import { Callout } from "@/ui/Callout";

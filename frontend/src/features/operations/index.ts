@@ -10,9 +10,6 @@
    beside the page, the report as a dialog on an outcome that needs the reader, and a
    status row at the top of the step. */
 export { OperationOverlay, type PendingWork } from "./components/OperationOverlay";
-/* Whether the viewport is a phone's. For a screen that draws its commands in a different
-   place per width and must not put each one in the document twice. */
-export { useIsPhone } from "./hooks/useIsPhone";
 /* Whether actions that change what a run replaces must wait - the same definition the
    overlay's session is built on, so a screen's lock and its overlay never disagree about
    when work is under way. */

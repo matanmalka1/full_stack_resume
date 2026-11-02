@@ -10,7 +10,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { PhoneActionBar } from "@/ui/PhoneActionBar";
 import { cx } from "@/ui/cx";
 import { useCancelReveal } from "../hooks/useCancelReveal";
-import { useIsPhone } from "../hooks/useIsPhone";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { useOperationCommands } from "../hooks/useOperationCommands";
 import type { FailureSummary } from "../model/failureSummary";
 import { failedPhaseStep } from "../model/operationPhases";

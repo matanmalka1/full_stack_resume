@@ -2,7 +2,7 @@ import { Sparkle, X } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useIsPhone } from "@/features/operations";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { useAiAvailability } from "@/features/settings";
 import { boardPath } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";

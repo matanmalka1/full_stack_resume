@@ -5,12 +5,10 @@ import { useSyncExternalStore } from "react";
    Most of a phone's layout is CSS on one tree. This is for the exception: a command the
    design places in a different part of the page at each width - the draft's approval, in
    the heading on a wide screen and in the bar pinned to a phone's bottom edge. Drawing it
-   in both places and hiding one would put the same command in the document twice. Where
-   `matchMedia` is missing (jsdom) the answer is the wide layout, which is what the
-   component tests describe.
-
-   The operations feature keeps its own copy (`features/operations/hooks/useIsPhone`);
-   the two should become this one. */
+   in both places and hiding one would put the same command in the document twice; a
+   run's failure report, a page of its own worded differently on a phone, is the same
+   case. Where `matchMedia` is missing (jsdom) the answer is the wide layout, which is
+   what the component tests describe. */
 const QUERY = "not all and (min-width: 64rem)";
 
 const subscribe = (onChange: () => void): (() => void) => {

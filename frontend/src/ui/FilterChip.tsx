@@ -68,6 +68,12 @@ export const FilterChip = ({
     {...rest}
   >
     {children}
-    {count === undefined ? null : <FilterChipCountMark count={count} pressed={pressed} variant={countVariant} />}
+    {/* The space keeps the label and its count two words in the chip's name. */}
+    {count === undefined ? null : (
+      <>
+        {" "}
+        <FilterChipCountMark count={count} pressed={pressed} variant={countVariant} />
+      </>
+    )}
   </button>
 );

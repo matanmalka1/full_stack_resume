@@ -50,7 +50,7 @@ const HubRow = ({ hidden, item }: { hidden: string | undefined; item: HubItem })
             <span dir="auto">{item.application.company}</span> · <span dir="auto">{item.application.target_role}</span>
           </span>
         </span>
-        <StatusBadge className="px-2.25 py-0.75 [&>svg]:hidden" tone="progress" variant={urgent ? "solid" : "soft"}>
+        <StatusBadge icon={false} className="px-2.25 py-0.75" tone="progress" variant={urgent ? "solid" : "soft"}>
           {item.label}
         </StatusBadge>
       </Link>

@@ -39,7 +39,7 @@ export const ApplicationSummary = ({
     {applicationAttention(item) === null ? (
       <ApplicationStageBadge className="px-2 py-0.5" item={item} />
     ) : (
-      <StatusBadge className="px-2 py-0.5 [&>svg]:hidden" tone="progress" variant="solid">
+      <StatusBadge icon={false} className="px-2 py-0.5" tone="progress" variant="solid">
         דורש טיפול
       </StatusBadge>
     )}
