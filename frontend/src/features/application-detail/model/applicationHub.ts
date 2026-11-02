@@ -84,14 +84,10 @@ export const preparationProgress = (detail: ApplicationDetail): PreparationProgr
 };
 
 /* The hub's one command forward: the screen the work is waiting on, worded by what the
-   reader will do there. The destination is preparation's own resume answer; where that
-   answer is the Application's address - the analysis and the draft's creation, which
-   preparation still names by it - the hub points at the analysis step instead of at
-   itself. */
+   reader will do there. The destination is preparation's own resume answer. */
 export const continuation = (detail: ApplicationDetail): { label: string; to: string } => {
   const applicationId = detail.application.id;
-  const resumed = preparationResumeDestinationFromDetail(applicationId, detail);
-  const to = resumed === routePaths.application(applicationId) ? routePaths.analysis(applicationId) : resumed;
+  const to = preparationResumeDestinationFromDetail(applicationId, detail);
 
   if (to === routePaths.ready(applicationId)) return { label: "פתיחת קורות החיים המוכנים", to };
   if (to === routePaths.draft(applicationId)) {

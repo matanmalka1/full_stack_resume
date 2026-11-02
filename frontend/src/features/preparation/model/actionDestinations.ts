@@ -88,7 +88,8 @@ const resumeDestination = (application: ResumeProjection): string => {
     return routePaths.draft(application.id);
   }
 
-  return routePaths.application(application.id);
+  /* Before a document has content the work is the analysis step's. */
+  return routePaths.analysis(application.id);
 };
 
 export const preparationResumeDestination = (application: ApplicationListItem): string =>

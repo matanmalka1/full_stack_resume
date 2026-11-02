@@ -312,7 +312,7 @@ describe("ApplicationListPage", () => {
     const rows = within(hub).getAllByRole("link");
     expect(rows.map((row) => row.getAttribute("href"))).toEqual([
       "/applications/app-late",
-      "/applications/app-attn",
+      "/applications/app-attn/analysis",
       "/applications/app-ready/ready",
     ]);
     expect(rows[0]).toHaveTextContent("Follow up with recruiter");
@@ -395,7 +395,7 @@ describe("ApplicationListPage", () => {
     expect(within(details).getByText("Referral from Dana")).toBeInTheDocument();
     expect(within(details).getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(within(details).getByText("פתוחה")).toBeInTheDocument();
-    expect(within(details).getByRole("link", { name: "המשך בהכנה" })).toHaveAttribute("href", "/applications/app-2");
+    expect(within(details).getByRole("link", { name: "המשך בהכנה" })).toHaveAttribute("href", "/applications/app-2/analysis");
   });
 
   it("offers a first job and the fact pool when no Application exists", async () => {

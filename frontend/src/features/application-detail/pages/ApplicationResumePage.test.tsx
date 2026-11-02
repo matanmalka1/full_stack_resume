@@ -32,7 +32,10 @@ const renderResume = (
       <MemoryRouter initialEntries={["/applications/app-1/resume"]}>
         <Routes>
           <Route element={<ApplicationResumePage />} path="/applications/:applicationId/resume" />
-          <Route element={<h1>ניתוח</h1>} path="/applications/:applicationId" />
+          <Route element={<h1>מועמדות</h1>} path="/applications/:applicationId" />
+          <Route element={<h1>ניתוח</h1>} path="/applications/:applicationId/analysis" />
+          <Route element={<h1>הגדרות התאמה</h1>} path="/applications/:applicationId/analysis/matching" />
+          <Route element={<h1>אימות</h1>} path="/applications/:applicationId/verification" />
           <Route element={<h1>טיוטה</h1>} path="/applications/:applicationId/draft" />
           <Route element={<h1>מוכן</h1>} path="/applications/:applicationId/ready" />
         </Routes>
@@ -123,12 +126,12 @@ describe("ApplicationResumePage", () => {
     await act(async () =>
       resolve(json(detail({ preparation_state: "ready_to_draft", recommended_action: "edit_matching_configuration" }))),
     );
-    expect(await screen.findByRole("heading", { name: "ניתוח" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "הגדרות התאמה" })).toBeInTheDocument();
   });
 
   it.each([
     ["analyze_job", "ניתוח"],
-    ["create_draft", "ניתוח"],
+    ["create_draft", "אימות"],
     ["regenerate_section", "טיוטה"],
     ["regenerate_claim", "טיוטה"],
     ["render_document", "טיוטה"],
