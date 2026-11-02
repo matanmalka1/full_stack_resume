@@ -8,6 +8,7 @@ import {
   decisionExportQueryOptions,
   documentPageCountQueryOptions,
   documentPdfHref,
+  documentPreviewSrc,
   documentQueryOptions,
 } from "@/api/documents";
 import { boardPath, boardReturnState } from "@/navigation/boardReturn";
@@ -18,6 +19,7 @@ import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { CommitBar } from "@/ui/CommitBar";
 import { Dialog } from "@/ui/Dialog";
+import { DocumentFrame } from "@/ui/DocumentFrame";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { ListCard, ListRow } from "@/ui/ListCard";
 import { LiveRegion } from "@/ui/LiveRegion";
@@ -28,7 +30,7 @@ import { SuccessNotice } from "@/ui/SuccessNotice";
 import { useIsPhone } from "@/ui/useIsPhone";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { DecisionDocument } from "../components/DecisionDocument";
-import { ReadyFileFacts, ReadyPageSketch } from "../components/ReadyDocumentSummary";
+import { ReadyFileFacts } from "../components/ReadyDocumentSummary";
 import { SubmissionDialog } from "../components/SubmissionDialog";
 
 const readyLoading = (
@@ -63,8 +65,12 @@ const downloadMarkdown = (markdown: string, filename: string) => {
 
    Drawn as the design draws it, without the wizard's stage bar: the finished page at the
    start of a wide screen, and beside it the statement, the file's facts, the two things
-   done with it, and the ways into how it was made. On a phone the page shrinks to a
-   thumbnail beside those facts and the two commands pin to the screen's bottom edge. */
+   done with it, and the ways into how it was made. On a phone the page stands under the
+   statement at the screen's width and the two commands pin to the screen's bottom edge.
+
+   The page is the document itself, framed as the editor frames it: Ready holds only
+   while the content matches the rendered files, so the preview of the current content
+   is the page the PDF carries. */
 export const ReadyPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const isPhone = useIsPhone();
@@ -142,6 +148,17 @@ export const ReadyPage = () => {
       </a>
     );
 
+  /* One frame, placed by width: drawing it in both places and hiding one would load the
+     document twice. */
+  const page =
+    !ready || documentHash === null ? null : (
+      <DocumentFrame
+        className={isPhone ? "w-full" : "max-w-130 flex-1"}
+        src={documentPreviewSrc(applicationId, documentHash)}
+        title="קורות החיים המוכנים"
+      />
+    );
+
   const primary = !ready ? null : submissionExists ? (
     <Link
       className={buttonClasses("primary", "w-full shadow-action", isPhone ? "large" : "default")}
@@ -213,7 +230,7 @@ export const ReadyPage = () => {
       </nav>
 
       <div className="flex items-start gap-8">
-        {ready ? <ReadyPageSketch className="max-w-130 flex-1 max-lg:hidden" size="large" /> : null}
+        {isPhone ? null : page}
 
         <div className="flex min-w-0 flex-1 flex-col gap-4.5 max-lg:gap-4 lg:max-w-150">
           <div>
@@ -266,18 +283,17 @@ export const ReadyPage = () => {
 
               {!ready ? null : (
                 <>
-                  <div className="flex items-stretch gap-3.5">
-                    <ReadyPageSketch className="lg:hidden" size="small" />
-                    {document === undefined ? (
-                      <Skeleton className="block h-24 w-full" />
-                    ) : (
-                      <ReadyFileFacts
-                        approvedAt={detail.approved_at ?? null}
-                        language={document.language}
-                        pages={pagesQuery.data?.pages ?? null}
-                      />
-                    )}
-                  </div>
+                  {isPhone ? page : null}
+
+                  {document === undefined ? (
+                    <Skeleton className="block h-24 w-full" />
+                  ) : (
+                    <ReadyFileFacts
+                      approvedAt={detail.approved_at ?? null}
+                      language={document.language}
+                      pages={pagesQuery.data?.pages ?? null}
+                    />
+                  )}
 
                   {/* A wide screen's two commands, under the file they act on. A phone pins
                       the same two to its bottom edge instead. */}
