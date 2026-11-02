@@ -74,6 +74,40 @@ class ClaimSupportProposal(StrictModel):
     assessments: list[ClaimSupportAssessment]
 
 
+class ProposedGapQuestion(StrictModel):
+    """One question about one requirement the analysis found unsupported or partial."""
+
+    requirement_id: str
+    question: str
+
+
+class GapQuestionsProposal(StrictModel):
+    """`propose_gap_questions`: one targeted question per requirement it was sent.
+
+    A question is a request for the user's own experience, never a statement about
+    it: it becomes nothing until the user answers, and the answer becomes only a
+    pending fact the user confirms (product-spec §17).
+    """
+
+    questions: list[ProposedGapQuestion]
+
+
+class FactDraftProposal(StrictModel):
+    """`draft_fact_from_answer`: one fact worded from the user's answer and nothing else.
+
+    `english` is required because every fact carries an English rendering; `hebrew`
+    is the Hebrew rendering, null when the answer gives no reason to write one for an
+    English CV. The engine checks the wording against the answer before it saves
+    anything, and saves it only as a pending fact.
+    """
+
+    meaning: str
+    english: str
+    hebrew: str | None
+    tags: list[str]
+    resume_style: Literal["bullet", "item"]
+
+
 class ProviderUsage(StrictModel):
     """Token counts as the provider reported them for one call.
 

@@ -26,6 +26,7 @@ from ..application.services.drafts import DraftAuthoringService, DraftEditingSer
 from ..application.services.drafts.activation import DraftActivation
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.review import DraftReviewService
+from ..application.services.gap_questions import GapQuestionActivation, GapQuestionService
 from ..application.services.knowledge import (
     FactLifecycleService,
     KnowledgeQueryService,
@@ -36,6 +37,8 @@ from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
     AnalysisOperationHandler,
     DraftOperationHandler,
+    GapFactOperationHandler,
+    GapQuestionsOperationHandler,
     OperationLifecycleService,
     OperationSubmissionService,
     RegenerationOperationHandler,
@@ -72,6 +75,7 @@ from ..infrastructure.persistence.documents import (
 from ..infrastructure.persistence.draft_history_sources import (
     SqlAlchemyDraftHistoryApplicationReader,
 )
+from ..infrastructure.persistence.gap_questions import SqlAlchemyGapQuestionStore
 from ..infrastructure.persistence.initial_recruitment_events import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
@@ -135,6 +139,7 @@ class Services:
     accounts: AccountService
     knowledge_import: KnowledgeImportService
     knowledge_export: KnowledgeExportService
+    gap_questions: GapQuestionService
 
 
 def build_object_store(paths: AppPaths, config: RuntimeConfig) -> ObjectStore:
@@ -309,6 +314,25 @@ def build_services(
         audit=intake_audit,
         knowledge=resolved_knowledge,
     )
+    knowledge_service = FactLifecycleService(
+        transactions=transactions,
+        store=knowledge_lifecycle_store,
+        knowledge=resolved_knowledge,
+        repository=user_knowledge,
+        documents=documents,
+        sources=analysis_sources,
+    )
+    gap_store = SqlAlchemyGapQuestionStore(transactions)
+    gap_activation = GapQuestionActivation(gap_store, analysis_sources, knowledge_service)
+    gap_service = GapQuestionService(
+        transactions=transactions,
+        store=gap_store,
+        analyses=analysis_sources,
+        knowledge=resolved_knowledge,
+        ai_calls=ai_calls,
+        provider=resolved_provider,
+        activation=gap_activation,
+    )
     failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
     runner = OperationRunner(
         {
@@ -338,6 +362,10 @@ def build_services(
                 documents,
                 continuations=operation_client,
             ),
+            OperationType.ASK_GAP_QUESTIONS: GapQuestionsOperationHandler(
+                gap_service, gap_activation
+            ),
+            OperationType.DRAFT_GAP_FACT: GapFactOperationHandler(gap_service, gap_activation),
         },
         transactions=transactions,
         execution_store=operation_execution,
@@ -361,14 +389,6 @@ def build_services(
         exclusive=lambda: worker_exclusivity(engine),
         concurrency=int(resolved_config.get("worker_concurrency")),
         maintenance=account_service.cleanup_rate_limits,
-    )
-    knowledge_service = FactLifecycleService(
-        transactions=transactions,
-        store=knowledge_lifecycle_store,
-        knowledge=resolved_knowledge,
-        repository=user_knowledge,
-        documents=documents,
-        sources=analysis_sources,
     )
     settings_service = SettingsService(
         transactions,
@@ -422,6 +442,7 @@ def build_services(
             account_repository,
             resolved_knowledge,
         ),
+        gap_questions=gap_service,
     )
 
 
@@ -466,6 +487,7 @@ def build_api_services(
         operation_lifecycle=services.operation_lifecycle,
         settings=services.settings,
         accounts=services.accounts,
+        gap_questions=services.gap_questions,
         identity=InstanceIdentity(
             product_version=__version__,
             api_version=API_VERSION,

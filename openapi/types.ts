@@ -488,6 +488,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/gap-questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the questions asked about the newest analysis, and their outcomes */
+        get: operations["read_gap_questions_api_v1_applications__application_id__gap_questions_get"];
+        put?: never;
+        /**
+         * Ask one question per unsupported or partial requirement
+         * @description `202`. Refused (`412`) when the analysis has nothing to ask about, `409` when a
+         *     newer analysis exists.
+         */
+        post: operations["ask_gap_questions_api_v1_applications__application_id__gap_questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/gap-questions/{question_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer one question; a pending fact is drafted from the answer
+         * @description `202`. The fact it drafts is `pending`: it counts only once the user confirms it.
+         */
+        post: operations["answer_gap_question_api_v1_applications__application_id__gap_questions__question_id__answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/gap-questions/{question_id}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline to answer one question
+         * @description `200` with the question set as it now reads; `409` if it already has an outcome.
+         */
+        post: operations["skip_gap_question_api_v1_applications__application_id__gap_questions__question_id__skip_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}/job-text": {
         parameters: {
             query?: never;
@@ -799,7 +861,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Edit a pending fact before it is confirmed
+         * @description Pending facts only (`412` otherwise); a canonical one is corrected by a replacement.
+         */
+        patch: operations["edit_pending_fact_api_v1_facts__fact_id__patch"];
         trace?: never;
     };
     "/api/v1/facts/{fact_id}/attachments": {
@@ -1088,6 +1154,14 @@ export interface components {
             /** Job Analysis Id */
             job_analysis_id: string;
             state: components["schemas"]["ApplicationStateResponse"];
+        };
+        /**
+         * AnswerGapQuestionRequest
+         * @description The user's own answer, in their words; it is the only source of the fact.
+         */
+        AnswerGapQuestionRequest: {
+            /** Answer */
+            answer: string;
         };
         /** ApplicationDetailResponse */
         ApplicationDetailResponse: {
@@ -1411,6 +1485,14 @@ export interface components {
             language_override?: ("en" | "he") | null;
             profile_override?: components["schemas"]["ProfileName"] | null;
             track_override?: components["schemas"]["Track"] | null;
+        };
+        /**
+         * AskGapQuestionsRequest
+         * @description Ask about the unmet requirements of this analysis, the Application's newest.
+         */
+        AskGapQuestionsRequest: {
+            /** Job Analysis Id */
+            job_analysis_id: string;
         };
         /**
          * AttachFactRequest
@@ -1958,6 +2040,31 @@ export interface components {
             target_role: string;
         };
         /**
+         * EditPendingFactRequest
+         * @description What a pending fact says, changed before it is confirmed (§17 `edit_pending_fact`).
+         *
+         *     Only the fields sent change. Identity, source, style, and provenance are not
+         *     editable: provenance records where the fact came from (for a gap answer, the
+         *     user's own answer), and an edit does not change that.
+         */
+        EditPendingFactRequest: {
+            /** Effective Dates */
+            effective_dates?: string | null;
+            /** Meaning */
+            meaning?: string | null;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Renderings */
+            renderings?: {
+                [key: string]: string;
+            } | null;
+            /** Tags */
+            tags?: string[] | null;
+        };
+        /**
          * Emphasis
          * @enum {string}
          */
@@ -2075,6 +2182,25 @@ export interface components {
             /** Events */
             events: components["schemas"]["FactEventResponse"][];
             fact: components["schemas"]["FactResponse"];
+        };
+        /**
+         * FactDraftReason
+         * @description A fact drafted from a gap answer said something the answer does not.
+         *
+         *     `problems` are the failed checks (`domain/gap_questions.py`); `unsupported` the
+         *     numbers and named terms the wording carried and the answer did not. Nothing was
+         *     saved; the answer is kept in the Operation, so a retry asks again.
+         */
+        FactDraftReason: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            code: "fact_draft";
+            /** Problems */
+            problems: ("unsupported-number" | "unsupported-term" | "missing-rendering" | "empty-wording")[];
+            /** Unsupported */
+            unsupported?: string[];
         };
         /**
          * FactEventResponse
@@ -2198,6 +2324,66 @@ export interface components {
              * @default
              */
             reason: string;
+        };
+        /**
+         * GapQuestionResponse
+         * @description One question and its outcome.
+         *
+         *     `state`: `open` (unanswered), `drafting` (a `draft_gap_fact` is queued or
+         *     running), `answered` (`fact` holds the drafted fact; `fact.status` is `pending`
+         *     until confirmed), `skipped`. `draft_operation` is the newest `draft_gap_fact`
+         *     for this question, live or terminal.
+         */
+        GapQuestionResponse: {
+            /** Answer */
+            answer?: string | null;
+            /**
+             * Coverage
+             * @enum {string}
+             */
+            coverage: "partial" | "unsupported";
+            draft_operation?: components["schemas"]["OperationResponse"] | null;
+            fact?: components["schemas"]["FactResponse"] | null;
+            /** Id */
+            id: string;
+            /**
+             * Importance
+             * @enum {string}
+             */
+            importance: "mandatory" | "preferred" | "unknown";
+            /** Ordinal */
+            ordinal: number;
+            /** Question */
+            question: string;
+            /** Requirement Id */
+            requirement_id: string;
+            /** Requirement Text */
+            requirement_text: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "drafting" | "answered" | "skipped";
+        };
+        /**
+         * GapQuestionSetResponse
+         * @description The newest question set of the Application's newest analysis.
+         *
+         *     No set asked yet: `questions` is empty and `operation_id` is null.
+         */
+        GapQuestionSetResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Asked At */
+            asked_at?: string | null;
+            /** Job Analysis Id */
+            job_analysis_id?: string | null;
+            /** Language */
+            language?: ("en" | "he") | null;
+            /** Operation Id */
+            operation_id?: string | null;
+            /** Questions */
+            questions: components["schemas"]["GapQuestionResponse"][];
         };
         /** GapResponse */
         GapResponse: {
@@ -2352,7 +2538,7 @@ export interface components {
              * Output Type
              * @enum {string}
              */
-            output_type: "job_analysis" | "cv_document";
+            output_type: "job_analysis" | "cv_document" | "gap_question" | "fact";
         };
         /**
          * OperationPhase
@@ -2404,7 +2590,7 @@ export interface components {
             created_at: string;
             failure_code?: components["schemas"]["OperationFailureCode"] | null;
             /** Failure Reason */
-            failure_reason?: (components["schemas"]["PdfPageLimitReason"] | components["schemas"]["MissingFactRenderingReason"] | components["schemas"]["RenderCheckReason"] | components["schemas"]["ClaimReviewReason"]) | null;
+            failure_reason?: (components["schemas"]["PdfPageLimitReason"] | components["schemas"]["MissingFactRenderingReason"] | components["schemas"]["RenderCheckReason"] | components["schemas"]["ClaimReviewReason"] | components["schemas"]["FactDraftReason"]) | null;
             /** Finished At */
             finished_at?: string | null;
             /** Id */
@@ -2451,7 +2637,7 @@ export interface components {
          * OperationType
          * @enum {string}
          */
-        OperationType: "analyze_job" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_document";
+        OperationType: "analyze_job" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_document" | "ask_gap_questions" | "draft_gap_fact";
         /**
          * PageFitReport
          * @description What fitting a new draft to its page limit did (product-spec §10).
@@ -3980,6 +4166,182 @@ export interface operations {
             };
         };
     };
+    read_gap_questions_api_v1_applications__application_id__gap_questions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GapQuestionSetResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ask_gap_questions_api_v1_applications__application_id__gap_questions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskGapQuestionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    answer_gap_question_api_v1_applications__application_id__gap_questions__question_id__answer_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                application_id: string;
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerGapQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    skip_gap_question_api_v1_applications__application_id__gap_questions__question_id__skip_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GapQuestionSetResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     update_job_text_api_v1_applications__application_id__job_text_patch: {
         parameters: {
             query?: never;
@@ -4622,6 +4984,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactDetailResponse"];
+                };
+            };
+            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    edit_pending_fact_api_v1_facts__fact_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditPendingFactRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
             /** @description No valid session (`AUTHENTICATION_REQUIRED`). */

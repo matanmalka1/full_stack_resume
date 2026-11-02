@@ -12,6 +12,8 @@ from .handlers import (
     AITaskHandler,
     AnalysisOperationHandler,
     DraftOperationHandler,
+    GapFactOperationHandler,
+    GapQuestionsOperationHandler,
     RegenerationOperationHandler,
     RenderOperationHandler,
 )
@@ -23,6 +25,8 @@ __all__ = [
     "AITaskHandler",
     "AnalysisOperationHandler",
     "DraftOperationHandler",
+    "GapFactOperationHandler",
+    "GapQuestionsOperationHandler",
     "OperationLifecycleService",
     "OperationSubmissionService",
     "RegenerationOperationHandler",

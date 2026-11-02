@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..domain.claim_review import ReviewProblemCode
+from ..domain.gap_questions import FactDraftProblem
 from ..util import canonical_json, sha256_text
 from .ai_configuration import ReasoningEffort
 
@@ -75,6 +76,10 @@ class OperationType(StrEnum):
     REGENERATE_SECTION = "regenerate_section"
     REGENERATE_CLAIM = "regenerate_claim"
     RENDER_DOCUMENT = "render_document"
+    #: Ask one question per unsupported or partial requirement of one analysis.
+    ASK_GAP_QUESTIONS = "ask_gap_questions"
+    #: Draft one pending fact from the user's answer to one gap question.
+    DRAFT_GAP_FACT = "draft_gap_fact"
 
 
 #: Operations whose successful activation replaces the analysis a
@@ -215,9 +220,10 @@ class CreateOperation(OperationModel):
 
 
 #: What an Operation can own as an output. Closed: analysis activates a JobAnalysis,
-#: and document-mutating operations name the CVDocument they changed. Provider calls
-#: are not outputs: they are in the AI call log, keyed by the Operation.
-OperationOutputType = Literal["job_analysis", "cv_document"]
+#: document-mutating operations name the CVDocument they changed, `ask_gap_questions`
+#: names each question it asked, and `draft_gap_fact` the pending fact it created.
+#: Provider calls are not outputs: they are in the AI call log, keyed by the Operation.
+OperationOutputType = Literal["job_analysis", "cv_document", "gap_question", "fact"]
 
 
 class OperationOutputReference(OperationModel):
@@ -260,6 +266,19 @@ class RenderCheckReason(OperationModel):
     """A render validation check that failed and carries no parameters."""
 
     code: RenderCheckCode
+
+
+class FactDraftReason(OperationModel):
+    """A fact drafted from a gap answer said something the answer does not.
+
+    `problems` are the failed checks (`domain/gap_questions.py`); `unsupported` the
+    numbers and named terms the wording carried and the answer did not. Nothing was
+    saved; the answer is kept in the Operation, so a retry asks again.
+    """
+
+    code: Literal["fact_draft"] = "fact_draft"
+    problems: list[FactDraftProblem]
+    unsupported: list[str] = Field(default_factory=list)
 
 
 class ClaimReviewSource(OperationModel):
@@ -330,7 +349,11 @@ class PageFitReport(OperationModel):
 #: failures; this structured value lets a client explain supported failures in
 #: its own words without parsing that sentence. Both are written with the failure.
 FailureReason = Annotated[
-    PdfPageLimitReason | MissingFactRenderingReason | RenderCheckReason | ClaimReviewReason,
+    PdfPageLimitReason
+    | MissingFactRenderingReason
+    | RenderCheckReason
+    | ClaimReviewReason
+    | FactDraftReason,
     Field(discriminator="code"),
 ]
 

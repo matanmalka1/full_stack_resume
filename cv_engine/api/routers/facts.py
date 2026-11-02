@@ -22,6 +22,7 @@ from ..schemas.facts import (
     CaptureClaimFactRequest,
     ConfirmAndUseFactRequest,
     ConfirmAndUseFactResponse,
+    EditPendingFactRequest,
     FactAttachmentProfileTargetResponse,
     FactAttachmentResponse,
     FactAttachmentSectionTargetResponse,
@@ -178,6 +179,35 @@ def create_fact_from_claim(
         provenance=request.provenance,
         effective_dates=request.effective_dates,
         replaces=request.replaces,
+        reason=request.reason,
+    )
+    return FactMutationResponse(
+        fact=FactResponse.of(result.fact),
+        event_id=result.event_id,
+        facts_version=result.facts_version,
+        lifecycle_version=result.lifecycle_version,
+    )
+
+
+@router.patch(
+    "/{fact_id}",
+    response_model=FactMutationResponse,
+    summary="Edit a pending fact before it is confirmed",
+)
+def edit_pending_fact(
+    fact_id: str,
+    request: EditPendingFactRequest,
+    services: Services,
+    actor: CurrentActor,
+) -> FactMutationResponse:
+    """Pending facts only (`412` otherwise); a canonical one is corrected by a replacement."""
+    result = services.knowledge.edit_pending_fact(
+        actor,
+        fact_id,
+        meaning=request.meaning,
+        renderings=request.renderings,
+        tags=request.tags,
+        effective_dates=request.effective_dates,
         reason=request.reason,
     )
     return FactMutationResponse(

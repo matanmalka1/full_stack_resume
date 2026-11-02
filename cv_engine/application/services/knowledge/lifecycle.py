@@ -193,34 +193,61 @@ class FactLifecycleService:
             if application_id is not None:
                 # The Application a new fact is recorded beside is the user's own.
                 self._sources.require_owned(tx, application_id, actor.user_id)
-            current = self._state(tx, actor)
-            store = self._build(current).facts
-            try:
-                record = build_new_fact(store, source, payload, canonical=False)
-            except (FactStoreError, ValueError) as exc:
-                raise KnowledgeRejected(str(exc)) from exc
-            source_id = source_id_of_name(source)
-            ordinal = 1 + max(
-                (row["ordinal"] for row in current.facts if row["source"] == source_id),
-                default=0,
-            )
-            row = fact_row(record, source_id, ordinal)
-            fact = fact_from_row(row)
-            knowledge, event_ids = self._commit(
+            return self.add_fact_in(
                 tx,
-                current,
-                replace(current, facts=[*current.facts, row]),
-                [
-                    self._event(
-                        fact,
-                        event_type="fact_created",
-                        from_status=None,
-                        reason=reason or "new pending fact",
-                        application_id=application_id,
-                        claim_id=claim_id,
-                    )
-                ],
+                actor,
+                source,
+                payload,
+                reason=reason,
+                application_id=application_id,
+                claim_id=claim_id,
             )
+
+    def add_fact_in(
+        self,
+        tx: WriteTransaction,
+        actor: Actor,
+        source: str,
+        payload: dict[str, Any],
+        *,
+        reason: str = "",
+        application_id: str | None = None,
+        claim_id: str | None = None,
+    ) -> FactMutationResult:
+        """`add_fact` inside a scope the caller owns: an Operation's activation.
+
+        A gap answer's fact (§17) is written in the same transaction as the record
+        that the question was answered, so one never exists without the other. The
+        caller has already resolved `application_id` for `actor`.
+        """
+        current = self._state(tx, actor)
+        store = self._build(current).facts
+        try:
+            record = build_new_fact(store, source, payload, canonical=False)
+        except (FactStoreError, ValueError) as exc:
+            raise KnowledgeRejected(str(exc)) from exc
+        source_id = source_id_of_name(source)
+        ordinal = 1 + max(
+            (row["ordinal"] for row in current.facts if row["source"] == source_id),
+            default=0,
+        )
+        row = fact_row(record, source_id, ordinal)
+        fact = fact_from_row(row)
+        knowledge, event_ids = self._commit(
+            tx,
+            current,
+            replace(current, facts=[*current.facts, row]),
+            [
+                self._event(
+                    fact,
+                    event_type="fact_created",
+                    from_status=None,
+                    reason=reason or "new pending fact",
+                    application_id=application_id,
+                    claim_id=claim_id,
+                )
+            ],
+        )
         return self._result(fact, knowledge, event_ids)
 
     def create_pending_fact(
@@ -314,6 +341,69 @@ class FactLifecycleService:
                         event_type="fact_deleted",
                         from_status=before.status.value,
                         reason=reason or "explicit deletion",
+                    )
+                ],
+            )
+        return self._result(after, knowledge, event_ids)
+
+    def edit_pending_fact(
+        self,
+        actor: Actor,
+        fact_id: str,
+        *,
+        meaning: str | None = None,
+        renderings: dict[str, str] | None = None,
+        tags: list[str] | None = None,
+        effective_dates: str | None = None,
+        reason: str = "",
+    ) -> FactMutationResult:
+        """§17: change what a pending fact says, in place, before it is confirmed.
+
+        Only a `pending` fact: it reaches no CV until confirmed, so its wording is
+        still the user's to settle (a gap answer's draft is reviewed this way). A
+        canonical fact is corrected by a replacement, and a deleted one not at all.
+        Identity, source, style, provenance, and status do not change. Appends a
+        `fact_edited` event carrying the fact as it now reads.
+        """
+        changes: dict[str, Any] = {
+            name: value
+            for name, value in (
+                ("meaning", meaning),
+                ("renderings", renderings),
+                ("tags", tags),
+                ("effective_dates", effective_dates),
+            )
+            if value is not None
+        }
+        if not changes:
+            raise KnowledgeRejected("an edit must change at least one field")
+        with self.transactions.write() as tx:
+            current = self._state(tx, actor)
+            store = self._build(current).facts
+            try:
+                before = store.get(fact_id)
+            except FactStoreError as exc:
+                raise UnknownRecord(f"Unknown fact: {fact_id}") from exc
+            if before.status is not FactStatus.PENDING:
+                raise KnowledgeRejected(
+                    f"only a pending fact can be edited: {fact_id} ({before.status.value})"
+                )
+            try:
+                after = Fact.model_validate({**before.model_dump(mode="json"), **changes})
+            except ValueError as exc:
+                raise KnowledgeRejected(str(exc)) from exc
+            if after == before:
+                raise KnowledgeRejected("the edit changes nothing")
+            knowledge, event_ids = self._commit(
+                tx,
+                current,
+                _with_fact(current, after),
+                [
+                    self._event(
+                        after,
+                        event_type="fact_edited",
+                        from_status=before.status.value,
+                        reason=reason or "edited before confirmation",
                     )
                 ],
             )

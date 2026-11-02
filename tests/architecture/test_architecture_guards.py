@@ -852,6 +852,8 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "KnowledgeExportService",
         # Appends each provider attempt in its own short scope before deciding a retry.
         "AICallRunner",
+        # Gap questions: queue-time reads, preparation reads, the read, and the skip.
+        "GapQuestionService",
     }
     owners = set()
     paths = (ENGINE / "application").rglob("*.py")

@@ -46,6 +46,8 @@ from ..application.ports import (
     AnalysisContext,
     AssessClaimSupportContext,
     DraftResumeContext,
+    FactFromAnswerContext,
+    GapQuestionsContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
     TaskContracts,
@@ -59,6 +61,8 @@ from ..domain.contracts.providers import (
     ClaimProposal,
     ClaimSupportProposal,
     DraftProposal,
+    FactDraftProposal,
+    GapQuestionsProposal,
     ProviderCost,
     ProviderPricing,
     ProviderUsage,
@@ -261,11 +265,13 @@ TASK_OUTPUT_MODELS: dict[str, type[StrictModel]] = {
     "assess_claim_support": ClaimSupportProposal,
     "regenerate_section": SectionProposal,
     "regenerate_claim": ClaimProposal,
+    "propose_gap_questions": GapQuestionsProposal,
+    "draft_fact_from_answer": FactDraftProposal,
 }
 
 
 class OpenAIProvider:
-    """The five contracted tasks over the Responses API, one HTTP attempt per call.
+    """The contracted tasks over the Responses API, one HTTP attempt per call.
 
     Strict Structured Outputs over the standard-library HTTP client, so the
     provider boundary adds no SDK dependency; the answer is still validated by
@@ -589,6 +595,34 @@ class OpenAIProvider:
         return cast(
             AIAttempt[ClaimProposal],
             self._run("regenerate_claim", context, model=model, reasoning_effort=reasoning_effort),
+        )
+
+    def propose_gap_questions(
+        self,
+        context: GapQuestionsContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIAttempt[GapQuestionsProposal]:
+        return cast(
+            AIAttempt[GapQuestionsProposal],
+            self._run(
+                "propose_gap_questions", context, model=model, reasoning_effort=reasoning_effort
+            ),
+        )
+
+    def draft_fact_from_answer(
+        self,
+        context: FactFromAnswerContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIAttempt[FactDraftProposal]:
+        return cast(
+            AIAttempt[FactDraftProposal],
+            self._run(
+                "draft_fact_from_answer", context, model=model, reasoning_effort=reasoning_effort
+            ),
         )
 
 

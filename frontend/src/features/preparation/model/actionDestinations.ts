@@ -17,6 +17,9 @@ const destinations: Record<string, (applicationId: string) => string> = {
   analyze: routePaths.analysis,
   /* The matching settings are a screen of their own beneath the analysis. */
   edit_matching_configuration: routePaths.matching,
+  /* Gap questions are asked and answered on the analysis step, under the requirements
+     they are about. */
+  ask_gap_questions: routePaths.analysis,
   /* Creating the draft, and re-pinning the document to a newer analysis before it, are the
      verification step's commands. */
   build_from_analysis: routePaths.verification,
@@ -63,6 +66,9 @@ const operationActions: Record<OperationType, string> = {
   regenerate_section: "regenerate_section",
   regenerate_claim: "regenerate_claim",
   render_document: "render",
+  ask_gap_questions: "ask_gap_questions",
+  /* An answer is drafted on the screen that asked the question. */
+  draft_gap_fact: "ask_gap_questions",
 };
 
 const resumeDestination = (application: ResumeProjection): string => {

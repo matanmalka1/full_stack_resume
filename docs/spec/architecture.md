@@ -67,8 +67,11 @@ Serialized documents are Pydantic models.
 Commands, queries, services, ports, transaction boundaries, action policy, state
 projections, optimistic commit checks, and turning validated Proposals into domain
 state. Services are synchronous and grouped by kind of work (intake and queries,
-analysis, AI authoring, editing, check and approval, history export, rendering,
-recruitment and submission, knowledge, Operations, maintenance, settings). They return
+analysis, gap questions, AI authoring, editing, check and approval, history export,
+rendering, recruitment and submission, knowledge, Operations, maintenance, settings).
+A gap answer's pending fact is written by the fact lifecycle's in-scope write
+(`FactLifecycleService.add_fact_in`) inside the Operation's activation, so the fact
+and the record that the question was answered commit together. They return
 Pydantic DTOs, never rows or paths.
 
 Services live in `services/`, their ports in `ports/`. Top-level modules under
@@ -139,7 +142,9 @@ Holds Applications (with job text, locked after submission by trigger
 `lock_submitted_job_text`), recruitment and audit history, JobAnalyses, `cv_documents`
 (fields: state-and-use-cases.md §3), `ai_calls` (§11), Submissions, Operations, fact
 events, users, sessions, facts, CandidateContexts, Profile bindings (§18.2), settings,
-and rate-limit buckets.
+rate-limit buckets, and gap questions with their outcomes (`gap_questions`,
+`gap_answers`: immutable children of an Application; a composite foreign key keeps a
+question's analysis, and an outcome's question, within the same Application).
 
 Addressed by `CV_DATABASE_URL`. One `Engine` (`pool_pre_ping=True`). Transactions run at
 `REPEATABLE READ`.

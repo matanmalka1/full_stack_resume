@@ -253,6 +253,12 @@ requirement doesn't cost the others; duplicates merge to the lower claim; identi
 stable across prompt versions; injected instructions don't change requirements, gaps,
 Fit, or coverage; no provider means no analysis.
 
+**Gap questions.** Only unmet requirements are asked about, mandatory first and capped;
+an answer becomes a pending fact with the answer as provenance and only known tags; a
+draft that adds a number or a named term, or lacks a Hebrew rendering, is refused and
+saves nothing; one outcome per question; a pending draft can be edited, then confirmed.
+`tests/ai/test_gap_questions.py`.
+
 **Provider.** Schema parsing per task; contract and prompt versions; refusal and invalid
 output distinct; withheld lines; retry policy per architecture.md §11; every attempt
 logged with usage and sanitized response; cost from the price snapshot.

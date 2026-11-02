@@ -21,6 +21,7 @@ from ..application.services.applications.queries import ApplicationQueryService
 from ..application.services.drafts import DraftAuthoringService, DraftEditingService
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.review import DraftReviewService
+from ..application.services.gap_questions import GapQuestionService
 from ..application.services.knowledge import FactLifecycleService, KnowledgeQueryService
 from ..application.services.operations import (
     OperationLifecycleService,
@@ -76,5 +77,6 @@ class ApiServices:
     operation_lifecycle: OperationLifecycleService
     settings: SettingsService
     accounts: AccountService
+    gap_questions: GapQuestionService
     identity: InstanceIdentity
     limits: ApiLimits

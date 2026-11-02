@@ -14,8 +14,10 @@ from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.api.session_cookie import SESSION_COOKIE
 from cv_engine.application.actor import Actor
 from cv_engine.application.commands import AnalyzeCommand, IngestCommand
+from cv_engine.application.ports.gap_questions import GapQuestionRecord
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.infrastructure.knowledge import FileKnowledge
+from cv_engine.infrastructure.persistence.gap_questions import SqlAlchemyGapQuestionStore
 from cv_engine.infrastructure.persistence.tables import facts
 from cv_engine.runtime.composition import build_api_services
 from cv_engine.util import new_id, utc_now
@@ -89,6 +91,26 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
         idempotency_key="same-key-across-users",
         analysis_service=services.analysis,
     )
+    # A real question of the owner's, so the foreign requests address a record that exists.
+    owner_question = GapQuestionRecord(
+        id=new_id(),
+        application_id=setup.application_id,
+        job_analysis_id=setup.analysis_id,
+        operation_id=owner_operation.id,
+        ordinal=1,
+        requirement_id="owner-secret-requirement",
+        requirement_text="Owner Secret requirement",
+        importance="mandatory",
+        coverage="unsupported",
+        language="en",
+        question="Owner Secret question?",
+        created_at=utc_now(),
+    )
+    transactions = services_transactions(services)
+    with transactions.write() as tx:
+        SqlAlchemyGapQuestionStore(transactions).insert_questions(
+            tx, setup.application_id, owner.user_id, [owner_question]
+        )
     owner_settings = services.settings.read(owner)
     services.settings.update(
         owner,
@@ -219,6 +241,31 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
                 f"{API_PREFIX}/applications/{setup.application_id}/external-submissions",
                 {"submitted_at": utc_now(), "metadata": {}},
             ),
+            ("GET", "/api/v1/applications/{application_id}/gap-questions"): ForeignRequest(
+                "GET", f"{API_PREFIX}/applications/{setup.application_id}/gap-questions"
+            ),
+            ("POST", "/api/v1/applications/{application_id}/gap-questions"): ForeignRequest(
+                "POST",
+                f"{API_PREFIX}/applications/{setup.application_id}/gap-questions",
+                {"job_analysis_id": setup.analysis_id},
+            ),
+            (
+                "POST",
+                "/api/v1/applications/{application_id}/gap-questions/{question_id}/answer",
+            ): ForeignRequest(
+                "POST",
+                f"{API_PREFIX}/applications/{setup.application_id}/gap-questions/"
+                f"{owner_question.id}/answer",
+                {"answer": "foreign answer"},
+            ),
+            (
+                "POST",
+                "/api/v1/applications/{application_id}/gap-questions/{question_id}/skip",
+            ): ForeignRequest(
+                "POST",
+                f"{API_PREFIX}/applications/{setup.application_id}/gap-questions/"
+                f"{owner_question.id}/skip",
+            ),
             ("PATCH", "/api/v1/applications/{application_id}/job-text"): ForeignRequest(
                 "PATCH",
                 f"{API_PREFIX}/applications/{setup.application_id}/job-text",
@@ -251,6 +298,11 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
             ),
             ("GET", "/api/v1/facts/{fact_id}"): ForeignRequest(
                 "GET", f"{API_PREFIX}/facts/{private_fact.fact_id}"
+            ),
+            ("PATCH", "/api/v1/facts/{fact_id}"): ForeignRequest(
+                "PATCH",
+                f"{API_PREFIX}/facts/{private_fact.fact_id}",
+                {"meaning": "foreign edit"},
             ),
             ("GET", "/api/v1/facts/attachment-targets"): ForeignRequest(
                 "GET", f"{API_PREFIX}/facts/attachment-targets?fact_id={private_fact.fact_id}"

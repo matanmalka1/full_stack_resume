@@ -30,6 +30,7 @@ from ..domain.document import (
     dependent_fact_ids,
     preparation_state,
 )
+from ..domain.gap_questions import gap_requirements
 from ..domain.knowledge import Knowledge
 from .operations import OperationType, OperationView
 from .queries import ApplicationStateView, BlockedActionView, ReasonView, WarningView
@@ -37,6 +38,7 @@ from .queries import ApplicationStateView, BlockedActionView, ReasonView, Warnin
 PREPARATION_ACTIONS = (
     "analyze",
     "edit_matching_configuration",
+    "ask_gap_questions",
     "build_from_analysis",
     "confirm_and_use_fact",
     "create_draft",
@@ -303,6 +305,9 @@ def derive_actions(
         allowed.add("analyze")
     if context.analyses:
         allowed.add("edit_matching_configuration")
+        newest = context.analyses[-1].get("analysis")
+        if newest is not None and gap_requirements(newest):
+            allowed.add("ask_gap_questions")
     if document is not None:
         has_content = document.content is not None
         latest = context.analyses[-1] if context.analyses else None
@@ -338,6 +343,8 @@ def derive_actions(
 
     if analyze_active:
         block(["analyze"], "ANALYSIS_IN_PROGRESS")
+    if active is not None and active.operation_type is OperationType.ASK_GAP_QUESTIONS:
+        block(["ask_gap_questions"], "GAP_QUESTIONS_IN_PROGRESS")
     if context.matching_context_operation_active:
         block(["edit_matching_configuration"], "MATCHING_CONTEXT_OPERATION_IN_PROGRESS")
     if document_operation_active:

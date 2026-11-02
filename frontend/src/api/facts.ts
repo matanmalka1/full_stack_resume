@@ -7,6 +7,7 @@ import type {
   ConfirmAndUseFact,
   ConfirmAndUseFactRequest,
   CreateFactRequest,
+  EditPendingFactRequest,
   FactAttachment,
   FactAttachmentTargets,
   FactDetail,
@@ -86,6 +87,11 @@ export const confirmFact = async (factId: string, body: FactTransitionRequest): 
       body,
     })
   ).data;
+
+/* §17 `edit_pending_fact`: a pending fact's meaning, renderings, tags, and dates,
+   changed in place before it is confirmed. Only the fields sent change. */
+export const editPendingFact = async (factId: string, body: EditPendingFactRequest): Promise<FactMutation> =>
+  (await apiRequest<FactMutation>(factPath(factId), { method: "PATCH", body })).data;
 
 /* One-way: pending/canonical -> deleted. `confirm: false` is refused rather
    than interpreted, the same as `confirmFact`. */

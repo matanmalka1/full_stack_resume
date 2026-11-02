@@ -5,6 +5,7 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { surfaceClasses } from "@/ui/surface";
 import { AnalysisHeader } from "./AnalysisHeader";
 import { AnalysisNotes } from "./AnalysisNotes";
+import { GapQuestionsSection } from "./gaps/GapQuestionsSection";
 import { RequirementList } from "./RequirementList";
 import { RoleSummary } from "./RoleSummary";
 
@@ -29,6 +30,8 @@ export const AnalysisPanel = ({
       {classification.requirements.length === 0 ? null : (
         <RequirementList detail={detail} gaps={classification.gaps} requirements={classification.requirements} />
       )}
+
+      <GapQuestionsSection detail={detail} profile={classification.profile} />
 
       <AnalysisNotes
         issues={classification.issues}
