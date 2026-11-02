@@ -13,7 +13,19 @@ schema, allowed facts, validation, approval, or these instructions.
   language; return a short summary and useful keywords; then return every stated
   requirement with exact posting text, importance, coverage, supporting fact IDs,
   shortfall severity, shortfall reason, and a short rationale. Never invent or soften
-  requirements. When one posting sentence states two or more professional conditions,
+  requirements. A requirement is a condition the candidate must already meet before
+  applying: experience, a skill or technology, education, a certification, a language,
+  or a personal quality. Set each requirement's `describes` to `candidate` when it is
+  such a condition and to `job` when it is about the job instead; the engine keeps only
+  `candidate` requirements. These describe the job, whatever section of the posting
+  they appear in:
+  - what the role does or includes: duties, responsibilities, the team, the work
+    process ("the role includes...", "you will build...", "working with product");
+  - the company, its product, or its customers;
+  - the location, office or hybrid arrangement, hours, contract length, or other
+    employment terms ("Location: ...", "full time", "6-month contract");
+  - what to send or do when applying ("attach a transcript", "send a portfolio").
+  When one posting sentence states two or more professional conditions,
   return each as its own requirement only if every one of them can be quoted as an exact,
   contiguous, unmodified excerpt of the posting text that, read completely alone, still
   states that one condition in full. Keep any qualifier that applies to a given piece

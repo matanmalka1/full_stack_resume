@@ -1,15 +1,15 @@
 {
   "prompt": {
-    "version": "system-v17",
+    "version": "system-v18",
     "file": "ai/prompts/system.md"
   },
   "tasks": {
     "propose_analysis": {
-      "version": "5.0.0",
+      "version": "6.0.0",
       "input": "AnalysisContext",
       "input_schema_version": "1.0.0",
       "output": "AnalysisProposal",
-      "output_schema_version": "2.0.0"
+      "output_schema_version": "3.0.0"
     },
     "draft_resume": {
       "version": "4.0.0",

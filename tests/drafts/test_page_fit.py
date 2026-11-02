@@ -249,6 +249,30 @@ def test_nothing_removable_names_nothing() -> None:
     assert next_trim(draft, profile, _facts(draft)) is None
 
 
+def test_a_demanded_line_outlasts_a_line_the_posting_does_not_ask_for() -> None:
+    skills = [_claim("skill.a", "item"), _claim("skill.b", "item"), _claim("skill.ai", "item")]
+    claims = [*_role("role", 3)]
+    draft = _draft(("Experience", claims), ("Skills", skills))
+    profile = _profile(
+        _spec("Experience", claims, min_claims_per_role=1),
+        _spec("Skills", skills),
+    )
+    facts = _facts(draft)
+    demanded = frozenset({"skill.ai"})
+    # Without the posting, the Profile's last skill would go first.
+    assert next_trim(draft, profile, facts) == "skill.ai"
+    assert next_trim(draft, profile, facts, demanded) == "skill.b"
+
+
+def test_a_demanded_line_still_goes_once_nothing_else_may() -> None:
+    skills = [_claim("skill.a", "item"), _claim("skill.ai", "item")]
+    draft = _draft(("Skills", skills))
+    profile = _profile(_spec("Skills", skills))
+    facts = _facts(draft)
+    demanded = frozenset({"skill.a", "skill.ai"})
+    assert next_trim(draft, profile, facts, demanded) == "skill.ai"
+
+
 def test_the_policy_is_deterministic_and_pure() -> None:
     claims = [*_role("new", 4), *_role("old", 4)]
     draft = _draft(("Experience", claims))

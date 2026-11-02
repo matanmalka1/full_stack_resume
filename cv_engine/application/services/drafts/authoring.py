@@ -366,7 +366,15 @@ class DraftAuthoringService:
             model=model,
             reasoning_effort=reasoning_effort,
         )
-        return self._fit_to_pages(updated, reason, profile, knowledge, source.document.template)
+        demanded = frozenset(
+            fact_id
+            for requirement in analysis.requirements
+            if requirement.importance == "mandatory"
+            for fact_id in requirement.supporting_fact_ids
+        )
+        return self._fit_to_pages(
+            updated, reason, profile, knowledge, source.document.template, demanded
+        )
 
     def _fit_to_pages(
         self,
@@ -375,6 +383,7 @@ class DraftAuthoringService:
         profile: Profile,
         knowledge: Knowledge,
         template: str | None,
+        demanded_fact_ids: frozenset[str],
     ) -> tuple[DraftDocument, ClaimReviewReason | None, PageFitReport]:
         """Measure the draft and drop the fewest lines that make it fit its page limit.
 
@@ -382,7 +391,8 @@ class DraftAuthoringService:
 
         Section budgets are guidance the writer weighs; the page limit is enforced here,
         before anything is written, so approval does not discover an overflow only when
-        the PDF is rendered. `next_trim` names each line to drop (domain/page_fit.py) and
+        the PDF is rendered. `next_trim` names each line to drop (domain/page_fit.py),
+        holding back the evidence for the posting's mandatory requirements, and
         needs no measurement, so the whole drop order is known up front. The number of
         lines to drop is then binary-searched, assuming the page count never rises as
         more lines go, within `MAX_PAGE_MEASUREMENTS` in all; the draft written is the
@@ -417,7 +427,9 @@ class DraftAuthoringService:
         order: list[TrimmedClaim] = []
         trims: list[DraftDocument] = []
         current = draft
-        while (claim_id := next_trim(current, profile, knowledge.facts)) is not None:
+        while (
+            claim_id := next_trim(current, profile, knowledge.facts, demanded_fact_ids)
+        ) is not None:
             line = trimmed_line(current, claim_id)
             order.append(
                 TrimmedClaim(

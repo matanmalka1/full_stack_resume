@@ -105,6 +105,34 @@ def test_one_unusable_requirement_does_not_cost_the_others(
     ]
 
 
+def test_a_reading_about_the_job_is_not_a_requirement(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """A duty or a location line read as mandatory used to drag Fit down to low."""
+    analysis = _normalize(
+        _proposal(
+            ProposedRequirement(
+                text="- Comfortable presenting to customers.", importance="mandatory"
+            ),
+            ProposedRequirement(
+                text="- Sales experience in the software industry.",
+                importance="mandatory",
+                describes="job",
+            ),
+        ),
+        fact_store,
+        profile_store,
+        requirement_concepts,
+    )
+
+    assert [requirement.text for requirement in analysis.requirements] == [
+        "- Comfortable presenting to customers."
+    ]
+    assert [(issue.code, issue.requirement_index) for issue in analysis.issues] == [
+        ("describes_job", 1)
+    ]
+
+
 def test_a_fact_the_store_does_not_have_is_dropped_and_disclosed(
     fact_store, profile_store, requirement_concepts
 ) -> None:
