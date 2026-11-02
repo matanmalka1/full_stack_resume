@@ -20,8 +20,8 @@ export const useRenderDocument = ({
   onQueued,
   rendering,
 }: {
-  /* True only right after this screen's own approval. Reloading an approved document stays
-     passive, so a visit never queues render work by itself. */
+  /* True only after this screen's own approval or template change. Reloading an approved
+     document stays passive, so a visit never queues render work by itself. */
   autoStart: boolean;
   detail: ApplicationDetail | undefined;
   /* The editor's watch: the accepted `202` is the earliest and most certain answer. */
@@ -50,10 +50,12 @@ export const useRenderDocument = ({
     },
   });
 
-  const automaticAttempted = useRef(false);
+  /* Once per approved document: a template change after this screen's approval is a new
+     hash, still approved, and renders again; a failed render of the same hash does not. */
+  const automaticAttempted = useRef<string | null>(null);
   useEffect(() => {
-    if (!autoStart || automaticAttempted.current || documentHash === null) return;
-    automaticAttempted.current = true;
+    if (!autoStart || documentHash === null || automaticAttempted.current === documentHash) return;
+    automaticAttempted.current = documentHash;
     render.mutate();
   }, [autoStart, documentHash, render]);
 

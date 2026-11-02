@@ -107,9 +107,10 @@ export const DraftEditorPage = () => {
 
   const [mode, setMode] = useState<DraftWorkspaceMode>("read");
   const [approvalOpen, setApprovalOpen] = useState(false);
-  /* Set by this screen's own approval, so the render it starts is the automatic
-     continuation of a press - never something a visit to an approved document starts. */
-  const [approvedHere, setApprovedHere] = useState(false);
+  /* Set by this screen's own approval or template change, so the render it starts is the
+     automatic continuation of a press - never something a visit to an approved document
+     starts. */
+  const [renderOnApproval, setRenderOnApproval] = useState(false);
   /* The render this screen queued. Only its success moves the reader on: a render that
      finished before they came back to edit must not bounce them out of the editor. */
   const [renderQueuedHere, setRenderQueuedHere] = useState<string | null>(null);
@@ -154,7 +155,7 @@ export const DraftEditorPage = () => {
       : undefined;
 
   const renderState = useRenderDocument({
-    autoStart: approvedHere,
+    autoStart: renderOnApproval,
     detail,
     onQueued: (operationId) => {
       setRenderQueuedHere(operationId);
@@ -277,7 +278,9 @@ export const DraftEditorPage = () => {
 
   /* The template is part of the document hash, so it is chosen like any command over
      the document: unsaved edits first, then against the hash just read, then the
-     document read back so the next autosave carries the new token. */
+     document read back so the next autosave carries the new token. It is not part of
+     what approval vouches for, so an approved document stays approved and its PDF is
+     rendered again in the new template. */
   const chooseTemplate = async (template: TemplateName | null) => {
     if (!(await editing.settle())) {
       throw new Error("העריכות לא נשמרו. יש לפתור את שגיאת השמירה או הקונפליקט ולנסות שוב.");
@@ -286,6 +289,8 @@ export const DraftEditorPage = () => {
     await setDocumentTemplate(applicationId, latest.document.document_hash, template);
     await invalidateDocumentViews(queryClient, applicationId);
     await queryClient.fetchQuery({ ...documentQueryOptions(applicationId), staleTime: 0 });
+    // Only once the projection names the new hash, so the render is not of the old one.
+    if (renderStage) setRenderOnApproval(true);
   };
 
   const navigateSaved = async (href: string) => {
@@ -638,7 +643,7 @@ export const DraftEditorPage = () => {
               draft={draft}
               onApproved={() => {
                 setApprovalOpen(false);
-                setApprovedHere(true);
+                setRenderOnApproval(true);
               }}
               onCheckFailed={() => setApprovalOpen(false)}
               onClose={() => setApprovalOpen(false)}

@@ -17,7 +17,8 @@ interface DraftTemplateControlProps {
   /* Settles the editor, chooses the template, and reads the document back. The page owns
      it because the editor's save token is the page's: the template moves the hash. */
   onApply: (template: TemplateName | null) => Promise<void>;
-  /* The document is approved or Ready: a new template returns it to draft. */
+  /* The document is approved or Ready: a new template keeps the approval and renders the
+     PDF again. */
   stamped: boolean;
 }
 
@@ -99,8 +100,8 @@ export const DraftTemplateControl = ({ disabled, draft, onApply, stamped }: Draf
       >
         <div className="flex flex-col gap-4">
           {stamped && selected !== current ? (
-            <Callout title="המסמך יחזור לטיוטה" tone="warning">
-              <p>הגרסה אושרה כבר בתבנית הנוכחית. אחרי ההחלפה יש לאשר וליצור את ה־PDF מחדש.</p>
+            <Callout title="ה־PDF ייווצר מחדש" tone="info">
+              <p>האישור נשמר, כי התוכן לא משתנה. אחרי ההחלפה ה־PDF ייווצר מחדש בתבנית החדשה.</p>
             </Callout>
           ) : null}
           <TemplateGallery

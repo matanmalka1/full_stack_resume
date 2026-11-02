@@ -366,6 +366,33 @@ describe("DraftRenderPanel", () => {
     expect(screen.queryByRole("button", { name: "יצירת HTML ו־PDF" })).not.toBeInTheDocument();
   });
 
+  /* A template change keeps the approval and moves the hash: the screen that started the
+     render follows the newly approved hash with one more, and never repeats a hash. */
+  it("renders again when the approved document becomes another hash", async () => {
+    const fetchMock = renderFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    const Host = () => {
+      const [projection, setProjection] = useState(approvedDetail);
+      return (
+        <>
+          <button onClick={() => setProjection({ ...approvedDetail, document_hash: OTHER_HASH })} type="button">
+            template
+          </button>
+          <RenderStep autoStart detail={projection} onQueued={vi.fn()} />
+        </>
+      );
+    };
+    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <Host />);
+
+    const posted = () =>
+      fetchMock.mock.calls
+        .filter((call) => isPost(call[1]))
+        .map((call) => JSON.parse(String(call[1]?.body)).expected_document_hash);
+    await waitFor(() => expect(posted()).toEqual([HASH]));
+    fireEvent.click(screen.getByRole("button", { name: "template" }));
+    await waitFor(() => expect(posted()).toEqual([HASH, OTHER_HASH]));
+  });
+
   it("offers the ready step once the projection says the document is Ready", async () => {
     vi.stubGlobal("fetch", renderFetch());
 
