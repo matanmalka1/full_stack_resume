@@ -75,12 +75,12 @@ test.describe("signing in", () => {
     await page.goto("/settings");
 
     await expect(page).toHaveURL(/\/login\?next=%2Fsettings$/);
-    await expect(page.getByRole("heading", { level: 1, name: "התחברות" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "כניסה לחשבון" })).toBeVisible();
     await page.getByLabel("אימייל").fill("candidate@example.com");
     await page.getByLabel("סיסמה").fill("a long password");
-    await page.getByRole("button", { name: "התחברות" }).click();
+    await page.getByRole("button", { name: "כניסה" }).click();
 
     await expect(page).toHaveURL(/\/settings$/);
-    await expect(page.getByRole("heading", { level: 1, name: "הגדרות המערכת" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "הגדרות" })).toBeVisible();
   });
 });
