@@ -1,16 +1,16 @@
 import { Eye, PenLine } from "lucide-react";
 
-import { IconButton } from "@/ui/IconButton";
+import { cx } from "@/ui/cx";
 import type { DraftWorkspaceMode } from "./DraftWorkspace";
 
-/* The phone's form of `DraftWorkspaceSwitch`: one icon in the step's compact header that
-   flips between the rows and the whole rendered document. Below the large breakpoint the
-   two never sit side by side, so the choice is one of two states rather than one of two
-   labels, and a full segmented control under the heading spent a row on it.
+/* The one switch between the draft's lines and the whole rendered document, in the
+   heading's row at every width: an outlined, labelled button on a wide screen and a bare
+   44px icon in a phone's top bar. Its name is what a press does - see the document, or go
+   back to its lines - and the same at both widths, so the label is hidden on a phone
+   rather than swapped for another.
 
-   It changes `mode` through the same handler as the switch, so leaving the rows still
-   settles the autosave buffer first. A toggle button, not a link: the route stays the
-   editor's. */
+   It changes `mode` through the page's handler, so leaving the lines still settles the
+   autosave buffer first. A toggle button, not a link: the route stays the editor's. */
 export const DraftPreviewToggle = ({
   mode,
   onModeChange,
@@ -19,20 +19,20 @@ export const DraftPreviewToggle = ({
   onModeChange: (mode: DraftWorkspaceMode) => void;
 }) => {
   const previewing = mode === "document";
+  const Icon = previewing ? PenLine : Eye;
   return (
-    <IconButton
-      /* Named for what a press does, not as a pressed state of "תצוגה מלאה": the switch's
-         own button carries that name in the same document, hidden on a phone but not
-         from a query, and two controls answering to one name is one too many. */
-      aria-label={previewing ? "חזרה לעריכת השורות" : "הצגת המסמך המלא"}
-      className="lg:hidden"
-      onClick={() => onModeChange(previewing ? "read" : "document")}
-    >
-      {previewing ? (
-        <PenLine aria-hidden="true" className="size-icon-md" />
-      ) : (
-        <Eye aria-hidden="true" className="size-icon-md" />
+    <button
+      aria-pressed={previewing}
+      className={cx(
+        "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-bold text-cv-text transition-colors duration-200",
+        "h-11 border border-cv-border-strong bg-cv-surface px-3.5 text-label hover:bg-cv-surface-muted",
+        "max-lg:w-11 max-lg:border-0 max-lg:bg-transparent max-lg:px-0",
       )}
-    </IconButton>
+      onClick={() => onModeChange(previewing ? "read" : "document")}
+      type="button"
+    >
+      <Icon aria-hidden="true" className="size-icon-lg lg:size-icon-md" />
+      <span className="max-lg:sr-only">תצוגה מקדימה</span>
+    </button>
   );
 };

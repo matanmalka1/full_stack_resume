@@ -6,6 +6,7 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import type { DraftClaimActions } from "../model/drafts.types";
 import { linkedFacts, removability } from "../model/draftClaims";
+import { type ClaimRequirements, requirementsForFacts } from "../model/draftFit";
 import { DraftClaimRow } from "./DraftClaimRow";
 
 /* The window a confirmed removal sits in before it actually reaches the server - long
@@ -25,6 +26,9 @@ interface DraftClaimListProps {
   /* Rendered instead of the list when the outline names no claims here. */
   emptyLabel: string;
   onMove?: (index: number, offset: -1 | 1) => void;
+  /* What each fact answers in the posting, so a row can name the requirement it serves.
+     Absent for the identity lines, which come from the Profile rather than the facts. */
+  requirements?: ClaimRequirements;
 }
 
 /* One run of claims as a list of rows.
@@ -40,6 +44,7 @@ export const DraftClaimList = ({
   factResolution,
   facts,
   onMove,
+  requirements,
 }: DraftClaimListProps): ReactNode => {
   const [pendingRemoval, setPendingRemoval] = useState<DraftClaim | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -102,16 +107,19 @@ export const DraftClaimList = ({
   const rowActions: DraftClaimActions = { ...actions, onRemove: requestRemoval };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col">
       {visibleClaims.length === 0 ? (
-        <p className="text-support leading-6 text-cv-text-muted">{emptyLabel}</p>
+        <p className="border-t border-cv-hairline px-5 py-3.5 text-support leading-6 text-cv-text-muted max-lg:px-3.5">
+          {emptyLabel}
+        </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-cv-border">
+        <ul className="flex flex-col">
           {visibleClaims.map((claim) => {
             const index = claims.findIndex((candidate) => candidate.claim_id === claim.claim_id);
             return (
               <DraftClaimRow
                 actions={rowActions}
+                answers={requirements === undefined ? [] : requirementsForFacts(requirements, claim.fact_ids)}
                 claim={claim}
                 facts={linkedFacts(claim, facts)}
                 factResolution={claim.claim_type === "pending" ? factResolution?.(claim) : undefined}
@@ -134,6 +142,7 @@ export const DraftClaimList = ({
 
       {pendingRemoval === null ? null : (
         <Callout
+          className="mx-5 mb-4 max-lg:mx-3.5"
           action={
             <Button onClick={cancelRemoval} size="compact" variant="secondary">
               ביטול ההסרה

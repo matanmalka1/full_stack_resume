@@ -1,5 +1,6 @@
 import { CircleAlert } from "lucide-react";
 
+import { cardClasses } from "@/ui/surface";
 import type { DraftFit } from "../model/draftFit";
 
 /* How well the posting is answered, kept in view while the lines that answer it are
@@ -9,15 +10,12 @@ import type { DraftFit } from "../model/draftFit";
    a line knows which requirement is still open without going back a step to look. Nothing
    here gates anything - a gap is shown, not enforced, exactly as on the analysis step. */
 export const DraftFitCard = ({ fit }: { fit: DraftFit }) => (
-  <section
-    aria-labelledby="draft-fit-heading"
-    className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface p-card-padding"
-  >
+  <section aria-labelledby="draft-fit-heading" className={cardClasses("flex flex-col gap-2.5 p-4 max-lg:p-3.5")}>
     <div className="flex items-baseline justify-between gap-3">
-      <h2 className="text-support font-semibold text-cv-text-muted" id="draft-fit-heading">
+      <h2 className="text-support font-medium text-cv-text-muted" id="draft-fit-heading">
         התאמה למשרה
       </h2>
-      <p className="text-heading-md font-bold text-cv-text tabular-nums">
+      <p className="text-heading-sheet font-extrabold text-cv-text tabular-nums">
         <span className="sr-only">{`${fit.matched} מתוך ${fit.total} דרישות מתקיימות`}</span>
         <span aria-hidden="true" dir="ltr">{`${fit.matched}/${fit.total}`}</span>
       </p>
@@ -30,13 +28,13 @@ export const DraftFitCard = ({ fit }: { fit: DraftFit }) => (
     </div>
 
     {fit.gaps.length === 0 ? null : (
-      <ul aria-label="דרישות שלא מתקיימות במלואן" className="flex flex-wrap gap-2">
+      <ul aria-label="דרישות שלא מתקיימות במלואן" className="flex flex-wrap gap-1.5">
         {fit.gaps.map((gap) => (
           <li
-            className="inline-flex max-w-full items-center gap-1.5 rounded-pill border border-dashed border-cv-border-strong px-3 py-1 text-support font-semibold text-cv-text"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-pill border border-dashed border-cv-border-strong px-2.5 py-1 text-caption font-bold text-cv-text"
             key={gap.requirementId}
           >
-            <CircleAlert aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted" />
+            <CircleAlert aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted lg:hidden" />
             <span className="truncate" title={gap.requirement}>
               {gap.severity === "hard" ? "חסר: " : "חלקי: "}
               <span dir="auto">{gap.requirement}</span>

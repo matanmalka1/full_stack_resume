@@ -4,7 +4,10 @@ import { useId, useState } from "react";
 import type { DocumentFacts, EditableDocument } from "../model/drafts.types";
 import { Button } from "@/ui/Button";
 import { Textarea } from "@/ui/Input";
+import { Tooltip } from "@/ui/Tooltip";
+import { cardClasses } from "@/ui/surface";
 import type { ClaimFactContext, DraftClaimActions } from "../model/drafts.types";
+import type { ClaimRequirements } from "../model/draftFit";
 import { ClaimFactResolution } from "./ClaimFactResolution";
 import { DraftClaimList } from "./DraftClaimList";
 
@@ -19,33 +22,40 @@ interface DraftSectionCardProps {
   draft: EditableDocument;
   factContext: ClaimFactContext;
   facts: DocumentFacts | undefined;
-  /* Its own id, so the section navigation above can reach it and so the heading names the
-     card for assistive tech. */
+  /* Its own id, so the heading names the card for assistive tech. */
   headingId: string;
+  /* Another part is open. The card stays mounted so a line being edited in it keeps
+     its text. */
+  hidden: boolean;
   onRegenerate: () => void;
   onMoveClaim: (index: number, offset: -1 | 1) => void;
+  requirements: ClaimRequirements;
   section: DraftOutlineSection;
 }
 
-/* A.4 frame 3: one section of the draft outline - its heading, its regenerate action, and
-   the claims in it. The only thing it adds to the list below it is the section context an
-   unsupported line needs to become a fact.
+/* The two commands a section header carries: a square, outlined 36px button each. On a
+   wide screen adding a line is spelled out, as the design draws it; on a phone it is the
+   plus alone, and the name stays for assistive tech. */
+const headerButton =
+  "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-control-sm border border-cv-border bg-cv-surface text-support font-bold text-cv-text transition-colors hover:bg-cv-surface-muted disabled:cursor-not-allowed disabled:opacity-50";
 
-   Drawn as the document's own section - a heading over a rule - rather than as a card:
-   every section was a framed, shadowed box, so the editor read as a stack of panels
-   instead of as the CV it is editing.
+/* A.4 frame 3: one section of the draft outline - its heading, the commands that act on
+   the whole section, and the claims in it. The only thing it adds to the list below it
+   is the section context an unsupported line needs to become a fact.
 
-   Below the large breakpoint it is a card after all: a phone shows one section at a time
-   between the section tabs and the approval bar, and a framed block is what says where
-   one ends. Its scroll margin clears the masthead and the pinned tabs together. */
+   A card at every width, as the design draws it: the heading and its commands over the
+   section's lines, each line divided from the next by a hairline that runs to the
+   card's edge. */
 export const DraftSectionCard = ({
   actions,
   draft,
   factContext,
   facts,
   headingId,
+  hidden,
   onRegenerate,
   onMoveClaim,
+  requirements,
   section,
 }: DraftSectionCardProps) => {
   const [adding, setAdding] = useState(false);
@@ -63,32 +73,44 @@ export const DraftSectionCard = ({
   };
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className="flex scroll-mt-24 flex-col gap-3 max-lg:scroll-mt-36 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-card-padding"
-    >
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-cv-border-strong pb-2 max-lg:flex-nowrap max-lg:border-cv-border">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <h3 className="truncate text-heading-sm font-bold text-cv-text" dir="auto" id={headingId}>
+    <section aria-labelledby={headingId} className={cardClasses("overflow-hidden")} hidden={hidden}>
+      <header className="flex items-start justify-between gap-2 px-5 py-4 max-lg:px-3.5 max-lg:pt-3.5 max-lg:pb-2.5">
+        <div className="min-w-0">
+          <h2
+            className="truncate text-heading-card font-extrabold text-cv-text max-lg:text-body"
+            dir="auto"
+            id={headingId}
+          >
             {section.name}
-          </h3>
-          <span className="shrink-0 text-support text-cv-text-muted">
+          </h2>
+          <p className="text-support text-cv-text-muted max-lg:text-caption">
             {section.claims.length === 1 ? "שורה אחת" : `${section.claims.length} שורות`}
-          </span>
+          </p>
         </div>
-        {/* No up/down controls for the section itself: section order is the Profile's,
-            and validation refuses any other, so a moved section could never be approved. */}
-        {/* On a phone the label is the button's name only: spelled out it wrapped the
-            section's own heading onto two lines. */}
-        <Button
-          className="max-lg:size-11 max-lg:shrink-0 max-lg:px-0"
-          disabled={actions.regenerationDisabled}
-          onClick={onRegenerate}
-          variant="ghost"
-        >
-          <RefreshCw aria-hidden="true" className="size-icon-md" />
-          <span className="max-lg:sr-only">יצירה מחדש של הפרק</span>
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* No up/down controls for the section itself: section order is the Profile's,
+              and validation refuses any other, so a moved section could never be approved. */}
+          <Tooltip label="יצירה מחדש של הפרק">
+            <button
+              aria-label="יצירה מחדש של הפרק"
+              className={`${headerButton} w-9`}
+              disabled={actions.regenerationDisabled}
+              onClick={onRegenerate}
+              type="button"
+            >
+              <RefreshCw aria-hidden="true" className="size-icon-md" />
+            </button>
+          </Tooltip>
+          <button
+            aria-expanded={adding}
+            className={`${headerButton} px-3 max-lg:w-9 max-lg:px-0`}
+            onClick={() => setAdding(true)}
+            type="button"
+          >
+            <Plus aria-hidden="true" className="size-icon-md" />
+            <span className="max-lg:sr-only">שורה חדשה</span>
+          </button>
+        </div>
       </header>
 
       <DraftClaimList
@@ -112,10 +134,11 @@ export const DraftSectionCard = ({
         )}
         facts={facts}
         onMove={onMoveClaim}
+        requirements={requirements}
       />
 
       {adding ? (
-        <div className="flex flex-col gap-2 rounded-control bg-cv-surface-muted p-3">
+        <div className="flex flex-col gap-2 border-t border-cv-hairline bg-cv-canvas px-5 py-4 max-lg:px-3.5">
           <label className="text-support font-medium text-cv-text" htmlFor={textareaId}>
             טקסט השורה החדשה
           </label>
@@ -144,12 +167,7 @@ export const DraftSectionCard = ({
             </Button>
           </div>
         </div>
-      ) : (
-        <Button className="self-start" onClick={() => setAdding(true)} variant="ghost">
-          <Plus aria-hidden="true" className="size-icon-md" />
-          הוספת שורה לפרק
-        </Button>
-      )}
+      ) : null}
     </section>
   );
 };

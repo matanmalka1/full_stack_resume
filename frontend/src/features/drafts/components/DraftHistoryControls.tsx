@@ -1,7 +1,7 @@
 import { Redo2, Undo2 } from "lucide-react";
 import { useEffect } from "react";
 
-import { Button } from "@/ui/Button";
+import { IconButton } from "@/ui/IconButton";
 import { Tooltip } from "@/ui/Tooltip";
 
 interface DraftHistoryControlsProps {
@@ -40,20 +40,21 @@ export const DraftHistoryControls = ({ canRedo, canUndo, onRedo, onUndo }: Draft
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canRedo, canUndo, onRedo, onUndo]);
 
-  /* Two icon buttons beside the outline's heading. Their shortcuts and the history's
-     depth are in the tooltips: a sentence about fifty remembered changes was a line of
-     its own on every visit, for something the reader only needs when reaching for it. */
+  /* Two quiet icon buttons at the end of the save-state block, beside the report on the
+     edits they step through. Their shortcuts and the history's depth are in the
+     tooltips: a sentence about fifty remembered changes was a line of its own on every
+     visit, for something the reader only needs when reaching for it. */
   return (
-    <div aria-label="היסטוריית עריכת הטיוטה" className="flex items-center gap-1" role="toolbar">
+    <div aria-label="היסטוריית עריכת הטיוטה" className="-my-1.5 -me-1.5 flex shrink-0 items-center" role="toolbar">
       <Tooltip label="ביטול השינוי האחרון (Ctrl/⌘+Z). נשמרים עד 50 שינויי ניסוח וסדר." wrap>
-        <Button aria-label="ביטול השינוי האחרון" disabled={!canUndo} onClick={onUndo} variant="secondary">
+        <IconButton aria-label="ביטול השינוי האחרון" disabled={!canUndo} onClick={onUndo} size="sm" variant="quiet">
           <Undo2 aria-hidden="true" className="size-icon-md" />
-        </Button>
+        </IconButton>
       </Tooltip>
       <Tooltip label="החזרת השינוי שבוטל (Ctrl+Y או ⌘+Shift+Z)" wrap>
-        <Button aria-label="החזרת השינוי שבוטל" disabled={!canRedo} onClick={onRedo} variant="secondary">
+        <IconButton aria-label="החזרת השינוי שבוטל" disabled={!canRedo} onClick={onRedo} size="sm" variant="quiet">
           <Redo2 aria-hidden="true" className="size-icon-md" />
-        </Button>
+        </IconButton>
       </Tooltip>
     </div>
   );
