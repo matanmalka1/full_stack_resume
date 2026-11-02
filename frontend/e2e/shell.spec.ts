@@ -39,7 +39,7 @@ test("applies the saved theme from Settings and follows system changes", async (
   api.stub("PATCH /api/v1/settings", answer);
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/settings");
-  await expect(page.getByRole("radio", { name: "לפי המערכת", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "לפי המכשיר", exact: true })).toBeChecked();
   await expect(page.locator("html")).not.toHaveAttribute("data-theme");
   const dark = await page.locator("html").evaluate((element) => getComputedStyle(element).backgroundColor);
   await page.emulateMedia({ colorScheme: "light" });
@@ -50,7 +50,7 @@ test("applies the saved theme from Settings and follows system changes", async (
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByRole("button", { name: "שמירת הגדרות" }).click();
   await expect(page.getByText("ההגדרות נשמרו")).toBeVisible();
-  await expect(page.getByRole("button", { name: /^ערכת נושא:/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^ערכת צבעים:/ })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("radio", { name: "כהה", exact: true })).toBeChecked();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
