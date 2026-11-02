@@ -1,14 +1,12 @@
 import { LayoutTemplate } from "lucide-react";
-import { useId, useState } from "react";
+import { useState } from "react";
 
 import { documentTemplatePreviewSrc } from "@/api/documents";
 import { type TemplateName, templateLabel } from "@/api/templates";
 import { useSettings } from "@/features/settings";
-import { TemplateGallery } from "@/features/templates";
+import { TemplatePickerDialog } from "@/features/templates";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { Dialog } from "@/ui/Dialog";
-import { ErrorCallout } from "@/ui/ErrorCallout";
 import type { EditableDocument } from "../model/drafts.types";
 
 interface DraftTemplateControlProps {
@@ -23,35 +21,12 @@ interface DraftTemplateControlProps {
 
 /* Which template the CV renders with, and the way to change it. The dialog shows the
    user's own saved CV in every template - the same server composition as the preview,
-   nothing stored - so the comparison is of their document, not of a sample. Choosing
-   in the dialog only selects; nothing changes until "apply". */
+   nothing stored - so the comparison is of their document, not of a sample. */
 export const DraftTemplateControl = ({ disabled, draft, onApply, stamped }: DraftTemplateControlProps) => {
-  const headingId = useId();
   const { settings } = useSettings();
   const options = settings?.available_templates ?? [];
   const current = draft.template ?? null;
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<TemplateName | null>(current);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  const close = () => {
-    if (pending) return;
-    setOpen(false);
-    setError(null);
-  };
-  const apply = async () => {
-    setPending(true);
-    setError(null);
-    try {
-      await onApply(selected);
-      setOpen(false);
-    } catch (failure) {
-      setError(failure);
-    } finally {
-      setPending(false);
-    }
-  };
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface px-3 py-2">
@@ -61,65 +36,30 @@ export const DraftTemplateControl = ({ disabled, draft, onApply, stamped }: Draf
       </span>
       <Button
         disabled={disabled || settings === undefined}
-        onClick={() => {
-          setSelected(current);
-          setOpen(true);
-        }}
+        onClick={() => setOpen(true)}
         size="compact"
         variant="secondary"
       >
         החלפת תבנית
       </Button>
 
-      <Dialog
-        description="קורות החיים השמורים שלך בכל אחת מהתבניות. התוכן לא משתנה, רק העיצוב."
-        dismissible={!pending}
-        /* The commands are the footer's own children, so the sheet's phone layout - two
-           equal halves - reaches them; a wrapper of its own kept them content-wide. */
-        footer={
-          <>
-            <Button disabled={pending} onClick={close} variant="secondary">
-              ביטול
-            </Button>
-            <Button
-              disabled={selected === current}
-              onClick={() => void apply()}
-              pending={pending}
-              pendingLabel="מחליף…"
-            >
-              החלת התבנית
-            </Button>
-          </>
-        }
-        headingId={headingId}
-        onClose={close}
-        open={open}
-        size="wide"
-        title="בחירת תבנית"
-      >
-        <div className="flex flex-col gap-4">
-          {stamped && selected !== current ? (
+      <TemplatePickerDialog
+        applyLabel="החלת התבנית"
+        changeWarning={
+          stamped ? (
             <Callout title="המסמך יחזור לטיוטה" tone="warning">
               <p>הגרסה אושרה כבר בתבנית הנוכחית. אחרי ההחלפה יש לאשר וליצור את ה־PDF מחדש.</p>
             </Callout>
-          ) : null}
-          <TemplateGallery
-            disabled={pending}
-            name={`${headingId}-template`}
-            onChange={setSelected}
-            options={options}
-            previewSrc={(template) => documentTemplatePreviewSrc(draft.application_id, draft.document_hash, template)}
-            value={selected}
-          />
-          {error === null ? null : (
-            <ErrorCallout
-              error={error}
-              fallbackDetail="התבנית לא הוחלפה. אפשר לנסות שוב."
-              title="לא ניתן להחליף תבנית"
-            />
-          )}
-        </div>
-      </Dialog>
+          ) : null
+        }
+        current={current}
+        description="קורות החיים השמורים שלך בכל אחת מהתבניות. התוכן לא משתנה, רק העיצוב."
+        onApply={onApply}
+        onClose={() => setOpen(false)}
+        open={open}
+        options={options}
+        previewSrc={(template) => documentTemplatePreviewSrc(draft.application_id, draft.document_hash, template)}
+      />
     </div>
   );
 };

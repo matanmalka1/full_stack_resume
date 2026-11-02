@@ -79,11 +79,17 @@ describe("SettingsPage", () => {
     fireEvent.change(screen.getByLabelText("מאמץ חשיבה"), {
       target: { value: "high" },
     });
-    // The template is chosen by name; the track's own design is the empty choice.
-    const template = screen.getByLabelText("תבנית עיצוב");
-    expect(template).toHaveValue("");
-    fireEvent.change(template, { target: { value: "deedy" } });
-    expect(template).toHaveValue("deedy");
+    // The template is chosen by sight over the sample CV; the track's own design is the empty choice.
+    fireEvent.click(screen.getByRole("button", { name: "תבנית עיצוב: תבנית המסלול" }));
+    expect(screen.getByTitle("תצוגה מקדימה: Deedy")).toHaveAttribute(
+      "src",
+      "/api/v1/templates/deedy/sample?language=he",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "אנגלית" }));
+    expect(screen.getByTitle("תצוגה מקדימה: Deedy").getAttribute("src")).toContain("language=en");
+    fireEvent.click(screen.getByRole("radio", { name: /Deedy/ }));
+    fireEvent.click(screen.getByRole("button", { name: "בחירת התבנית" }));
+    expect(screen.getByRole("button", { name: "תבנית עיצוב: Deedy" })).toBeInTheDocument();
     fireEvent.click(saveButton);
     await screen.findByRole("status");
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");

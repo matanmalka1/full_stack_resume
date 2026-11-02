@@ -92,6 +92,24 @@ export const SettingsSelectRow = ({
   );
 };
 
+/* A setting chosen in a dialog of its own: the whole row is the button that opens it,
+   with the current value muted at its end and a chevron, as a list row reads. Its name
+   is spelled out, so the label and the value are announced as two words, not one. */
+export const SettingsButtonRow = ({ label, onClick, value }: { label: string; onClick: () => void; value: string }) => (
+  <button
+    aria-label={`${label}: ${value}`}
+    className={cx(rowClasses, "w-full cursor-pointer text-start hover:bg-cv-surface-muted")}
+    onClick={onClick}
+    type="button"
+  >
+    <span className={rowLabelClasses}>{label}</span>
+    <span className="flex min-w-0 shrink items-center gap-1.5 text-label text-cv-text-muted">
+      <span className="truncate">{value}</span>
+      <ChevronLeft aria-hidden="true" className="size-4.5 shrink-0" />
+    </span>
+  </button>
+);
+
 /* An on/off setting, drawn as the app's one checkbox; `role="switch"` announces it as
    on/off, and the row's name is its label. */
 export const SettingsSwitchRow = ({

@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { ApiProblem } from "@/api/client";
 import type { Settings, UpdateSettingsRequest } from "@/api/contracts";
 import { type SettingsRead, readSettings, settingsQueryKey, updateSettings } from "@/api/settings";
-import { TRACK_TEMPLATE_LABEL, type TemplateName } from "@/api/templates";
+import { type SampleLanguage, templateLabel, templateSampleSrc } from "@/api/templates";
+import { TemplatePickerDialog } from "@/features/templates";
 import { useDisplaySettingsPreview } from "./DisplaySettingsPreview";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
@@ -14,8 +15,10 @@ import { Callout } from "@/ui/Callout";
 import { cx } from "@/ui/cx";
 import { SegmentedControl } from "@/ui/SegmentedControl";
 import { showToast } from "@/ui/toast";
+import { ViewSwitch } from "@/ui/ViewSwitch";
 import { SettingsConflict } from "./SettingsConflict";
 import {
+  SettingsButtonRow,
   SettingsGroup,
   SettingsNoteRow,
   SettingsSection,
@@ -46,6 +49,8 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
   const [baseline, setBaseline] = useState<SettingsRead>({ etag, settings });
   const [conflict, setConflict] = useState<{ base: UpdateSettingsRequest; local: UpdateSettingsRequest } | null>(null);
   const [latest, setLatest] = useState<SettingsRead | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [sampleLanguage, setSampleLanguage] = useState<SampleLanguage>("he");
   const values = editableSettings(baseline.settings);
   const {
     formState: { isDirty },
@@ -165,24 +170,11 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
             <SettingsGroup>
               {/* A new CV opens in this template; each one can still change it in the
                   editor, and a change here leaves existing CVs as they are. */}
-              <SettingsSelectRow
+              <SettingsButtonRow
                 label="תבנית עיצוב"
-                onChange={(event) =>
-                  setValue(
-                    "default_template",
-                    event.target.value === "" ? null : (event.target.value as TemplateName),
-                    { shouldDirty: true },
-                  )
-                }
-                value={form.default_template ?? ""}
-              >
-                <option value="">{TRACK_TEMPLATE_LABEL}</option>
-                {settings.available_templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.label}
-                  </option>
-                ))}
-              </SettingsSelectRow>
+                onClick={() => setTemplatesOpen(true)}
+                value={templateLabel(settings.available_templates, form.default_template ?? null)}
+              />
             </SettingsGroup>
           </SettingsSection>
           <SettingsSection description="המודל שמנתח משרות ומנסח טיוטות." divided={false} title="בינה מלאכותית">
@@ -237,6 +229,33 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
           </div>
         ) : null}
       </form>
+      {/* No CV of the user's is needed to choose a default, so the gallery frames a
+          sample. The choice joins the form's other changes and is kept on save. */}
+      <TemplatePickerDialog
+        applyLabel="בחירת התבנית"
+        current={form.default_template ?? null}
+        description="קורות חיים חדשים ייפתחו בתבנית הזו. קורות חיים קיימים לא משתנים."
+        onApply={(template) => setValue("default_template", template, { shouldDirty: true })}
+        onClose={() => setTemplatesOpen(false)}
+        open={templatesOpen}
+        options={settings.available_templates}
+        previewSrc={(template) => templateSampleSrc(template, sampleLanguage)}
+        toolbar={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-support text-cv-text-muted">התצוגה מציגה קורות חיים לדוגמה.</p>
+            <ViewSwitch
+              label="שפת הדוגמה"
+              onChange={setSampleLanguage}
+              options={[
+                { label: "עברית", value: "he" },
+                { label: "אנגלית", value: "en" },
+              ]}
+              showLabels
+              value={sampleLanguage}
+            />
+          </div>
+        }
+      />
       {conflict !== null && (
         <Callout title="ההגדרות השתנו מאז שפתחת את הטופס" tone="warning">
           <p>העריכות שלך נשמרו בטופס. יש לטעון את הגרסה העדכנית ולהשוות לפני שמירה נוספת.</p>
