@@ -32,7 +32,12 @@ const SHOW_DELAY_MS = 300;
 
 const canPopover = () => typeof HTMLElement !== "undefined" && "showPopover" in HTMLElement.prototype;
 
-const place = (trigger: HTMLElement, bubble: HTMLElement, align: TooltipProps["align"], placement: TooltipProps["placement"]) => {
+const place = (
+  trigger: HTMLElement,
+  bubble: HTMLElement,
+  align: TooltipProps["align"],
+  placement: TooltipProps["placement"],
+) => {
   const anchor = trigger.getBoundingClientRect();
   const { height, width } = bubble.getBoundingClientRect();
   const viewportWidth = document.documentElement.clientWidth;
@@ -45,11 +50,7 @@ const place = (trigger: HTMLElement, bubble: HTMLElement, align: TooltipProps["a
 
   const rtl = getComputedStyle(trigger).direction === "rtl";
   const left =
-    align === "center"
-      ? anchor.left + anchor.width / 2 - width / 2
-      : rtl
-        ? anchor.left
-        : anchor.right - width;
+    align === "center" ? anchor.left + anchor.width / 2 - width / 2 : rtl ? anchor.left : anchor.right - width;
 
   bubble.style.top = `${Math.round(top)}px`;
   bubble.style.left = `${Math.round(Math.min(Math.max(left, EDGE), viewportWidth - EDGE - width))}px`;
