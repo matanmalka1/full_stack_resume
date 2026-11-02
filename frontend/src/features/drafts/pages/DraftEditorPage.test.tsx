@@ -328,6 +328,56 @@ describe("DraftEditorPage", () => {
     expect(screen.getByRole("link", { name: "חזרה לפרטי המועמדות" })).toHaveAttribute("href", "/applications/app-1");
   });
 
+  it("marks the job's requirements against the lines on screen, beside the fit", async () => {
+    const requirement = (id: string, text: string, supporting: string[]) => ({
+      requirement_id: id,
+      text,
+      importance: "mandatory",
+      coverage: supporting.length === 0 ? "unsupported" : "matched",
+      supporting_fact_ids: supporting,
+      boundary_fact_ids: [],
+    });
+    stubReads({
+      detail: () =>
+        jsonResponse(
+          detail({
+            latest_analysis: {
+              id: "analysis-1",
+              application_id: "app-1",
+              job_text_hash: detail().job_text_hash,
+              version_number: 1,
+              analysis: {
+                analysis_version: "3.0",
+                track: "sales",
+                profile: "account-executive",
+                emphasis: "tech-consultative-sales",
+                language: "en",
+                summary: "A sales role.",
+                keywords: [],
+                requirements: [requirement("r1", "Quota attainment", ["f-1"]), requirement("r2", "Team lead", [])],
+                issues: [],
+                source_coverage: 1,
+                user_override: {},
+              },
+              fit_level: "medium",
+              fit_score: 0.5,
+              gaps: [],
+              provider: "openai",
+              model: "gpt-5.6-terra",
+              created_at: "2026-08-24T07:00:00Z",
+            },
+          } as Partial<ApplicationDetail>),
+        ),
+    });
+    renderPage();
+
+    const panel = (await screen.findByText("דרישות המשרה")).closest("section")!;
+    fireEvent.click(within(panel).getByText("דרישות המשרה"));
+    expect(within(panel).getByText("מופיעה בטיוטה")).toBeInTheDocument();
+    expect(within(panel).getByText("אין עובדה תומכת")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "הוסף עובדה לדרישה: Team lead" })).toBeInTheDocument();
+  });
+
   it("offers in-page navigation once the outline carries more than one section", async () => {
     stubReads({
       document: () =>

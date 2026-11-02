@@ -7,6 +7,7 @@ import type { DocumentOutline } from "@/api/documents";
 import { RequirementFactAction, documentRequirements } from "@/features/preparation";
 import { DisclosureSummary } from "@/ui/Disclosure";
 import { StatusBadge } from "@/ui/StatusBadge";
+import { cardClasses } from "@/ui/surface";
 import type { Tone } from "@/ui/tone";
 import { type RequirementDocumentState, requirementCoverage } from "../model/requirementCoverage";
 
@@ -47,7 +48,9 @@ interface DraftRequirementsPanelProps {
    matches wording or scores anything.
 
    Collapsed by default: it is a reference the reader opens, not the work of the screen.
-   Silent when the document's own analysis is not the one this client can read. */
+   It is a card of the workspace's side column, under the fit it details, so its rows stack
+   the requirement over its mark at every width. Silent when the document's own analysis
+   is not the one this client can read. */
 export const DraftRequirementsPanel = ({ detail, outline }: DraftRequirementsPanelProps) => {
   const [open, setOpen] = useState(false);
   const requirements = useMemo(() => documentRequirements(detail), [detail]);
@@ -59,38 +62,33 @@ export const DraftRequirementsPanel = ({ detail, outline }: DraftRequirementsPan
   const profile = detail.application.profile ?? null;
 
   return (
-    <section
-      aria-labelledby="draft-requirements-heading"
-      className="border border-cv-border bg-cv-surface p-card-padding max-lg:rounded-surface max-lg:p-3.5"
-    >
+    <section aria-labelledby="draft-requirements-heading" className={cardClasses("p-4 max-lg:p-3.5")}>
       <details onToggle={(event) => setOpen(event.currentTarget.open)} open={open}>
-        <DisclosureSummary className="text-body font-semibold text-cv-text max-lg:min-h-11" open={open}>
+        <DisclosureSummary className="min-h-8 text-label font-bold text-cv-text max-lg:min-h-11" open={open}>
           <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
             <ListChecks aria-hidden="true" className="size-icon-md text-cv-text-muted" />
             <span id="draft-requirements-heading">דרישות המשרה</span>
-            <span className="text-support font-normal text-cv-text-muted">
+            <span className="text-caption font-medium text-cv-text-muted">
               {summary.inDocument}/{summary.evidenced} מופיעות בטיוטה
               {summary.warned > 0 ? ` · ${summary.warned} דרישות חובה חסרות` : ""}
             </span>
           </span>
         </DisclosureSummary>
 
-        <ul className="mt-3 flex flex-col divide-y divide-cv-border">
+        <ul className="mt-2 flex flex-col divide-y divide-cv-hairline">
           {summary.rows.map(({ requirement, state }) => {
             const importance = importanceLabels[requirement.importance];
             return (
-              <li className="flex flex-col gap-2 py-3" key={requirement.requirementId}>
-                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-                  <p className="min-w-0 flex-1 text-support leading-6 text-cv-text">
-                    <bdi>{requirement.text}</bdi>
-                    {importance === null ? null : (
-                      <span className="ms-2 text-caption font-semibold text-cv-text-muted">{importance}</span>
-                    )}
-                  </p>
-                  <StatusBadge className="shrink-0" icon={stateIcons[state]} tone={stateTones[state]}>
-                    {stateLabels[state]}
-                  </StatusBadge>
-                </div>
+              <li className="flex flex-col items-start gap-2 py-3" key={requirement.requirementId}>
+                <p className="text-support leading-snug font-bold text-cv-text">
+                  <bdi>{requirement.text}</bdi>
+                  {importance === null ? null : (
+                    <span className="ms-2 text-caption font-medium text-cv-text-muted">{importance}</span>
+                  )}
+                </p>
+                <StatusBadge icon={stateIcons[state]} tone={stateTones[state]}>
+                  {stateLabels[state]}
+                </StatusBadge>
                 {state === "no_facts" ? <RequirementFactAction profile={profile} requirement={requirement} /> : null}
               </li>
             );
