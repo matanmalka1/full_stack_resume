@@ -8,7 +8,8 @@ import { cardClasses } from "@/ui/surface";
 import { sourceHostname } from "../model/applicationPresentation";
 
 /* The posting the CV is tailored to, as the hub's last card: reference, read rather than
-   worked on. The design offers no way to edit it, so none is drawn.
+   worked on. Editing it is a command of the record's menu (`JobPostingDialog`), not of
+   the card.
 
    A wide screen shows the text in the card. On a phone it is folded behind its title, a
    row a press away, so the step cards above stay the screen's subject; the text is in the

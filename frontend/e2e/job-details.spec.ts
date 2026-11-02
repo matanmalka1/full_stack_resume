@@ -54,4 +54,18 @@ test.describe("the Application hub", () => {
       .analyze();
     expect(dialogResults.violations).toEqual([]);
   });
+
+  test("edits the posting from the record's menu in an accessible dialog", async ({ page }) => {
+    await page.goto("/applications/app-1");
+
+    await page.locator('button[aria-label="פעולות נוספות"]:visible').click();
+    await page.getByRole("menuitem", { name: "עריכת נוסח המשרה" }).click();
+    const dialog = page.getByRole("dialog", { name: "עריכת נוסח המשרה" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveCSS("opacity", "1");
+    await expect(dialog.getByRole("textbox", { name: "טקסט המשרה" })).toHaveValue("Senior Backend Engineer");
+
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
 });

@@ -224,6 +224,51 @@ describe("ApplicationPage", () => {
     expect(screen.queryByText(/הבא:/)).not.toBeInTheDocument();
   });
 
+  it("edits the posting from the record's menu, naming the text it replaces", async () => {
+    const value = hubDetail();
+    const fetchMock = renderHub(value, {
+      fetchImplementation: (input, init) =>
+        Promise.resolve(
+          String(input).endsWith("/job-text") && init?.method === "PATCH"
+            ? json({ application_id: "app-1", job_text_hash: "d".repeat(64) })
+            : json(value),
+        ),
+    });
+
+    const [menu] = await screen.findAllByRole("button", { name: "פעולות נוספות" });
+    fireEvent.click(menu);
+    fireEvent.click(screen.getByRole("menuitem", { name: "עריכת נוסח המשרה" }));
+
+    const dialog = screen.getByRole("dialog", { name: "עריכת נוסח המשרה" });
+    const text = within(dialog).getByRole("textbox", { name: "טקסט המשרה" });
+    expect(text).toHaveValue("Engineer");
+    /* An unchanged posting is refused before any request. */
+    fireEvent.click(within(dialog).getByRole("button", { name: "שמירת הנוסח" }));
+    expect(await within(dialog).findByText(/זהים לנוסח השמור/)).toBeInTheDocument();
+
+    fireEvent.change(text, { target: { value: "Senior Engineer" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "שמירת הנוסח" }));
+
+    expect(await screen.findByText("נוסח המשרה עודכן")).toBeInTheDocument();
+    const patch = fetchMock.mock.calls.find(
+      ([input, init]) => String(input).endsWith("/job-text") && init?.method === "PATCH",
+    );
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({
+      job_text: "Senior Engineer",
+      source_url: null,
+      expected_job_text_hash: value.job_posting.job_text_hash,
+    });
+  });
+
+  it("offers no posting edit once a Submission locked the text", async () => {
+    renderHub(hubDetail({ job_posting: { ...hubDetail().job_posting, locked: true } }));
+
+    const [menu] = await screen.findAllByRole("button", { name: "פעולות נוספות" });
+    fireEvent.click(menu);
+    expect(screen.getByRole("menuitem", { name: "פרטי משרה" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "עריכת נוסח המשרה" })).not.toBeInTheDocument();
+  });
+
   it("offers nothing against a deleted record", async () => {
     renderHub(hubDetail({ application: { ...hubDetail().application, deleted_at: "2026-08-30T00:00:00Z" } }));
 

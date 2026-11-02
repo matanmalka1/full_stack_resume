@@ -45,6 +45,8 @@ export type ClosedApplication = ApiSchemas["CloseApplicationResponse"];
 export type DeletedApplication = ApiSchemas["DeleteApplicationResponse"];
 /* An edit of the posting an Application holds. It replaces the text in place, names the
    text it replaces by hash, and is refused once the Application has a Submission. */
+export type UpdateJobTextRequest = ApiSchemas["UpdateJobTextRequest"];
+export type UpdatedJobText = ApiSchemas["UpdateJobTextResponse"];
 export type UpdateApplicationNotesRequest = ApiSchemas["UpdateApplicationNotesRequest"];
 export type UpdatedApplicationNotes = ApiSchemas["UpdateApplicationNotesResponse"];
 export type DuplicateCheckResult = ApiSchemas["DuplicateCheckResponse"];

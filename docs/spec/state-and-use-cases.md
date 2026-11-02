@@ -399,8 +399,9 @@ Calls no AI. Deleted Applications are excluded from duplicate detection.
 Input: new text, optional URL, `expected_job_text_hash`. Replaces the job text in place
 and appends an audit record with both hashes. A hash mismatch is 409. Unchanged input
 writes nothing. After any Submission it is refused (409), also enforced by the trigger
-`lock_submitted_job_text`. No screen offers it at present: the Application hub draws the
-posting as read-only reference.
+`lock_submitted_job_text`. The Application hub offers it as "עריכת נוסח המשרה" in the
+record's ⋯ menu until the text is locked, opening a dialog (a sheet on a phone) with the
+current text and URL.
 
 ### `update_application_notes`
 

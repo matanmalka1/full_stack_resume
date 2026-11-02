@@ -201,7 +201,8 @@ name a test or a screen reader finds:
 - The Application hub (`/applications/:id`) opens on the recruitment stage card, then
   the dark next-action card, the five-step CV checklist and the folded posting; its one
   command and the PDF are pinned at the bottom, and its record menu (⋮) is an action
-  sheet. From the large breakpoint the commands move to the header, the checklist
+  sheet; that menu also edits the posting until a Submission locks it. From the large
+  breakpoint the commands move to the header, the checklist
   becomes a row of tiles, and the reminder, the record's facts and the PDF stand in a
   300px side column. The preparation steps have addresses of their own: the analysis
   (`/analysis`), its matching settings (`/analysis/matching`) and the verification

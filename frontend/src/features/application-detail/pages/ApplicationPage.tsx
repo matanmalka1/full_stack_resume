@@ -27,12 +27,13 @@ import { ApplicationFacts } from "../components/ApplicationFacts";
 import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { DeleteApplicationDialog } from "../components/DeleteApplicationDialog";
 import { JobPostingCard } from "../components/JobPostingCard";
+import { JobPostingDialog, jobPostingEditable } from "../components/JobPostingDialog";
 import { NextActionCard } from "../components/NextActionCard";
 import { PreparationProgressCard } from "../components/PreparationProgressCard";
 import { RecruitmentStageCard } from "../components/RecruitmentStageCard";
 import { continuation, isApplicationClosed } from "../model/applicationHub";
 
-type HubDialog = "update" | "details" | "history" | "close" | "delete";
+type HubDialog = "update" | "details" | "history" | "posting" | "close" | "delete";
 
 /* The cards' own shapes while the record is read, so the screen fills in rather than
    replacing a sentence with a page. */
@@ -92,6 +93,7 @@ export const ApplicationPage = () => {
   const detail = query.data;
   const [dialog, setDialog] = useState<HubDialog | null>(null);
   const [closedNotice, setClosedNotice] = useState(false);
+  const [postingNotice, setPostingNotice] = useState(false);
   const { closeMutation, deleteMutation } = useApplicationRecordMutations(applicationId, {
     onDeleted: () => void navigate(boardPath(), { state: boardReturnState(applicationId) }),
   });
@@ -118,6 +120,7 @@ export const ApplicationPage = () => {
     onDetails: open("details"),
     onHistory: open("history"),
     onUpdate: open("update"),
+    ...(detail !== undefined && jobPostingEditable(detail) ? { onEditPosting: open("posting") } : {}),
   };
 
   return (
@@ -197,6 +200,11 @@ export const ApplicationPage = () => {
       </div>
 
       <div className="mt-4 flex flex-col gap-4 lg:mt-5.5">
+        {postingNotice ? (
+          <SuccessNotice onDismiss={() => setPostingNotice(false)} title="נוסח המשרה עודכן">
+            הניתוח הקודם נעשה על הנוסח הקודם ואינו פעיל יותר, ולכן יש להריץ ניתוח מחדש.
+          </SuccessNotice>
+        ) : null}
         {closedNotice ? (
           <SuccessNotice onDismiss={() => setClosedNotice(false)} title="המועמדות נסגרה">
             היא ירדה מלוח המועמדויות הפעילות, ושום דבר בה לא נמחק.
@@ -284,6 +292,16 @@ export const ApplicationPage = () => {
         continueTo={next === null ? null : { label: "המשך בהכנה", to: next.to }}
         onClose={() => setDialog(null)}
       />
+      {dialog === "posting" && detail !== undefined ? (
+        <JobPostingDialog
+          detail={detail}
+          onClose={() => setDialog(null)}
+          onSaved={() => {
+            setDialog(null);
+            setPostingNotice(true);
+          }}
+        />
+      ) : null}
       <CloseApplicationDialog
         application={dialog === "close" ? (target ?? null) : null}
         onCancel={() => setDialog(null)}
