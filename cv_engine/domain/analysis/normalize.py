@@ -250,6 +250,10 @@ def normalize_requirement(
     text = _collapsed(proposed.text)
     if not text:
         return None, [AnalysisIssue(code="requirement_unusable", requirement_index=index)]
+    if proposed.describes == "job":
+        return None, [
+            AnalysisIssue(code="describes_job", requirement_index=index, details={"text": text[:120]})
+        ]
 
     source = locate(proposed.text, source_text)
     if source.match == "not_found":

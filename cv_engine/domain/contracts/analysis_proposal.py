@@ -54,9 +54,16 @@ class ProposedRequirement(StrictModel):
     `fact_ids` is a citation, never a proof. Every id is checked against the
     canonical fact store, and a positive `coverage` with nothing left after
     that check collapses to `unknown`.
+
+    `describes` is the provider's answer to whether the text is a condition on
+    the candidate or a statement about the job - a duty, the company, the
+    location, the terms, how to apply. Only the first is a requirement; the
+    engine drops the second. An explicit per-item answer, because an
+    instruction alone left duties and location lines counted as mandatory.
     """
 
     text: str
+    describes: Literal["candidate", "job"] = "candidate"
     importance: Importance = "unknown"
     coverage: ProposedRequirementCoverage = "unknown"
     shortfall_severity: ShortfallSeverity = "unknown"
@@ -124,6 +131,7 @@ IssueCode = Literal[
     "duplicate_requirement",
     "requirement_unusable",
     "shortfall_inconsistent",
+    "describes_job",
 ]
 
 
