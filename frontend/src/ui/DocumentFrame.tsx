@@ -3,9 +3,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/ui/Button";
 import { cx } from "@/ui/cx";
+import { DocumentSketch } from "@/ui/DocumentSketch";
+import { PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/ui/documentPage";
 
-const PAGE_WIDTH_PX = 794;
-const PAGE_HEIGHT_PX = 1123;
 const MIN_ZOOM_PERCENT = 25;
 const MAX_ZOOM_PERCENT = 200;
 const ZOOM_STEP_PERCENT = 10;
@@ -46,6 +46,9 @@ export const DocumentFrame = ({ busy = false, className, onLoad, src, title }: D
   const [fitZoom, setFitZoom] = useState(100);
   const [manualZoom, setManualZoom] = useState(100);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
+  /* Until the first document paints, the page shows the sketch of one. A later src
+     replaces a page already on screen, which `busy` dims instead. */
+  const [painted, setPainted] = useState(false);
 
   useLayoutEffect(() => {
     const node = viewportRef.current;
@@ -157,7 +160,10 @@ export const DocumentFrame = ({ busy = false, className, onLoad, src, title }: D
         >
           <iframe
             className="absolute left-0 top-0 border-0 bg-cv-surface"
-            onLoad={onLoad}
+            onLoad={() => {
+              setPainted(true);
+              onLoad?.();
+            }}
             sandbox=""
             src={src}
             style={{
@@ -168,6 +174,7 @@ export const DocumentFrame = ({ busy = false, className, onLoad, src, title }: D
             }}
             title={title}
           />
+          {painted ? null : <DocumentSketch scale={scale} />}
         </div>
       </section>
     </div>
