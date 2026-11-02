@@ -138,9 +138,10 @@ class DraftEditingService:
     ) -> DocumentMutationResult:
         """Choose the template the document renders with.
 
-        Allowed in any state, as an edit is: the hash moves with it, so an approved or
-        ready document returns to draft and is approved and rendered again in the new
-        template. Choosing the template it already has changes nothing.
+        Allowed in any state, as an edit is. The hash moves with it, so a command that
+        read the document before is refused, but the basis does not: an approved
+        document stays approved and a Ready one returns to approved, to be rendered
+        again in the new template. Choosing the template it already has changes nothing.
         """
         with self.transactions.read() as tx:
             source = read_document_source(

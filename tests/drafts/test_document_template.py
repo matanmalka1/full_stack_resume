@@ -14,7 +14,7 @@ from helpers import (
 from cv_engine.application.commands import RenderCommand, SetDocumentTemplateCommand
 from cv_engine.application.errors import StateConflict
 from cv_engine.application.settings import UpdateSettings
-from cv_engine.domain.document import PreparationState, document_hash
+from cv_engine.domain.document import ContentCheck, PreparationState, document_hash
 
 
 def _set(services, application_id: str, template: str | None, expected: str | None = None):
@@ -71,18 +71,30 @@ def test_a_content_write_keeps_the_template_in_the_hash(services) -> None:
     assert document.document_hash == document_hash(document.analysis_id, document.content, "clean")
 
 
-def test_choosing_a_template_outdates_the_approval_and_the_render(
+def _render(services, application_id: str):
+    return services.rendering.render(
+        actor_of(services),
+        RenderCommand(
+            application_id=application_id,
+            expected_document_hash=stored_document(services, application_id).document_hash,
+        ),
+    )
+
+
+def test_choosing_a_template_keeps_the_approval_and_outdates_the_render(
     services, deterministic_renderer
 ) -> None:
     ingested, _ = seed_document(services, "Template Co")
     application_id = ingested.application_id
     seed_draft(services, application_id)
     assert approve_active_draft(services, application_id).passed
+    assert _render(services, application_id).validation.passed
     approved = stored_document(services, application_id)
 
     changed = _set(services, application_id, "latex")
     assert changed.document_hash != approved.document_hash
-    assert changed.preparation_state == PreparationState.DRAFT_IN_PROGRESS
+    assert changed.preparation_state == PreparationState.APPROVED
+    assert changed.content_check == ContentCheck.PASSED
     document = stored_document(services, application_id)
     assert document.template == "latex"
     assert document.content == approved.content
@@ -100,19 +112,18 @@ def test_choosing_a_template_outdates_the_approval_and_the_render(
     preview = services.rendering.preview_document(actor_of(services), application_id)
     assert 'class="page t-latex"' in preview.html
 
-    assert approve_active_draft(services, application_id).passed
-    rendered = services.rendering.render(
-        actor_of(services),
-        RenderCommand(
-            application_id=application_id,
-            expected_document_hash=stored_document(services, application_id).document_hash,
-        ),
-    )
+    # Rendered again, without approving again, it is Ready in the new template.
+    rendered = _render(services, application_id)
     assert rendered.validation.passed, rendered.validation.issues
     document = stored_document(services, application_id)
+    assert document.approved_at == approved.approved_at
     html = (services.paths.root / document.html_path).read_text(encoding="utf-8")
     assert 'class="page t-latex"' in html
+    ready = services.queries.application_detail(actor_of(services), application_id)
+    assert ready.preparation_state == PreparationState.READY
 
-    # Back to the track's own template: the hash it had before any choice.
+    # Back to the track's own template: the hash it had before any choice, and the
+    # render in latex no longer makes it Ready.
     back = _set(services, application_id, None)
     assert back.document_hash == document_hash(document.analysis_id, document.content)
+    assert back.preparation_state == PreparationState.APPROVED

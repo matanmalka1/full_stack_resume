@@ -143,8 +143,8 @@ class BuildFromAnalysisCommand(BoundaryDTO):
 class SetDocumentTemplateCommand(BoundaryDTO):
     """Choose the document's render template; `None` is the track's own.
 
-    Presentation only, yet part of the basis: the PDF it renders is what approval
-    and Ready vouch for, so a change outdates both.
+    Presentation only: the content check and approval do not read it, so a change
+    keeps them, while Ready vouches for the PDF in it and is outdated.
     """
 
     application_id: str

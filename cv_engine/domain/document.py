@@ -43,11 +43,12 @@ class ContentCheck(StrEnum):
 def document_hash(
     analysis_id: str, content: DraftDocument | None, template: str | None = None
 ) -> str:
-    """The document's concurrency token, and the part of its basis it owns.
+    """The document's concurrency token.
 
-    A chosen template is part of it, since it changes the rendered CV; the track's
-    own template (`None`) adds nothing, so a document that never chose one keeps
-    the hash it had before templates could be chosen.
+    A chosen template is part of it, so a command that read the document before a
+    template change is refused; the track's own template (`None`) adds nothing, so a
+    document that never chose one keeps the hash it had before templates could be
+    chosen. Without a template it is also the part of the basis the document owns.
     """
     hashed: dict[str, object] = {
         "analysis_id": analysis_id,
@@ -93,16 +94,30 @@ def facts_hash(fact_ids: Iterable[str], facts: Mapping[str, Fact]) -> str:
 
 
 def basis(document: CVDocument, facts: Mapping[str, Fact]) -> str:
+    """What the content check and approval vouch for: the content, its analysis pin,
+    and its facts. The template is not part of it, since neither reads it."""
+    content = document_hash(document.analysis_id, document.content)
     dependent = dependent_fact_ids(document.content)
-    return sha256_text(f"{document.document_hash}:{facts_hash(dependent, facts)}")
+    return sha256_text(f"{content}:{facts_hash(dependent, facts)}")
+
+
+def render_basis(document: CVDocument, current_basis: str) -> str:
+    """What a render vouches for: the basis in the document's template.
+
+    The track's own template (`None`) adds nothing, so a document that never chose
+    one keeps the stamps it had before the template left the basis.
+    """
+    if document.template is None:
+        return current_basis
+    return sha256_text(f"{current_basis}:{document.template}")
 
 
 def document_state(document: CVDocument | None, current_basis: str | None) -> DocumentState:
     if document is None:
         return DocumentState.NONE
-    if document.approved_basis is None or document.approved_basis != current_basis:
+    if current_basis is None or document.approved_basis != current_basis:
         return DocumentState.DRAFT
-    if document.rendered_basis == current_basis:
+    if document.rendered_basis == render_basis(document, current_basis):
         return DocumentState.READY
     return DocumentState.APPROVED
 

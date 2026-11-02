@@ -33,7 +33,7 @@ describe("DraftTemplateControl", () => {
       `/api/v1/applications/app-1/document/preview?template=latex&v=${HASH}`,
     );
     expect(screen.getByTitle("תצוגה מקדימה: תבנית המסלול").getAttribute("src")).toContain("template=track");
-    expect(screen.queryByText("המסמך יחזור לטיוטה")).not.toBeInTheDocument();
+    expect(screen.queryByText("ה־PDF ייווצר מחדש")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: /LaTeX/ }));
     fireEvent.click(apply);
@@ -45,7 +45,7 @@ describe("DraftTemplateControl", () => {
     renderControl({ onApply, stamped: true });
     fireEvent.click(screen.getByRole("button", { name: "החלפת תבנית" }));
     fireEvent.click(screen.getByRole("radio", { name: /Deedy/ }));
-    expect(screen.getByText("המסמך יחזור לטיוטה")).toBeInTheDocument();
+    expect(screen.getByText("ה־PDF ייווצר מחדש")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "החלת התבנית" }));
     expect(await screen.findByText("לא ניתן להחליף תבנית")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "החלת התבנית" })).toBeInTheDocument();

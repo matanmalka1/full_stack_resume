@@ -57,9 +57,12 @@ export const TemplateGallery = ({
       {cards.map((card) => {
         const selected = card.id === value;
         return (
+          /* `relative` holds the sr-only radio inside its card. Without it the radio's
+             containing block is the dialog, past the body's scroller, so it overflows the
+             dialog, and focusing it scrolls the whole dialog off its header. */
           <label
             className={cx(
-              "group flex cursor-pointer flex-col gap-2 rounded-surface border bg-cv-surface p-2 transition-colors",
+              "relative group flex cursor-pointer flex-col gap-2 rounded-surface border bg-cv-surface p-2 transition-colors",
               "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-cv-accent",
               selected ? "border-cv-accent ring-1 ring-cv-accent" : "border-cv-border hover:border-cv-border-strong",
               disabled && "cursor-not-allowed opacity-60",
