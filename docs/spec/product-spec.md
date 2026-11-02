@@ -454,8 +454,10 @@ owns action policy; React does not duplicate it.
 The Dashboard is a table with search, filters, presets (needs attention, ready to send,
 active interviews), facet counts, sorting, and paging.
 
-Application Detail shows status, next action, notes, preparation and blockers, a
-unified timeline, the document, and submissions.
+Application Detail shows the recruitment status, the next action, preparation progress
+and the document's PDF, with notes, the unified timeline (corrections and external
+submissions included) and the record's close and delete one command away. Blockers are
+shown on the preparation step they block.
 
 `submit_application` records a send that already happened outside the system. It
 requires a Ready document, copies its content, HTML, and PDF (with SHA-256) into an
