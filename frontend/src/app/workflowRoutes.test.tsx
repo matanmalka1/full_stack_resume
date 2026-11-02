@@ -30,6 +30,8 @@ describe("useInWorkflow", () => {
     "/applications/app-1/draft",
     "/applications/app-1/ready",
     "/applications/app-1/analysis",
+    "/applications/app-1/analysis/matching",
+    "/applications/app-1/verification",
   ])("treats %s as a wizard step", (path) => {
     expect(at(path)).toBe("wizard");
   });

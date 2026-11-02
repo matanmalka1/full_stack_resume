@@ -30,10 +30,15 @@ export const routePaths = {
      other one canonical would have bounced the majority of navigation through a redirect
      - and because it stays honest if what this screen does changes again. */
   application,
-  /* The analysis step of the wizard: the verdict, the matching and the draft's creation.
-     The hub at `application` names the record and links here; it used to be this step. */
-  analysis: (applicationId: string): string => `${application(applicationId)}/analysis`,
   resumeApplication: (applicationId: string): string => `${application(applicationId)}/resume`,
+  /* The analysis step: the verdict and the requirements it was read from. The hub at
+     `application` names the record and links here. Its matching settings are a screen
+     beneath it, reached from it and returning to it. */
+  analysis: (applicationId: string): string => `${application(applicationId)}/analysis`,
+  matching: (applicationId: string): string => `${application(applicationId)}/analysis/matching`,
+  /* The step that turns the analysis into a draft: the recommended action, what stands in
+     its way, and the other actions the projection offers. */
+  verification: (applicationId: string): string => `${application(applicationId)}/verification`,
   draft: (applicationId: string): string => `${application(applicationId)}/draft`,
   /* The ready step: the Application's rendered document, its file and its submission.
      Keyed by the Application, like the editor, because there is one document and a Ready

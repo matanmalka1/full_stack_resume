@@ -20,6 +20,9 @@ export { PreparationView } from "./components/PreparationView";
    kept a step's heading and its chip two independently written answers to one question.
    The spine itself is reached only through here. */
 export { WizardStepShell } from "./components/WizardStepShell";
+/* The four stages' names, for the new-job screen's stepper: the step before an
+   Application exists draws the same stages without a record to locate it in. */
+export { workflowStageLabels, workflowStages } from "./model/workflowStages";
 /* The Application screen's five-row account of its CV, with the way into the editor on
    the open row. The screen places it; preparation decides what it says. */
 export { PreparationChecklist } from "./components/PreparationChecklist";

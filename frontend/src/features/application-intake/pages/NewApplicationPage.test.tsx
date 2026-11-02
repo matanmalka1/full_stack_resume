@@ -136,7 +136,7 @@ const renderPage = (entry = "/", aiAvailable = false) => {
       <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route element={<NewApplicationPage />} path="/" />
-          <Route element={<CreatedApplicationDestination />} path="/applications/:applicationId" />
+          <Route element={<CreatedApplicationDestination />} path="/applications/:applicationId/analysis" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -144,17 +144,20 @@ const renderPage = (entry = "/", aiAvailable = false) => {
 };
 
 const fillIntake = (jobText = "Job description text") => {
-  fireEvent.change(screen.getByLabelText("שם החברה"), { target: { value: " Acme " } });
-  fireEvent.change(screen.getByLabelText("תפקיד היעד"), {
+  fireEvent.change(screen.getByLabelText("חברה"), { target: { value: " Acme " } });
+  fireEvent.change(screen.getByLabelText("תפקיד"), {
     target: { value: "Backend Engineer" },
   });
   fireEvent.change(jobTextArea(), { target: { value: jobText } });
 };
 
-const jobTextArea = () => screen.getByRole("textbox", { name: /^טקסט המשרה/ });
+const jobTextArea = () => screen.getByRole("textbox", { name: /^טקסט המודעה/ });
+
+/* Saving says whether it also analyzes: it does only where a provider can run one. */
+const createButtonName = /^(שמירת המשרה|שמירה וניתוח המשרה)$/;
 
 const submitForm = () => {
-  fireEvent.click(screen.getByRole("button", { name: "יצירת מועמדות" }));
+  fireEvent.click(screen.getByRole("button", { name: createButtonName }));
 };
 
 afterEach(() => {
@@ -175,28 +178,25 @@ describe("NewApplicationPage", () => {
     window.sessionStorage.setItem("cv:board-query", "activity=all&stage=approved");
     renderPage("/");
 
-    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute(
-      "href",
-      "/?activity=all&stage=approved",
-    );
-    expect(screen.getByRole("heading", { name: "קליטת משרה" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ביטול" })).toHaveAttribute("href", "/?activity=all&stage=approved");
+    expect(screen.getByRole("heading", { name: "משרה חדשה" })).toBeInTheDocument();
   });
 
   it("promises an analysis only when a provider can run one", () => {
     renderPage("/");
     expect(screen.getByText(/ניתוח המשרה דורש ספק AI/)).toBeInTheDocument();
-    expect(screen.queryByText(/ותתחיל את הניתוח/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "שמירת המשרה" })).toBeInTheDocument();
     cleanup();
 
     renderPage("/", true);
-    expect(screen.getByText("יצירת המועמדות תשמור את נוסח המשרה ותתחיל את הניתוח.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "שמירה וניתוח המשרה" })).toBeInTheDocument();
     expect(screen.queryByText(/ניתוח המשרה דורש ספק AI/)).not.toBeInTheDocument();
   });
 
   it("returns to the bare board when nothing was remembered", () => {
     renderPage("/");
 
-    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "ביטול" })).toHaveAttribute("href", "/");
   });
 
   it("restores an intake draft from persistent browser storage without changing its text", () => {
@@ -209,10 +209,10 @@ describe("NewApplicationPage", () => {
 
     renderPage();
 
-    expect(screen.getByText("פרטים שהוזנו קודם שוחזרו מהדפדפן הזה.")).toBeInTheDocument();
-    expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme Israel ");
-    expect(screen.getByLabelText("תפקיד היעד")).toHaveValue("Platform Engineer");
-    expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("https://example.com/jobs/platform");
+    expect(screen.getByText("הטיוטה שוחזרה מהדפדפן")).toBeInTheDocument();
+    expect(screen.getByLabelText("חברה")).toHaveValue(" Acme Israel ");
+    expect(screen.getByLabelText("תפקיד")).toHaveValue("Platform Engineer");
+    expect(screen.getByLabelText("קישור למודעה (לא חובה)")).toHaveValue("https://example.com/jobs/platform");
     expect(jobTextArea()).toHaveValue("First line\n\nדרישות מורכבות — exactly as pasted.");
   });
 
@@ -230,7 +230,7 @@ describe("NewApplicationPage", () => {
     window.sessionStorage.clear();
     renderPage();
     expect(jobTextArea()).toHaveValue("A long posting that must survive immediate navigation");
-    expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme ");
+    expect(screen.getByLabelText("חברה")).toHaveValue(" Acme ");
   });
 
   it.each(["not valid JSON", "null", JSON.stringify({ version: 1, fields: { job_text: 42 } })])(
@@ -255,9 +255,7 @@ describe("NewApplicationPage", () => {
     renderPage();
     fillIntake("Keep this posting even when storage is full");
 
-    expect(
-      await screen.findByText("לא ניתן לשמור את הפרטים בדפדפן. אין לסגור את העמוד לפני יצירת המועמדות."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("לא ניתן לשמור את הטיוטה בדפדפן - אין לסגור את העמוד")).toBeInTheDocument();
     expect(jobTextArea()).toHaveValue("Keep this posting even when storage is full");
     const closing = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(closing);
@@ -287,11 +285,10 @@ describe("NewApplicationPage", () => {
     renderPage("/", true);
 
     fillIntake();
-    const createButton = screen.getByRole("button", { name: "יצירת מועמדות" });
+    const createButton = screen.getByRole("button", { name: createButtonName });
     expect(createButton).toHaveAttribute("form", "application-intake-form");
-    const commitBar = createButton.closest(".sticky");
-    expect(commitBar).not.toBeNull();
-    expect(commitBar?.parentElement?.lastElementChild).toBe(commitBar);
+    /* The command closes the form's own card, under the fields it submits. */
+    expect(createButton.closest("form")).toHaveAttribute("id", "application-intake-form");
     submitForm();
 
     expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
@@ -360,7 +357,6 @@ describe("NewApplicationPage", () => {
 
     expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
     const duplicateResult = screen.getByText("נמצאה מועמדות דומה. אפשר לפתוח אותה או לאשר יצירת מועמדות נוספת.");
-    expect(duplicateResult.closest(".sticky")).not.toBeNull();
     expect(duplicateResult.closest('[role="status"]')).not.toBeNull();
     expect(screen.getByText("אותה כתובת מקור · אותה חברה ואותו תפקיד")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פתיחת המועמדות הקיימת: Acme — Backend Engineer" })).toHaveAttribute(
@@ -371,9 +367,9 @@ describe("NewApplicationPage", () => {
       screen.getByText("נדרש אישור מפורש כדי ליצור מועמדות נוספת. אפשר גם לפתוח אחת מהמועמדויות הקיימות."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "יצירת מועמדות נוספת" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "יצירת מועמדות" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme ");
-    expect(screen.getByLabelText("תפקיד היעד")).toHaveValue("Backend Engineer");
+    expect(screen.queryByRole("button", { name: createButtonName })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("חברה")).toHaveValue(" Acme ");
+    expect(screen.getByLabelText("תפקיד")).toHaveValue("Backend Engineer");
     expect(jobTextArea()).toHaveValue("Job description text");
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH]);
   });
@@ -574,7 +570,7 @@ describe("NewApplicationPage", () => {
       expect(screen.queryByText("נמצאה מועמדות דומה")).not.toBeInTheDocument();
     });
     expect(screen.queryByRole("button", { name: "יצירת מועמדות נוספת" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "יצירת מועמדות" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: createButtonName })).toBeInTheDocument();
   });
 
   it("shows a refused creation as a blocker in this screen's words, not the server's", async () => {
@@ -619,19 +615,19 @@ describe("NewApplicationPage", () => {
     const pastedText = "Line one\n\nשורה שנייה עם סימנים — keep me";
 
     fillIntake(pastedText);
-    fireEvent.change(screen.getByLabelText("כתובת המשרה"), {
+    fireEvent.change(screen.getByLabelText("קישור למודעה (לא חובה)"), {
       target: { value: "https://example.com/jobs/keep-this-value" },
     });
     submitForm();
 
     expect(await screen.findByText(/יש לתקן את השדות המסומנים/)).toBeInTheDocument();
-    expect(screen.getByLabelText("שם החברה")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("כתובת המשרה")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("חברה")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("קישור למודעה (לא חובה)")).toHaveAttribute("aria-invalid", "true");
     expect(jobTextArea()).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("תפקיד היעד")).not.toHaveAttribute("aria-invalid");
-    expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme ");
-    expect(screen.getByLabelText("תפקיד היעד")).toHaveValue("Backend Engineer");
-    expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("https://example.com/jobs/keep-this-value");
+    expect(screen.getByLabelText("תפקיד")).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByLabelText("חברה")).toHaveValue(" Acme ");
+    expect(screen.getByLabelText("תפקיד")).toHaveValue("Backend Engineer");
+    expect(screen.getByLabelText("קישור למודעה (לא חובה)")).toHaveValue("https://example.com/jobs/keep-this-value");
     expect(jobTextArea()).toHaveValue(pastedText);
 
     await waitFor(() => {
@@ -653,18 +649,18 @@ describe("NewApplicationPage", () => {
     const calls = stubFetch({});
     renderPage();
     fillIntake();
-    fireEvent.change(screen.getByLabelText("כתובת המשרה"), { target: { value: "ftp://example.com/job" } });
+    fireEvent.change(screen.getByLabelText("קישור למודעה (לא חובה)"), { target: { value: "ftp://example.com/job" } });
 
     submitForm();
 
     expect(await screen.findByText("הכתובת חייבת להתחיל ב-http:// או https:// וללא רווחים.")).toBeInTheDocument();
     expect(calls).toEqual([]);
-    expect(screen.getByLabelText("כתובת המשרה")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("ftp://example.com/job");
+    expect(screen.getByLabelText("קישור למודעה (לא חובה)")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("קישור למודעה (לא חובה)")).toHaveValue("ftp://example.com/job");
     expect(jobTextArea()).toHaveValue("Job description text");
 
-    fireEvent.change(screen.getByLabelText("כתובת המשרה"), { target: { value: "https://example.com/job" } });
-    await waitFor(() => expect(screen.getByLabelText("כתובת המשרה")).not.toHaveAttribute("aria-invalid"));
+    fireEvent.change(screen.getByLabelText("קישור למודעה (לא חובה)"), { target: { value: "https://example.com/job" } });
+    await waitFor(() => expect(screen.getByLabelText("קישור למודעה (לא חובה)")).not.toHaveAttribute("aria-invalid"));
     expect(jobTextArea()).toHaveValue("Job description text");
   });
 
@@ -758,7 +754,7 @@ describe("NewApplicationPage", () => {
     fillIntake(overBudgetText);
 
     expect(screen.getByText("— חורג מהגודל המותר")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "יצירת מועמדות" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: createButtonName })).toBeDisabled();
     expect(calls).toEqual([]);
   });
 });

@@ -40,6 +40,16 @@ export const operationTypeLabels: Record<OperationType, string> = {
   render_document: "יצירת קובץ קורות החיים",
 };
 
+/* What a run is doing, in a sentence under its heading on a screen that is nothing but
+   the run. */
+export const operationRunNotes: Record<OperationType, string> = {
+  analyze_job: "מנתחים את המשרה ומשווים את דרישותיה לעובדות שלך…",
+  create_draft: "בוחרים עובדות ומנסחים מהן את הטיוטה…",
+  regenerate_section: "מנסחים את הפרק מחדש…",
+  regenerate_claim: "מנסחים ובודקים את השורה…",
+  render_document: "יוצרים את קובץ קורות החיים…",
+};
+
 export const statusTones: Record<OperationStatus, Tone> = {
   queued: "progress",
   running: "progress",

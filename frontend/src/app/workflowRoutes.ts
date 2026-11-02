@@ -15,6 +15,8 @@ const workflowPatterns = [
   "/applications/:applicationId/draft",
   "/applications/:applicationId/ready",
   "/applications/:applicationId/analysis",
+  "/applications/:applicationId/analysis/matching",
+  "/applications/:applicationId/verification",
 ] as const;
 
 /* One hook per pattern, in a fixed order, which is what the rules of hooks require: the
@@ -26,8 +28,8 @@ export const useInWorkflow = (): boolean => {
   const draft = useMatch(workflowPatterns[3]);
   const ready = useMatch(workflowPatterns[4]);
   const analysis = useMatch(workflowPatterns[5]);
+  const matching = useMatch(workflowPatterns[6]);
+  const verification = useMatch(workflowPatterns[7]);
 
-  return (
-    intake !== null || preparation !== null || resume !== null || draft !== null || ready !== null || analysis !== null
-  );
+  return [intake, preparation, resume, draft, ready, analysis, matching, verification].some((match) => match !== null);
 };

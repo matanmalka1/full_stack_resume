@@ -9,13 +9,12 @@ import { type WorkflowStage, workflowStageLabels } from "../model/workflowStages
 import { type PhoneHeader, PreparationWorkflowSteps } from "./PreparationWorkflowSteps";
 
 interface WizardStepShellProps {
-  /* Absent on intake, where the Application does not exist yet, and while the record
-     naming it has not loaded. */
+  /* Absent while the record naming the Application has not loaded. */
   applicationId?: string;
   children?: ReactNode;
   description?: ReactNode;
   /* The projection the spine reads the work's position from. Absent while in flight, and
-     absent on intake, where there is nothing to read yet. */
+     absent when there is nothing to read yet. */
   detail?: ApplicationDetail;
   /* A failed page query owns the whole route surface through QueryState (including its
      404 frame). In that state there is no workflow position to announce, so the wizard
@@ -28,13 +27,7 @@ interface WizardStepShellProps {
   /* The analysis, draft and ready steps each put the work beside the evidence for it - the
      facts checklist beside the diagnosis, the draft beside its rendered document, the
      approved record beside its validation - and that split of two readable columns needs
-     the wide frame.
-
-     Every step takes it, intake included. Intake used to take the narrower wizard
-     measure, and pressing "יצירת מועמדות" then widened the spine, the heading and the
-     body in the same paint that swapped the step - the one moment the flow should feel
-     like moving forward read as the page being thrown somewhere else. One measure keeps
-     the frame still while its contents change. */
+     the wide frame. */
   measure?: "wide";
   /* Whether this step gives its body a `WideRow` target - see that component's doc.
      Only the analysis step sets this: its work/reasoning split reads there instead of
@@ -87,8 +80,6 @@ export const WizardStepShell = ({
   const [wideRowTarget, setWideRowTarget] = useState<HTMLDivElement | null>(null);
   const [statusTarget, setStatusTarget] = useState<HTMLDivElement | null>(null);
 
-  const intake = stage === "intake";
-
   if (queryError !== null && queryError !== undefined) {
     return children;
   }
@@ -115,7 +106,7 @@ export const WizardStepShell = ({
         description={description}
         /* The phone header names who the CV is for, so the eyebrow saying it again stays
            for assistive tech only there. */
-        eyebrow={eyebrow === undefined || intake ? eyebrow : <span className="max-lg:sr-only">{eyebrow}</span>}
+        eyebrow={eyebrow === undefined ? eyebrow : <span className="max-lg:sr-only">{eyebrow}</span>}
         landmark={
           <PreparationWorkflowSteps
             applicationId={applicationId}
@@ -131,7 +122,7 @@ export const WizardStepShell = ({
              stage its record does not actually meet - says something the bar does not,
              and stays in view. */
           title ??
-          (intake || phoneHeading === "full" ? (
+          (phoneHeading === "full" ? (
             workflowStageLabels[stage]
           ) : (
             <span className="max-lg:sr-only">{workflowStageLabels[stage]}</span>

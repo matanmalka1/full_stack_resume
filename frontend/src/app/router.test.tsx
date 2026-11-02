@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { NewApplicationPage } from "@/features/application-intake/pages/NewApplicationPage";
 import { ApplicationListPage } from "@/features/application-list/pages/ApplicationListPage";
-import { AnalysisPage } from "@/features/application-detail/pages/AnalysisPage";
+import { AnalysisPage } from "@/features/preparation/pages/AnalysisPage";
 import { ApplicationPage } from "@/features/application-detail/pages/ApplicationPage";
 import { ApplicationResumePage } from "@/features/application-detail/pages/ApplicationResumePage";
 import { DraftEditorPage } from "@/features/drafts/pages/DraftEditorPage";
