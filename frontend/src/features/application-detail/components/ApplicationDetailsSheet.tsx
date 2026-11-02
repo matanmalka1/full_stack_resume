@@ -71,10 +71,10 @@ export const ApplicationDetailsSheet = ({
     givenNextStep !== undefined
       ? givenNextStep
       : reminder !== ""
-      ? `${reminder}${application.next_action_date == null ? "" : ` · ${formatDate(application.next_action_date)}`}`
-      : application.recommended_action == null
-        ? null
-        : actionLabel(application.recommended_action);
+        ? `${reminder}${application.next_action_date == null ? "" : ` · ${formatDate(application.next_action_date)}`}`
+        : application.recommended_action == null
+          ? null
+          : actionLabel(application.recommended_action);
 
   return (
     <Dialog
@@ -114,13 +114,17 @@ export const ApplicationDetailsSheet = ({
           <Fact label="ציון התאמה">{fitText(application.fit_level)}</Fact>
         </dl>
 
-        {nextStep === null ? null : (
-          <Block label="פעולה מומלצת הבאה">
+        {/* Said rather than left out when nothing is scheduled or recommended: the reader
+            then knows the record is waiting on them, not missing a block. */}
+        <Block label="פעולה מומלצת הבאה">
+          {nextStep === null ? (
+            <p className="text-body text-cv-text-muted">אין פעולה מתוזמנת כעת</p>
+          ) : (
             <p className="text-heading-card font-bold text-cv-text" dir="auto">
               {nextStep}
             </p>
-          </Block>
-        )}
+          )}
+        </Block>
 
         {application.notes.trim() === "" ? null : (
           <Block label="הערות">

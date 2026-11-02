@@ -66,7 +66,10 @@ export const PageShell = ({
           <div
             className={cx(
               "flex flex-wrap items-end justify-between gap-x-6 gap-y-3",
-              phoneMasthead === "hidden" && "max-lg:sr-only",
+              /* Hidden, the row keeps its heading for assistive tech, but its commands go
+                 with it entirely: a focusable control a sighted reader cannot see is a dead
+                 stop in the tab order. */
+              phoneMasthead === "hidden" && "max-lg:sr-only max-lg:[&_a]:hidden max-lg:[&_button]:hidden",
               phoneMasthead === "centered" && "max-lg:justify-center max-lg:text-center",
             )}
           >

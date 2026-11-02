@@ -198,6 +198,32 @@ describe("ApplicationPage", () => {
     );
   });
 
+  it("says in its details that nothing is scheduled when nothing is", async () => {
+    renderHub(
+      hubDetail({
+        recommended_action: null,
+        application: { ...hubDetail().application, next_action: null, next_action_date: null },
+      }),
+    );
+
+    const [menu] = await screen.findAllByRole("button", { name: "פעולות נוספות" });
+    fireEvent.click(menu);
+    fireEvent.click(screen.getByRole("menuitem", { name: "פרטי משרה" }));
+
+    expect(
+      within(screen.getByRole("dialog", { name: /פרטי משרה/ })).getByText("אין פעולה מתוזמנת כעת"),
+    ).toBeInTheDocument();
+  });
+
+  /* A closed process is on no rung of the bar, so the card says it closed in words. */
+  it("states a closed recruitment status in words beside its exact name", async () => {
+    renderHub(hubDetail({ recruitment_status: "rejected" }));
+
+    expect((await screen.findAllByText("לא התקבל")).length).toBeGreaterThan(0);
+    expect(screen.getByText("· תהליך הגיוס נסגר")).toBeInTheDocument();
+    expect(screen.queryByText(/הבא:/)).not.toBeInTheDocument();
+  });
+
   it("offers nothing against a deleted record", async () => {
     renderHub(hubDetail({ application: { ...hubDetail().application, deleted_at: "2026-08-30T00:00:00Z" } }));
 

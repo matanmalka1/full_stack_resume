@@ -78,8 +78,9 @@ const groupBySource = (entries: FactPoolEntry[]): { entries: FactPoolEntry[]; so
    link. A phone sees each knowledge file as a card of rows under a small heading - a tile
    naming the file, the wording with its origin under it, the status at the far end - and
    the whole row is the link. One tree rather than a list beside a table, so every fact
-   has one link and one name; the group headings are rows of their own that only a phone
-   shows, which is why each knowledge file is a `tbody`. */
+   has one link and one name. Each knowledge file is a `tbody` opened by a heading row
+   naming the file and how many facts it holds: a small label over its card on a phone,
+   a row across the table on a wide screen. */
 export const FactPoolList = ({
   entries,
   factHref,
@@ -101,14 +102,18 @@ export const FactPoolList = ({
       </thead>
       {groupBySource(entries).map(({ entries: grouped, source }) => (
         <tbody className="max-lg:mb-3.5 max-lg:flex max-lg:flex-col max-lg:last:mb-0" key={source}>
-          <tr className="lg:hidden">
+          <tr className="lg:border-t lg:border-cv-hairline lg:bg-cv-canvas">
             <th
-              className="block pb-2 text-start text-support font-bold text-cv-text-muted"
+              className="pb-2 text-start text-support font-bold text-cv-text-muted max-lg:block lg:px-4.5 lg:py-2 lg:text-caption"
               colSpan={4}
-              dir="auto"
               scope="colgroup"
             >
-              {factSourceLabel(source)}
+              <span className="flex items-baseline justify-between gap-3">
+                <span dir="auto">{factSourceLabel(source)}</span>{" "}
+                <span className="font-medium tabular-nums">
+                  {grouped.length} <span className="sr-only">עובדות</span>
+                </span>
+              </span>
             </th>
           </tr>
           {grouped.map(({ fact, outOfSync }, index) => {

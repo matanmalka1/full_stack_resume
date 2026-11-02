@@ -46,11 +46,14 @@ const order = (status: string) => recruitmentStatuses.indexOf(status as (typeof 
    between chips. */
 const StatusChips = ({
   current,
+  describedBy,
   onChange,
   options,
   value,
 }: {
   current: string;
+  /* The field's error, named as the group's description so it is read with the choice. */
+  describedBy: string | undefined;
   onChange: (status: string) => void;
   options: readonly string[];
   value: string;
@@ -83,7 +86,7 @@ const StatusChips = ({
   const ending = sorted.filter((status) => endingStatuses.has(status));
 
   return (
-    <fieldset className="flex flex-col">
+    <fieldset aria-describedby={describedBy} className="flex flex-col">
       <legend className="mb-2.5 text-label font-bold text-cv-text">מצב המועמדות</legend>
       <div className="flex flex-wrap gap-2">
         {forward.map(chip)}
@@ -125,6 +128,7 @@ export const RecruitmentUpdateForm = ({
       <div className="flex flex-col gap-3">
         <StatusChips
           current={detail.recruitment_status}
+          describedBy={errors.targetStatus?.message === undefined ? undefined : "recruitment-status-error"}
           onChange={(status) =>
             form.setValue("targetStatus", status as RecruitmentUpdateFields["targetStatus"], {
               shouldDirty: true,
@@ -135,7 +139,9 @@ export const RecruitmentUpdateForm = ({
           value={fields.targetStatus}
         />
         {errors.targetStatus?.message === undefined ? null : (
-          <p className="text-support font-medium text-cv-blocker">{errors.targetStatus.message}</p>
+          <p className="text-support font-medium text-cv-blocker" id="recruitment-status-error">
+            {errors.targetStatus.message}
+          </p>
         )}
         {detail.allowed_recruitment_transitions.length === 0 ? (
           <p className="text-support text-cv-text-muted">אין מעבר קדימה זמין מהמצב הנוכחי.</p>

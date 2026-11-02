@@ -58,11 +58,10 @@ export const RecruitmentStageCard = ({ detail, onUpdate }: { detail: Application
       <p className="flex flex-wrap items-center gap-x-2 text-heading-card font-extrabold text-cv-text lg:hidden">
         {statusIcon("size-icon-lg shrink-0")}
         {label}
-        {rung.index === null ? null : (
-          <span className="text-support font-medium text-cv-text-muted">
-            · שלב {rung.index + 1} מתוך {rung.total}
-          </span>
-        )}
+        <span className="text-support font-medium text-cv-text-muted">
+          {/* A closed process sits on no rung, so it is said in words. */}
+          {rung.index === null ? "· תהליך הגיוס נסגר" : `· שלב ${rung.index + 1} מתוך ${rung.total}`}
+        </span>
       </p>
 
       {/* The ladder. On a phone it draws what the sentence above already says, so it is

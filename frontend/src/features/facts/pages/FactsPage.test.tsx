@@ -110,7 +110,8 @@ describe("FactsPage", () => {
       "/facts?fact=fact.backend",
     );
     expect(within(table).getByRole("link", { name: "Managed accounts" })).toBeInTheDocument();
-    expect(within(table).getByRole("columnheader", { name: "ניסיון בפיתוח" })).toBeInTheDocument();
+    /* Each knowledge file's heading row names it and how many facts it holds. */
+    expect(within(table).getByRole("columnheader", { name: "ניסיון בפיתוח 1 עובדות" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("חיפוש עובדות"), { target: { value: "managed" } });
     expect(within(table).queryByRole("link", { name: "בניית שירותי Backend" })).not.toBeInTheDocument();
