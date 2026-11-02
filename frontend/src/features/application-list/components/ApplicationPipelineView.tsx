@@ -1,255 +1,138 @@
-import { Info, Pencil } from "lucide-react";
-import { Link } from "react-router-dom";
-
 import type { ApplicationListItem } from "@/api/contracts";
-import { buttonClasses } from "@/ui/Button";
-import { IconButton } from "@/ui/IconButton";
-import { Tooltip } from "@/ui/Tooltip";
+import { preparationStateLabels } from "@/features/preparation";
+import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
-import { toneBackgroundClasses, toneBorderClasses, toneDotClasses } from "@/ui/tone";
-import { useOpenRecord } from "../hooks/useOpenRecord";
 import { applicationAttention } from "../model/applicationListPresentation";
-import { closedStage, recruitmentStages } from "../model/recruitmentStages";
-import { ApplicationIdentity } from "./ApplicationIdentity";
-import { ApplicationNextAction } from "./ApplicationNextAction";
-import { AttentionLink, nextActionHeading } from "./ApplicationCardNextAction";
+import { type RecruitmentStage, recruitmentStages } from "../model/recruitmentStages";
 
 interface ApplicationPipelineViewProps {
   items: readonly ApplicationListItem[];
-  /* The server's count per recruitment status across every page of the current query,
-     ignoring only the recruitment-stage filter itself, and the statuses that filter
-     selects (none: no filter). Together they give each column its whole size. */
+  /* The server's count per recruitment status across the open board. The board draws it
+     whole, so this agrees with the column; it is read anyway so a column can never claim
+     fewer than the server holds. */
   recruitmentStatusCounts: Readonly<Record<string, number>>;
-  recruitmentStatusFilter: readonly string[] | undefined;
   onRequestDetails: (item: ApplicationListItem) => void;
-  onRequestUpdate: (item: ApplicationListItem) => void;
   returnedId: string | null;
 }
 
-interface PipelineColumn {
-  id: string;
-  title: string;
-  statuses: readonly string[];
-  tone: "neutral" | "accent" | "warning" | "success";
-}
-
-/* Same stage grouping the filter bar uses, plus the closed applications the bar never
-   shows a column for - the board covers the active stages and where work ends up. The
-   columns stay recruitment stages: the CV's own progress is a separate axis and is not
-   mixed into this one. */
-const pipelineColumns: readonly PipelineColumn[] = [
-  ...recruitmentStages.map((stage) => ({
-    id: stage.id,
-    title: stage.label,
-    statuses: stage.statuses,
-    tone: stage.tone,
-  })),
-  { id: closedStage.id, title: closedStage.label, statuses: closedStage.statuses, tone: closedStage.tone },
-];
-
-/* demo_re marks each column by a coloured top edge on one neutral lane rather than
-   tinting the whole lane; the edge carries the stage's tone. */
-const pipelineEdgeClasses: Record<PipelineColumn["tone"], string> = {
-  neutral: "border-t-cv-border-strong",
-  accent: "border-t-cv-accent",
-  warning: "border-t-cv-warning",
-  success: "border-t-cv-success",
-};
-
-/* The stage columns sort by recruitment, so a card that needs the reader would
-   otherwise look like its neighbours. A mark beside the company says so at a glance;
-   the words ride with it for anyone who cannot see the mark, and the reasons are the
-   system tooltip. */
-const AttentionMark = ({ item }: { item: ApplicationListItem }) => {
-  const attention = applicationAttention(item);
-  if (attention === null) return null;
-
-  return (
-    <Tooltip className="mt-1.5 shrink-0" label={attention.label} wrap>
-      <span aria-hidden="true" className={cx("size-2 rounded-pill", toneDotClasses[attention.tone])} />
-      <span className="sr-only">דורש טיפול</span>
-    </Tooltip>
-  );
-};
-
-/* One Application in its stage, after demo_re: who, what is waiting on it, and a
-   footer whose main control is the step to take - or, with none, the way into its
-   recruitment record - beside a pencil for the stage itself. */
+/* One Application in its stage: the role, the employer, and where its CV stands, with a
+   "needs attention" chip beside the role when the projection holds a reason. The whole card
+   is one button that opens the Application's details sheet, where the way into the work
+   is. */
 const PipelineCard = ({
   item,
   onRequestDetails,
-  onRequestUpdate,
   returned,
 }: {
   item: ApplicationListItem;
-  returned: boolean;
   onRequestDetails: (item: ApplicationListItem) => void;
-  onRequestUpdate: (item: ApplicationListItem) => void;
+  returned: boolean;
 }) => {
-  const open = useOpenRecord(() => onRequestDetails(item));
   const attention = applicationAttention(item);
-  const head = nextActionHeading(item, attention !== null);
 
   return (
-    // The card opens its details on a click; its company link stays the keyboard route.
-    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
-    <article
-      className={cx(
-        "group flex cursor-pointer flex-col gap-2.5 rounded-control border border-cv-border bg-cv-surface p-3.5 shadow-surface transition-all hover:border-cv-border-strong",
-        returned && "cv-returned",
-      )}
-      data-application-id={item.id}
-      onClick={open.onClick}
-    >
-      <ApplicationIdentity afterCompany={<AttentionMark item={item} />} item={item} variant="pipeline" />
-
-      {attention === null ? null : (
-        <div
-          className={cx(
-            "rounded-control border px-2 py-1.5",
-            toneBorderClasses[attention.tone],
-            toneBackgroundClasses[attention.tone],
-          )}
-        >
-          <AttentionLink attention={attention} className="leading-tight" item={item} />
-        </div>
-      )}
-
-      {/* A phone's stage card stops at who, how far along and what needs the reader, as
-          the cards view's does: the next step and the stage pencil are the details
-          sheet's, a tap on the card away. */}
-      <div className="max-lg:hidden">
-        <ApplicationNextAction item={item} />
-      </div>
-
-      <div className="flex items-center justify-between gap-2 border-t border-cv-border pt-2 max-lg:hidden">
-        {head?.command == null ? (
-          <button
-            className="text-support font-medium text-cv-accent hover:underline"
-            onClick={() => onRequestUpdate(item)}
-            type="button"
-          >
-            עדכון סטטוס
-          </button>
-        ) : (
-          <Link
-            aria-label={`${head.title} · ${item.company}`}
-            className={buttonClasses(
-              head.command.strong ? "primary" : "secondary",
-              "min-w-0 flex-1 truncate",
-              "compact",
-            )}
-            to={head.command.to}
-          >
-            <span className="truncate">{head.title}</span>
-          </Link>
+    <li>
+      <button
+        className={cx(
+          "flex w-full flex-col items-stretch gap-2 rounded-control-lg border border-cv-hairline bg-cv-surface px-3.5 py-3 text-start text-cv-text shadow-surface transition-colors hover:border-cv-border-strong lg:gap-1.5 lg:rounded-control lg:border-transparent lg:p-3",
+          returned && "cv-returned",
         )}
-        {/* The card body opens the details on a click; this is the same for the keyboard. */}
-        <Tooltip label="פרטי משרה">
-          <IconButton
-            aria-label={`פרטי המשרה של ${item.company}`}
-            className="shrink-0"
-            onClick={() => onRequestDetails(item)}
-            size="sm"
-            variant="quiet"
-          >
-            <Info aria-hidden="true" className="size-icon-sm" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip label="עדכון שלב הגיוס">
-          <IconButton
-            aria-label={`עדכון שלב הגיוס של ${item.company}`}
-            className="shrink-0"
-            onClick={() => onRequestUpdate(item)}
-            size="sm"
-            variant="quiet"
-          >
-            <Pencil aria-hidden="true" className="size-icon-sm" />
-          </IconButton>
-        </Tooltip>
-      </div>
-    </article>
+        data-application-id={item.id}
+        onClick={() => onRequestDetails(item)}
+        type="button"
+      >
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0 text-body font-bold lg:text-label">
+            <bdi>{item.target_role}</bdi>
+          </span>
+          {attention === null ? null : (
+            <StatusBadge className="px-2 py-0.5 [&>svg]:hidden" tone="progress" variant="solid">
+              <span title={attention.label}>דורש טיפול</span>
+            </StatusBadge>
+          )}
+        </span>
+        <span className="text-support text-cv-text-muted lg:text-caption">
+          <bdi>{item.company}</bdi>
+        </span>
+        <span className="text-caption text-cv-text-muted">
+          הכנת קו״ח: {preparationStateLabels[item.preparation_state]}
+        </span>
+      </button>
+    </li>
   );
 };
 
+/* The open board by recruitment stage, one column per stage in the order a process moves.
+
+   From the large breakpoint the columns are grey lanes side by side, each holding white
+   cards; five of them fit a laptop's content width and a narrower one scrolls them
+   sideways. On a phone each lane is a heading over bare cards, most of the screen wide, in
+   a strip that scrolls sideways and snaps lane by lane - the next lane peeks in at the edge
+   to say there is more. An empty stage says so in a dashed frame rather than vanishing, so
+   the five stages are always the same five places. */
 export const ApplicationPipelineView = ({
   items,
   recruitmentStatusCounts,
-  recruitmentStatusFilter,
   onRequestDetails,
-  onRequestUpdate,
   returnedId,
 }: ApplicationPipelineViewProps) => {
-  /* A column holds only this page's Applications, but the board is paged. Its size is
-     therefore the server's count over every page - limited to the statuses the stage
-     filter lets through, since the others cannot be on any page - and never less than
-     what this page actually holds. */
-  const columnTotal = (column: PipelineColumn, onPage: number): number =>
+  const columnTotal = (stage: RecruitmentStage, onPage: number): number =>
     Math.max(
       onPage,
-      column.statuses
-        .filter((status) => recruitmentStatusFilter === undefined || recruitmentStatusFilter.includes(status))
-        .reduce((sum, status) => sum + (recruitmentStatusCounts[status] ?? 0), 0),
+      stage.statuses.reduce((sum, status) => sum + (recruitmentStatusCounts[status] ?? 0), 0),
     );
 
-  const knownStatuses = new Set(pipelineColumns.flatMap((column) => column.statuses));
-  const unknownStatuses = [...new Set(items.map((item) => item.recruitment_status))].filter(
-    (status) => !knownStatuses.has(status),
-  );
-  /* The closed column appears once there is anything closed on any page, not just this one. */
-  const populatedOrActiveColumns = pipelineColumns.filter(
-    (column) => column.id !== "closed" || columnTotal(column, 0) > 0,
-  );
-  const columns: readonly PipelineColumn[] =
-    unknownStatuses.length === 0
-      ? populatedOrActiveColumns
-      : [...populatedOrActiveColumns, { id: "other", title: "שלב אחר", statuses: unknownStatuses, tone: "neutral" }];
-
   return (
-    /* On a phone the lanes are a horizontal strip across the full screen width, each lane
-       most of it wide so the next one peeks in at the edge and says the strip scrolls; the
-       strip snaps lane by lane. A lane there is a heading over bare cards, not a boxed
-       column: the boxes nested inside one another at that width. */
     <ul
-      aria-label="מועמדויות לפי שלב גיוס"
-      className="flex items-start gap-3.5 overflow-x-auto pt-1 pb-4 max-lg:-mx-4 max-lg:snap-x max-lg:snap-mandatory max-lg:scroll-px-4 max-lg:gap-3 max-lg:px-4 sm:max-lg:-mx-6 sm:max-lg:scroll-px-6 sm:max-lg:px-6"
+      aria-label="שלבי הגיוס"
+      className="m-0 flex list-none items-stretch gap-3 overflow-x-auto p-0 pb-2 max-lg:-mx-4 max-lg:snap-x max-lg:snap-mandatory max-lg:scroll-px-4 max-lg:px-4 sm:max-lg:-mx-6 sm:max-lg:scroll-px-6 sm:max-lg:px-6 lg:grid lg:grid-cols-[repeat(5,minmax(13.75rem,1fr))] lg:gap-3.5"
     >
-      {columns.map((column) => {
-        const stageItems = items.filter((item) => column.statuses.includes(item.recruitment_status));
-        const total = columnTotal(column, stageItems.length);
+      {recruitmentStages.map((stage) => {
+        const stageItems = items.filter((item) =>
+          (stage.statuses as readonly string[]).includes(item.recruitment_status),
+        );
+        const total = columnTotal(stage, stageItems.length);
+        const Icon = stage.icon;
+        const headingId = `pipeline-stage-${stage.id}`;
 
         return (
           <li
-            className={cx(
-              "flex max-h-[75vh] w-72 shrink-0 flex-col rounded-surface border border-t-[3px] border-cv-border bg-cv-surface-muted p-3",
-              "max-lg:max-h-none max-lg:w-[78vw] max-lg:max-w-80 max-lg:snap-start max-lg:border-0 max-lg:bg-transparent max-lg:p-0",
-              pipelineEdgeClasses[column.tone],
-            )}
-            key={column.id}
+            aria-labelledby={headingId}
+            className="relative flex w-75 max-w-[80vw] shrink-0 snap-start flex-col gap-2.5 lg:min-h-130 lg:w-auto lg:max-w-none lg:rounded-surface lg:bg-cv-surface-muted lg:p-3"
+            key={stage.id}
           >
-            <div className="mb-3 flex items-center justify-between gap-3 px-1">
-              <h2 className="text-support font-bold text-cv-text">{column.title}</h2>
-              <span className="rounded-pill border border-cv-border bg-cv-surface px-2 py-0.5 text-support font-bold text-cv-text-muted tabular-nums shadow-surface">
-                {total === stageItems.length ? stageItems.length : `${stageItems.length} מתוך ${total}`}
+            <h2
+              className="flex items-center gap-2 text-body font-extrabold text-cv-text lg:px-1 lg:py-0.5 lg:text-label"
+              id={headingId}
+            >
+              <span
+                aria-hidden="true"
+                className="flex size-7.5 shrink-0 items-center justify-center rounded-item border border-cv-border bg-cv-surface lg:hidden"
+              >
+                <Icon className="size-icon-md" />
               </span>
-            </div>
-            <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto max-lg:overflow-visible">
-              {stageItems.length === 0 ? (
-                <p className="rounded-control border border-dashed border-cv-border py-8 text-center text-support text-cv-text-muted">
-                  אין מועמדויות בשלב זה
-                </p>
-              ) : (
-                stageItems.map((item) => (
+              <span className="min-w-0 flex-1">{stage.label}</span>
+              <span className="text-support font-bold text-cv-text-muted tabular-nums">
+                <span className="sr-only">, </span>
+                {total}
+              </span>
+            </h2>
+            {stageItems.length === 0 ? (
+              <p className="rounded-control-lg border border-dashed border-cv-border-soft px-3.5 py-4.5 text-center text-support text-cv-text-muted lg:rounded-control lg:border-cv-border-strong">
+                אין מועמדויות בשלב הזה
+              </p>
+            ) : (
+              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                {stageItems.map((item) => (
                   <PipelineCard
                     item={item}
                     key={item.id}
                     onRequestDetails={onRequestDetails}
-                    onRequestUpdate={onRequestUpdate}
                     returned={returnedId === item.id}
                   />
-                ))
-              )}
-            </div>
+                ))}
+              </ul>
+            )}
           </li>
         );
       })}

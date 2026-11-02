@@ -22,7 +22,6 @@ export interface ApplicationSearch {
   setSearch: (value: string) => void;
   mode: SearchMode;
   items: readonly GlobalSearchItem[];
-  applicationMatched: number;
   // Shown rows answer an earlier search than the field now holds.
   isStale: boolean;
   isError: boolean;
@@ -76,7 +75,6 @@ export const useApplicationSearch = (enabled: boolean): ApplicationSearch => {
     setSearch,
     mode,
     items,
-    applicationMatched: query.data?.matched ?? 0,
     isStale: query.isPlaceholderData || deferred !== trimmed,
     isError,
     error: query.error ?? facts.error ?? history.error,

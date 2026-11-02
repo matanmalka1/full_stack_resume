@@ -1,237 +1,98 @@
+import { Link } from "react-router-dom";
+
 import type { ApplicationListItem } from "@/api/contracts";
+import { preparationResumeDestination } from "@/features/preparation";
+import { InitialTile } from "@/ui/InitialTile";
 import { Skeleton } from "@/ui/Skeleton";
-import { Tooltip } from "@/ui/Tooltip";
+import { cardClasses } from "@/ui/surface";
 import { cx } from "@/ui/cx";
-import { surfaceClasses } from "@/ui/surface";
-import { useOpenRecord } from "../hooks/useOpenRecord";
-import {
-  applicationAttention,
-  duplicatedApplicationIdentityIds,
-  formatApplicationDate,
-  formatRelativeUpdate,
-  isNextActionOverdue,
-} from "../model/applicationListPresentation";
-import { ApplicationRecordActions } from "./ApplicationListItemActions";
-import { ApplicationIdentity } from "./ApplicationIdentity";
-import { ApplicationFitStatus, ApplicationProgress } from "./ApplicationListStatuses";
-import { ApplicationCardNextAction, nextActionHeading } from "./ApplicationCardNextAction";
+import { formatRelativeUpdate } from "../model/applicationListPresentation";
+import { ApplicationStageBadge, PreparationMeter } from "./ApplicationListStatuses";
 
-const cardGridClasses = "grid gap-4 md:grid-cols-2 xl:grid-cols-3";
+/* One column on a phone; from the large breakpoint as many 300px-or-wider columns as the
+   row beside the action hub holds - two on a laptop, three on a wide screen. */
+const cardGridClasses =
+  "m-0 grid list-none gap-2.5 p-0 lg:grid-cols-[repeat(auto-fill,minmax(18.75rem,1fr))] lg:gap-3.5";
 
-interface ApplicationCardsViewProps {
-  clearingApplicationId: string | null;
-  items: readonly ApplicationListItem[];
-  onClearNextAction: (item: ApplicationListItem) => void;
-  onRequestClose: (item: ApplicationListItem) => void;
-  onRequestDelete: (item: ApplicationListItem) => void;
-  onRequestDetails: (item: ApplicationListItem) => void;
-  onRequestUpdate: (item: ApplicationListItem) => void;
-  /* The Application the reader just came back from: its card is ringed for a moment
-     (styles.css, `cv-returned`) so the eye finds it, and nothing about its place changes. */
-  returnedId: string | null;
-}
+/* One Application as the design draws it: the employer's initial, the role as the
+   card's title with the employer and when it last moved under it, and one line for where
+   it stands - the recruitment stage's chip and the CV's step bar.
 
-/* The update time with both dates on the system tooltip. */
-const UpdatedAt = ({ item }: { item: ApplicationListItem }) => (
-  <Tooltip
-    label={`עודכנה ב־${formatApplicationDate(item.updated_at)} · נפתחה ב־${formatApplicationDate(item.created_at)}`}
-  >
-    <time dateTime={item.updated_at}>{formatRelativeUpdate(item.updated_at)}</time>
-  </Tooltip>
-);
-
-/* What a card's leading edge says before anything on it is read: a projected reason
-   that blocks the work, or one that asks for it, or a reminder already past its date.
-   The most severe wins. A closed Application asks for nothing. */
-type CardUrgency = "blocker" | "warning";
-
-const cardUrgency = (item: ApplicationListItem): CardUrgency | null => {
-  if (item.is_closed) return null;
-  const attention = applicationAttention(item);
-  if (attention !== null) return attention.tone === "blocker" ? "blocker" : "warning";
-  return isNextActionOverdue(item.next_action_date) && item.next_action != null ? "warning" : null;
-};
-
-const urgencyEdgeClasses: Record<CardUrgency, string> = {
-  blocker: "border-s-4 border-s-cv-blocker",
-  warning: "border-s-4 border-s-cv-warning",
-};
-
-/* One Application as a card, laid out after demo_re: who, how well it fits and the
-   menu; the progress; what to do next; and a footer with when it last moved and the way
-   into its recruitment record. The blocks are separated by space rather than each
-   boxed, so a board of cards is not a grid of boxes inside boxes. Every block is a
-   shared component, so the cards, the details dialog and the action hub cannot drift
-   apart in what they say.
-
-   The card itself takes focus and opens its details on Enter or Space, as a click on
-   it does; its link icon stays the route straight to the work. */
-const ApplicationCard = ({
-  ambiguous,
-  clearing,
-  item,
-  onClearNextAction,
-  onRequestClose,
-  onRequestDelete,
-  onRequestDetails,
-  onRequestUpdate,
-  returned,
-}: Omit<ApplicationCardsViewProps, "clearingApplicationId" | "items" | "returnedId"> & {
-  ambiguous: boolean;
-  clearing: boolean;
-  item: ApplicationListItem;
-  returned: boolean;
-}) => {
-  const open = useOpenRecord(() => onRequestDetails(item));
-  const hasNext = nextActionHeading(item, applicationAttention(item) !== null) !== null;
-  const urgency = cardUrgency(item);
-
-  return (
-    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
-    <article
-      aria-label={`${item.target_role} אצל ${item.company}`}
-      className={surfaceClasses(
+   The whole card is one link, into the Application at the step the server recommends (a
+   Ready CV opens on its ready step). Everything the board used to stack on a card - a
+   next-step block, a ⋮ menu, a fit chip - is the Application's own screen's now, one tap
+   away; the board answers "where does each one stand" and nothing else. */
+const ApplicationCard = ({ item, returned }: { item: ApplicationListItem; returned: boolean }) => (
+  <li>
+    <Link
+      className={cardClasses(
         cx(
-          "group flex h-full min-w-0 cursor-pointer flex-col gap-3 p-3.5 transition-all hover:border-cv-border-strong focus-visible:border-cv-border-strong lg:gap-4 lg:p-5",
-          /* A closed Application is history: it sits flat and quiet so the open work
-             around it is what the eye lands on. Its text keeps full contrast. */
-          item.is_closed
-            ? "bg-cv-surface-muted"
-            : "bg-cv-surface-raised shadow-surface hover:shadow-floating focus-visible:shadow-floating",
-          urgency === null ? undefined : urgencyEdgeClasses[urgency],
+          "flex h-full flex-col gap-3 p-3.5 text-cv-text transition-colors hover:border-cv-border-strong lg:gap-3.5 lg:p-4.5",
           returned && "cv-returned",
         ),
       )}
       data-application-id={item.id}
-      data-closed={item.is_closed ? true : undefined}
-      data-urgency={urgency ?? undefined}
-      onClick={open.onClick}
-      onKeyDown={open.onKeyDown}
-      /* Focusable so the keyboard opens the record the way a click does. It stays an
-         article rather than a button: it holds links and buttons of its own. */
-      // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-      tabIndex={0}
+      to={preparationResumeDestination(item)}
     >
-      <div className="flex items-start justify-between gap-3">
-        <ApplicationIdentity ambiguous={ambiguous} item={item} variant="card" />
-        {/* Fit is read to decide whether to go on at all, so it sits beside who the
-            Application is for rather than in the footer. Unanalysed, there is nothing
-            to say yet and nothing is drawn. */}
-        {item.fit_level == null ? null : (
-          <span className="ms-auto shrink-0">
-            <ApplicationFitStatus item={item} />
+      <span className="flex min-w-0 items-center gap-3">
+        <InitialTile className="max-lg:size-10 max-lg:text-heading-sm" name={item.company} />
+        <span className="min-w-0 flex-1">
+          {/* Isolated rather than `dir="auto"` on the line: a Latin role keeps its own
+              order but the line stays right-aligned with the Hebrew ones around it. */}
+          <span className="block truncate text-heading-sm font-bold lg:text-heading-card">
+            <bdi>{item.target_role}</bdi>
           </span>
-        )}
-        <ApplicationRecordActions
-          item={item}
-          onRequestClose={onRequestClose}
-          onRequestDelete={onRequestDelete}
-          onRequestDetails={onRequestDetails}
-          onRequestUpdate={onRequestUpdate}
-        />
-      </div>
-
-      <ApplicationProgress item={item} />
-
-      {/* A phone's card stops at who and how far along: what to do next is the action
-          hub's above the list and the details sheet's a tap away, and repeated on every
-          card it pushed the second card off the screen. */}
-      {hasNext ? (
-        <div className="max-lg:hidden">
-          {/* Named for assistive tech only: drawn on every card it said nothing the
-              action under it does not already say. */}
-          <p className="sr-only">פעולה מומלצת הבאה</p>
-          <ApplicationCardNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
-        </div>
-      ) : (
-        <p className="text-support text-cv-text-muted max-lg:hidden">אין פעולה מתוזמנת כעת</p>
-      )}
-
-      <div className="mt-auto flex items-center justify-between gap-3 border-t border-cv-border pt-3 text-support text-cv-text-muted max-lg:border-t-0 max-lg:pt-0">
-        <UpdatedAt item={item} />
-        <button
-          className="shrink-0 font-semibold text-cv-accent hover:underline max-lg:hidden"
-          onClick={() => onRequestUpdate(item)}
-          type="button"
-        >
-          עדכון סטטוס ומשימות
-        </button>
-      </div>
-    </article>
-  );
-};
+          <span className="block truncate text-support text-cv-text-muted">
+            <span dir="auto">{item.company}</span> · עודכן{" "}
+            <time dateTime={item.updated_at}>{formatRelativeUpdate(item.updated_at)}</time>
+          </span>
+        </span>
+      </span>
+      <span className="flex min-w-0 items-center gap-2.5">
+        <ApplicationStageBadge item={item} phoneIcon />
+        <PreparationMeter item={item} />
+      </span>
+    </Link>
+  </li>
+);
 
 export const ApplicationCardsView = ({
-  clearingApplicationId,
   items,
-  onClearNextAction,
-  onRequestClose,
-  onRequestDelete,
-  onRequestDetails,
-  onRequestUpdate,
   returnedId,
-}: ApplicationCardsViewProps) => {
-  /* Two Applications for the same company and role would otherwise read as one card
-     drawn twice; each says there is another. */
-  const ambiguous = duplicatedApplicationIdentityIds(items);
+}: {
+  items: readonly ApplicationListItem[];
+  /* The Application the reader just came back from: its card is ringed for a moment
+     (styles.css, `cv-returned`) so the eye finds it, and nothing about its place changes. */
+  returnedId: string | null;
+}) => (
+  <ul aria-label="כרטיסי מועמדויות" className={cardGridClasses}>
+    {items.map((item) => (
+      <ApplicationCard item={item} key={item.id} returned={returnedId === item.id} />
+    ))}
+  </ul>
+);
 
-  /* Named, like the stages view's list, so the page's one grid of records is a region a
-     reader can jump to rather than an anonymous run of articles after the action hub. */
-  return (
-    <section aria-label="כרטיסי מועמדויות" className={cardGridClasses}>
-      {items.map((item) => (
-        <ApplicationCard
-          ambiguous={ambiguous.has(item.id)}
-          clearing={clearingApplicationId === item.id}
-          item={item}
-          key={item.id}
-          onClearNextAction={onClearNextAction}
-          onRequestClose={onRequestClose}
-          onRequestDelete={onRequestDelete}
-          onRequestDetails={onRequestDetails}
-          onRequestUpdate={onRequestUpdate}
-          returned={returnedId === item.id}
-        />
-      ))}
-    </section>
-  );
-};
+const skeletonCards = ["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"];
 
-/* One row of the widest grid: enough to hold the layout, and a phone does not sweep
-   through a column of placeholders that the first page may not fill. */
-const skeletonCards = ["skeleton-1", "skeleton-2", "skeleton-3"];
-
-/* The first load reserves the card grid it will be replaced by, block for block: the
-   identity and menu, the progress block, the next-action block, and the footer. Drawn
-   with the `Skeleton` primitive so it sweeps like every other waiting region and keeps
-   its `forced-colors` rule; radius comes from the primitive. */
+/* The first load reserves the card grid it will be replaced by, line for line: the
+   initial and the two lines beside it, then the stage chip and the step bar. Drawn with
+   the `Skeleton` primitive so it sweeps like every other waiting region. */
 export const ApplicationCardsSkeleton = () => (
   <output aria-label="טוען את המועמדויות" className={cardGridClasses}>
     {skeletonCards.map((key) => (
-      <div className={surfaceClasses("flex min-h-56 flex-col gap-4 bg-cv-surface-raised p-5 shadow-surface")} key={key}>
-        <div className="flex items-start justify-between gap-3">
-          <span className="flex flex-1 gap-2">
-            <Skeleton className="block size-9 shrink-0" />
-            <span className="flex-1 space-y-2">
-              <Skeleton className="block h-4 w-4/5" />
-              <Skeleton className="block h-3 w-3/5" />
-            </span>
+      <span className={cardClasses("flex flex-col gap-3.5 p-4.5")} key={key}>
+        <span className="flex items-center gap-3">
+          <Skeleton className="block size-11 shrink-0" />
+          <span className="flex-1 space-y-2">
+            <Skeleton className="block h-4 w-3/5" />
+            <Skeleton className="block h-3 w-2/5" />
           </span>
-          <Skeleton className="block size-9 shrink-0" />
-        </div>
-        <span className="space-y-2">
-          <Skeleton className="block h-4 w-full" />
+        </span>
+        <span className="flex items-center gap-2.5">
           <Skeleton className="block h-6 w-24" />
+          <Skeleton className="block h-1.5 flex-1" />
         </span>
-        <span className="space-y-2">
-          <Skeleton className="block h-3 w-32" />
-          <Skeleton className="block h-4 w-3/4" />
-        </span>
-        <div className="mt-auto flex items-center justify-between gap-3 border-t border-cv-border pt-3">
-          <Skeleton className="block h-4 w-24" />
-          <Skeleton className="block h-4 w-16" />
-        </div>
-      </div>
+      </span>
     ))}
   </output>
 );
