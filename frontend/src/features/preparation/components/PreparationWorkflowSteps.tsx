@@ -1,4 +1,4 @@
-import { ChevronRight, X } from "lucide-react";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -24,7 +24,7 @@ import {
    `none` to reset what the previous screen left behind. */
 /* What a step adds to its compact header on a phone. Every part is optional: a step that
    passes nothing gets the role as its title, the company under it and the stage bar. */
-export interface PhoneHeader {
+interface PhoneHeader {
   /* One trailing control - an overflow menu, the draft's preview toggle. Rendered below
      the large breakpoint only, so it must not repeat a control the step already shows on
      a phone. Give it a 44px target and an accessible name; it is usually icon-only. */
@@ -41,9 +41,6 @@ export interface PhoneHeader {
 }
 
 interface PreparationWorkflowStepsProps {
-  /* Whether the stepper is drawn from the large breakpoint. A step whose desktop header
-     says where the work stands some other way leaves it out there. */
-  desktopSpine?: boolean;
   /* Absent while the record naming the Application has not loaded: no stage has a
      destination yet, so the bar is an indicator until one does. */
   applicationId?: string;
@@ -92,31 +89,39 @@ const stepsFor = (
   });
 };
 
-export const PreparationWorkflowSteps = ({
-  applicationId,
-  desktopSpine = true,
-  detail,
-  phoneHeader = NO_PHONE_HEADER,
-  stage,
-}: PreparationWorkflowStepsProps) => {
+/* The four stages as the open screen sees them: which is current, which are behind, and
+   where each can be reopened from - except the one being read, which is not a way back. */
+export const useWorkflowSteps = (
+  stage: WorkflowStage,
+  applicationId: string | undefined,
+  detail: ApplicationDetail | undefined,
+): WorkflowStep[] => {
   const { pathname } = useLocation();
 
   const destinations = applicationId === undefined ? {} : workflowDestinations(applicationId, detail);
   const steps = stepsFor(stage, detail, destinations);
 
-  /* Which of the three stages the open screen belongs to, found by matching a stage's
+  /* Which of the stages the open screen belongs to, found by matching a stage's
      destination against the open path. The current stage wins a tie where one arises. */
   const currentHere = steps.findIndex((step) => step.state === "current" && step.href === pathname);
   const hereIndex = currentHere !== -1 ? currentHere : steps.findIndex((step) => step.href === pathname);
 
-  /* A stage whose screen is the one being read is not a way back. */
-  const located = steps.map((step, index) =>
+  return steps.map((step, index) =>
     Object.assign(
       { label: step.label, state: step.state },
       index === hereIndex ? { here: true } : {},
       step.href === pathname ? {} : { href: step.href },
     ),
   );
+};
+
+export const PreparationWorkflowSteps = ({
+  applicationId,
+  detail,
+  phoneHeader = NO_PHONE_HEADER,
+  stage,
+}: PreparationWorkflowStepsProps) => {
+  const located = useWorkflowSteps(stage, applicationId, detail);
 
   /* One way out, above the spine, and the wizard's only navigation besides it.
 
@@ -128,11 +133,7 @@ export const PreparationWorkflowSteps = ({
      and all. */
   /* On a phone the step's top is the compact header an app's inner screen has: the way out
      as a chevron, who the CV is for as the title, an optional trailing action, and the
-     stage bar under them. The new-job screen draws the way out as a close mark instead -
-     nothing has been created yet, so leaving is cancelling rather than going back - and
-     keeps its numbered stepper under the page's own heading. The link's name is the same
-     words either way. */
-  const intake = stage === "intake";
+     stage bar under them. */
   const company = detail?.application.company;
   const role = detail?.application.target_role;
   const title = phoneHeader.title ?? role ?? workflowStageLabels[stage];
@@ -140,31 +141,20 @@ export const PreparationWorkflowSteps = ({
   const initial = company?.trim().charAt(0);
 
   return (
-    <div
-      className={cx(
-        "flex flex-col gap-2",
-        !intake &&
-          "max-lg:grid max-lg:grid-cols-[auto_minmax(0,1fr)_auto] max-lg:items-center max-lg:gap-x-2 max-lg:gap-y-3",
-      )}
-    >
-      {/* A phone's way out. From the large breakpoint the page header's own bordered chevron
-          (or its trail) is the way back, so this one is not drawn there. */}
+    <div className="flex flex-col gap-2 max-lg:grid max-lg:grid-cols-[auto_minmax(0,1fr)_auto] max-lg:items-center max-lg:gap-x-2 max-lg:gap-y-3">
       <Link
-        className="inline-flex min-h-11 w-fit shrink-0 items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text max-lg:min-w-11 max-lg:justify-center max-lg:px-0 max-lg:text-cv-text lg:hidden"
+        className="inline-flex min-h-11 w-fit shrink-0 items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text max-lg:min-w-11 max-lg:justify-center max-lg:px-0 max-lg:text-cv-text"
         state={boardReturnState(applicationId)}
         to={boardPath()}
       >
-        {intake ? (
-          <X aria-hidden="true" className="size-icon-lg shrink-0 lg:hidden" />
-        ) : (
-          <ChevronRight aria-hidden="true" className="size-icon-lg shrink-0 lg:hidden" />
-        )}
+        <ArrowRight aria-hidden="true" className="size-icon-md shrink-0 max-lg:hidden" />
+        <ChevronRight aria-hidden="true" className="size-icon-lg shrink-0 lg:hidden" />
         <span className="max-lg:sr-only">חזרה ללוח המועמדויות</span>
       </Link>
 
       {/* Drawn for sighted readers only: the page's heading and its eyebrow, which say the
           same in words, stay in the document for assistive tech and route focus. */}
-      {intake ? null : (
+      {
         <div aria-hidden="true" className="flex min-w-0 items-center gap-3 lg:hidden">
           {phoneHeader.mark === true && initial !== undefined && initial !== "" ? (
             <span
@@ -185,19 +175,13 @@ export const PreparationWorkflowSteps = ({
             )}
           </span>
         </div>
-      )}
-      {intake || phoneHeader.action === undefined ? null : (
+      }
+      {phoneHeader.action === undefined ? null : (
         <div className="flex shrink-0 items-center lg:hidden">{phoneHeader.action}</div>
       )}
 
-      <div
-        className={cx(
-          !intake && "max-lg:col-span-3",
-          phoneHeader.bar === false && "max-lg:hidden",
-          !desktopSpine && "lg:hidden",
-        )}
-      >
-        <WorkflowStepsRail label="שלבי הכנת קורות החיים" phone={intake ? "marks" : "segments"} steps={located} />
+      <div className={cx("max-lg:col-span-3", phoneHeader.bar === false && "max-lg:hidden")}>
+        <WorkflowStepsRail label="שלבי הכנת קורות החיים" steps={located} />
       </div>
     </div>
   );

@@ -1,195 +1,132 @@
-import { useId, useState } from "react";
-import { ChevronLeft, Clock3, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, CircleCheck } from "lucide-react";
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
-import type { FactStatus } from "@/api/contracts";
 import { cx } from "@/ui/cx";
-import { Field } from "@/ui/Field";
+import { FilterChip } from "@/ui/FilterChip";
 import { SearchInput } from "@/ui/Input";
-import { Select } from "@/ui/Select";
 import type { FactFilters } from "../model/factFilters";
-import { factSourceLabel, factStatusLabels } from "../model/factLabels";
+import { factSourceLabel } from "../model/factLabels";
 
 interface FactPoolFiltersProps {
   filters: FactFilters;
   onChange: (filters: FactFilters) => void;
+  /* Where the banner leads when exactly one fact waits: straight to it. */
+  pendingHref: string | null;
   /* How many facts in the whole pool still wait for confirmation, whatever the filters. */
   pendingCount: number;
   sources: string[];
-  tags: string[];
 }
 
-// Deleted facts are absent from the pool response, so they cannot be filtered here.
-const statuses: FactStatus[] = ["pending", "canonical"];
+const bannerClasses =
+  "flex min-h-11 items-center gap-3 rounded-surface bg-cv-accent px-3.5 py-3 text-start text-cv-on-accent shadow-floating lg:px-4.5 lg:py-3.5 lg:shadow-none";
 
-/* A phone has room for one field across, not four. Below the large breakpoint the bar
-   keeps the search field (its label read, not drawn), and the knowledge file the pool is
-   grouped by becomes a row of chips - the one filter a reader reaches for while
-   scrolling. Status and tag are not lost: they fold behind "סינון", whose count says
-   when either is set, so a narrowed list never looks like the whole pool.
+/* The dark strip that says how many facts wait for the reader. With one waiting it is a
+   link to that fact, as the design draws it; with several, opening one would leave the
+   rest unnamed, so the strip narrows the pool to them instead and a second press gives
+   the whole pool back. */
+const PendingBanner = ({
+  count,
+  href,
+  onToggle,
+  pressed,
+}: {
+  count: number;
+  href: string | null;
+  onToggle: () => void;
+  pressed: boolean;
+}) => {
+  const content = (trailing: ReactNode, detail: ReactNode) => (
+    <>
+      <span
+        aria-hidden="true"
+        className="flex size-9 shrink-0 items-center justify-center rounded-control-sm bg-cv-on-accent/15 lg:size-auto lg:bg-transparent"
+      >
+        <CircleCheck className="size-icon-md lg:size-icon-lg" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-body font-bold">
+          {count === 1 ? "עובדה אחת ממתינה לאישורך" : `${count} עובדות ממתינות לאישורך`}
+        </span>
+        <span className="block text-support opacity-85 lg:hidden">{detail}</span>
+      </span>
+      <span className="text-support font-bold underline max-lg:hidden">{trailing}</span>
+      <ChevronLeft aria-hidden="true" className="size-icon-md shrink-0 lg:hidden" />
+    </>
+  );
 
-   The pending banner is the way into the facts that still wait: one tap narrows the list
-   to them, a second gives the pool back.
+  if (href !== null) {
+    return (
+      <Link className={bannerClasses} to={href}>
+        {content("לבדיקה", "רק עובדות מאושרות נכנסות לטיוטות")}
+      </Link>
+    );
+  }
 
-   A wide screen draws the same bar on one line, as the desktop design does: the banner
-   across the top, then the search field beside the chips and "סינון". Behind "סינון"
-   there are the status, source and tag selects - the source select repeats the chips,
-   but it is the one control that names the source filter as a field, so it stays. */
-export const FactPoolFilters = ({ filters, onChange, pendingCount, sources, tags }: FactPoolFiltersProps) => {
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreId = useId();
-  const moreActive = Number(filters.status !== "all") + Number(filters.tag !== "all");
-  const pendingOnly = filters.status === "pending";
+  return (
+    <button aria-pressed={pressed} className={bannerClasses} onClick={onToggle} type="button">
+      {pressed
+        ? content("הצגת כל המאגר", "מוצגות רק הממתינות. נגיעה נוספת מחזירה את כל המאגר.")
+        : content("הצגת הממתינות", "רק עובדות מאושרות נכנסות לטיוטות")}
+    </button>
+  );
+};
+
+/* The pool's three ways in, in the design's order for each width: a phone stacks the
+   search field, the pending banner and a sideways-scrolling row of chips; a wide screen
+   leads with the banner and sets the field and the chips side by side under it. The
+   chips are the knowledge files the pool holds - the one axis every fact has exactly one
+   of, and the one the phone's list is grouped by. */
+export const FactPoolFilters = ({ filters, onChange, pendingCount, pendingHref, sources }: FactPoolFiltersProps) => {
   const chips = [
     { label: "הכל", value: "all" },
     ...sources.map((source) => ({ label: factSourceLabel(source), value: source })),
   ];
 
   return (
-    <div className="grid gap-3 max-lg:flex max-lg:flex-col lg:flex lg:flex-wrap lg:items-center">
-      <Field className="lg:min-w-72 lg:flex-1" label={<span className="sr-only">חיפוש</span>}>
-        {(control) => (
-          <SearchInput
-            {...control}
-            onChange={(event) => onChange({ ...filters, query: event.target.value })}
-            placeholder="תוכן, מקור או תגית"
-            value={filters.query}
-          />
-        )}
-      </Field>
-
-      {pendingCount === 0 ? null : (
-        <button
-          aria-pressed={pendingOnly}
-          className="flex min-h-11 items-center gap-3 rounded-surface bg-cv-accent px-3.5 py-3 text-start text-cv-on-accent shadow-floating lg:order-first lg:basis-full lg:px-4.5 lg:shadow-none"
-          onClick={() => onChange({ ...filters, status: pendingOnly ? "all" : "pending" })}
-          type="button"
-        >
-          <span
-            aria-hidden="true"
-            className="flex size-9 shrink-0 items-center justify-center rounded-control border border-cv-on-accent/30"
-          >
-            <Clock3 className="size-icon-md" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-body font-bold">
-              {pendingCount === 1 ? "עובדה אחת ממתינה לאישורך" : `${pendingCount} עובדות ממתינות לאישורך`}
-            </span>
-            <span className="block text-support lg:hidden">
-              {pendingOnly ? "מוצגות רק הממתינות. נגיעה נוספת מחזירה את כל המאגר." : "רק עובדות מאושרות נכנסות לטיוטות"}
-            </span>
-          </span>
-          <ChevronLeft aria-hidden="true" className="size-icon-md shrink-0 lg:hidden" />
-          <span className="shrink-0 text-support font-bold underline underline-offset-2 max-lg:hidden">
-            {pendingOnly ? "הצגת כל המאגר" : "לבדיקה"}
-          </span>
-        </button>
-      )}
-
-      {/* The chips scroll sideways; the toggle stays put at the row's end so the other
-          filters are never scrolled out of reach. */}
-      <div className="flex items-center gap-2">
-        <div
-          aria-label="סינון לפי מאגר מקור"
-          className="-my-1 flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 lg:flex-wrap"
-          // A set of toggles under one name; there is no native grouping element for it.
-          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-          role="group"
-        >
-          {chips.map((chip) => {
-            const active = filters.source === chip.value;
-            return (
-              <button
-                aria-pressed={active}
-                className={cx(
-                  "min-h-11 shrink-0 rounded-pill border px-4 text-support font-semibold whitespace-nowrap transition-colors",
-                  active
-                    ? "border-cv-accent bg-cv-accent text-cv-on-accent"
-                    : "border-cv-border bg-cv-surface text-cv-text hover:border-cv-border-strong",
-                )}
-                key={chip.value}
-                onClick={() => onChange({ ...filters, source: chip.value })}
-                type="button"
-              >
-                {chip.label}
-              </button>
-            );
-          })}
-        </div>
-        <button
-          aria-controls={moreId}
-          aria-expanded={moreOpen}
-          className={cx(
-            "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-pill border bg-cv-surface px-3.5 text-support font-semibold",
-            moreActive > 0 ? "border-cv-accent text-cv-accent" : "border-cv-border text-cv-text",
-          )}
-          onClick={() => setMoreOpen((open) => !open)}
-          type="button"
-        >
-          <SlidersHorizontal aria-hidden="true" className="size-icon-md" />
-          סינון
-          {moreActive === 0 ? null : (
-            <span className="rounded-pill bg-cv-accent px-1.5 text-caption text-cv-on-accent tabular-nums">
-              {moreActive}
-              <span className="sr-only"> פעילים</span>
-            </span>
-          )}
-        </button>
+    <div className="flex flex-col gap-3.5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
+      <div className="min-w-0 lg:flex-1 lg:basis-70">
+        <label className="sr-only" htmlFor="fact-search">
+          חיפוש עובדות
+        </label>
+        <SearchInput
+          className="shadow-surface lg:shadow-none"
+          id="fact-search"
+          onChange={(event) => onChange({ ...filters, query: event.target.value })}
+          placeholder="חיפוש עובדה, מיומנות או תפקיד"
+          value={filters.query}
+        />
       </div>
 
-      {/* The folded panel. A wide screen sets its three selects in a row under the bar;
-          the source select is drawn there only - the chips are its phone form. */}
+      {pendingCount === 0 ? null : (
+        <div className="flex flex-col lg:order-first lg:basis-full">
+          <PendingBanner
+            count={pendingCount}
+            href={pendingHref}
+            onToggle={() => onChange({ ...filters, pendingOnly: !filters.pendingOnly })}
+            pressed={filters.pendingOnly}
+          />
+        </div>
+      )}
+
+      {/* A phone's row runs to the screen's edges and scrolls sideways; a wide screen has
+          room to wrap it beside the field. */}
       <div
-        className={cx("flex-col gap-3 lg:basis-full lg:grid-cols-3", moreOpen ? "flex lg:grid" : "hidden")}
-        id={moreId}
+        aria-label="סינון לפי מאגר מקור"
+        className={cx("flex gap-2", "max-lg:-mx-4 max-lg:overflow-x-auto max-lg:px-4 max-lg:py-0.5", "lg:flex-wrap")}
+        // A set of toggles under one name; there is no native grouping element for it.
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+        role="group"
       >
-        <Field label="מעמד">
-          {(control) => (
-            <Select
-              {...control}
-              onChange={(event) => onChange({ ...filters, status: event.target.value as FactStatus | "all" })}
-              value={filters.status}
-            >
-              <option value="all">כל המעמדות</option>
-              {statuses.map((status) => (
-                <option key={status} value={status}>
-                  {factStatusLabels[status]}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-        <Field className="max-lg:hidden" label="מאגר מקור">
-          {(control) => (
-            <Select
-              {...control}
-              onChange={(event) => onChange({ ...filters, source: event.target.value })}
-              value={filters.source}
-            >
-              <option value="all">כל המאגרים</option>
-              {sources.map((source) => (
-                <option key={source} value={source}>
-                  {factSourceLabel(source)}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-        <Field label="תגית">
-          {(control) => (
-            <Select
-              {...control}
-              onChange={(event) => onChange({ ...filters, tag: event.target.value })}
-              value={filters.tag}
-            >
-              <option value="all">כל התגיות</option>
-              {tags.map((tag) => (
-                <option key={tag} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
+        {chips.map((chip) => (
+          <FilterChip
+            key={chip.value}
+            onClick={() => onChange({ ...filters, source: chip.value })}
+            pressed={filters.source === chip.value}
+          >
+            {chip.label}
+          </FilterChip>
+        ))}
       </div>
     </div>
   );

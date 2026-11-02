@@ -1,85 +1,39 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { type ApplicationListQuery, applicationListQueryOptions } from "@/api/applications";
 import { rememberBoardQuery } from "@/navigation/boardReturn";
-import { useDebouncedValue } from "./useDebouncedValue";
 import { paramsFromQuery, queryFromParams } from "../model/applicationListParams";
-
-const SEARCH_DEBOUNCE_MS = 300;
-
-interface QueryUpdateOptions {
-  replace?: boolean;
-  resetOffset?: boolean;
-}
 
 /** Owns the board's shareable URL state and its server query.
  *
- * Search text intentionally remains a local input buffer. Only its settled value enters
- * the URL and query key, so typing stays immediate without turning the returned server
- * page into client-owned state.
+ * `withPreset` is false for the stages view: it draws the whole open board by recruitment
+ * stage and offers no slices, so a slice chosen in the cards view must not silently
+ * narrow it. The slice stays in the URL for the way back to the cards.
  */
-export const useApplicationListQuery = () => {
+export const useApplicationListQuery = ({ withPreset }: { withPreset: boolean }) => {
   const [params, setParams] = useSearchParams();
   const query = queryFromParams(params);
-  const urlSearch = query.search ?? "";
-  const [searchInput, setSearchInput] = useState(urlSearch);
-  const settledSearch = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
-  const externalSearch = useRef<string | null>(null);
-  const previousUrlSearch = useRef(urlSearch);
 
   const updateQuery = useCallback(
-    (next: ApplicationListQuery, { resetOffset = true, replace = false }: QueryUpdateOptions = {}) => {
-      setParams(paramsFromQuery(resetOffset ? { ...next, offset: 0 } : next), { replace });
+    (next: ApplicationListQuery) => {
+      setParams(paramsFromQuery(next));
     },
     [setParams],
   );
 
   /* The board's URL is the board's state, so remembering it here is remembering it once,
-     wherever it changed from - a filter, the search box settling, a page step, or a link
-     that arrived already filtered. The screens that offer a way back read it rather than
-     each carrying the parameters themselves.
-
-     Round-tripped through the board's own parsing rather than stored as the raw location:
-     an address typed or shared with a stale or invented parameter would otherwise be
-     handed back later as if the board had asked for it. `updateQuery` writes the same
-     canonical form, so only the landing URL can differ. */
+     wherever it changed from. The screens that offer a way back read it rather than each
+     carrying the parameters themselves. Round-tripped through the board's own parsing, so
+     an address arriving with a stale or invented parameter is not handed back later as a
+     narrowing the reader chose. */
   const rememberedQuery = paramsFromQuery(query).toString();
   useEffect(() => {
     rememberBoardQuery(rememberedQuery);
   }, [rememberedQuery]);
 
-  useEffect(() => {
-    if (urlSearch !== previousUrlSearch.current) {
-      previousUrlSearch.current = urlSearch;
-      externalSearch.current = urlSearch;
-      setSearchInput(urlSearch);
-    }
-  }, [urlSearch]);
+  const listQuery = useQuery(applicationListQueryOptions(withPreset ? query : { ...query, preset: undefined }));
 
-  useEffect(() => {
-    if (externalSearch.current !== null) {
-      if (settledSearch === externalSearch.current) externalSearch.current = null;
-      return;
-    }
-    if (settledSearch !== (query.search ?? "")) {
-      updateQuery({ ...query, search: settledSearch === "" ? undefined : settledSearch }, { replace: true });
-    }
-  }, [query, settledSearch, updateQuery]);
-
-  const listQuery = useQuery(
-    applicationListQueryOptions({
-      ...query,
-      search: settledSearch === "" ? undefined : settledSearch,
-    }),
-  );
-
-  return {
-    listQuery,
-    query,
-    searchInput,
-    setSearchInput,
-    updateQuery,
-  };
+  return { listQuery, query, updateQuery };
 };

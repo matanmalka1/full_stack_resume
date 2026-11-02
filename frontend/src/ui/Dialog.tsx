@@ -1,6 +1,5 @@
-import { type ReactNode, type RefObject, useEffect, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef } from "react";
 
-import { surfaceClasses } from "./surface";
 import { cx } from "./cx";
 import { wrapDialogFocus } from "./dialogFocus";
 
@@ -40,10 +39,8 @@ interface DialogProps {
      container either way, so a caller may still reorder a command with `order-*`. */
   footerLayout?: "row" | "stack";
   headingId: string;
-  /* A mark naming what the dialog is about - archive, delete, rebuild, a conflict. An
-     "alert" draws it over the title at every width; a "sheet" draws it over the title on
-     a phone and beside it from the large breakpoint, as the desktop conflict dialog does.
-     Decorative: the title says it. */
+  /* A mark over the title naming what the dialog is about - archive, delete, rebuild. A
+     confirmation leads with it at every width. Decorative: the title says it. */
   icon?: ReactNode;
   onClose: () => void;
   open: boolean;
@@ -51,13 +48,9 @@ interface DialogProps {
      the same centred surface. A "sheet" (the default) rises from the bottom edge, full
      width, under a grab handle: it holds a form or a record, and a thumb reaches its
      commands there. An "alert" stays a centred card - a two-answer question that should
-     interrupt, as `ConfirmDialog` asks it. */
+     interrupt, as `ConfirmDialog` asks it - and is answered by its own two commands, so
+     it draws no close mark at any width; Escape still cancels it. */
   presentation?: "sheet" | "alert";
-  /* How the dialog stands from the large breakpoint. "modal" (the default) is the centred
-     card. "drawer" docks it to the inline-end edge at the viewport's full height - a
-     record looked at beside the list it came from (the board's job details), whose one
-     command sits at the drawer's foot. Below the breakpoint `presentation` decides alone. */
-  widePresentation?: "modal" | "drawer";
   /* Where focus goes once the dialog closes, for a dialog that is not always opened by
      the control that reopens it. Native restoration returns focus to whatever held it at
      `showModal()`, which for a dialog the screen opened by itself is an unrelated control,
@@ -83,14 +76,17 @@ export const Dialog = ({
   restoreFocusTo,
   size = "default",
   title,
-  widePresentation = "modal",
 }: DialogProps) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const openedWith = useRef("");
+  /* Set while the dialog closes itself on unmount (below), so the `close` event that
+     close() queues is not read as the reader closing it. Under StrictMode the dialog is
+     unmounted and remounted in place, and that event would otherwise arrive after the
+     remount and close the dialog the reader just opened. */
+  const closedForUnmount = useRef(false);
   const heightClass = size === "wide" ? "max-h-[85dvh]" : "max-h-[calc(100dvh-2rem)]";
   const sheet = presentation === "sheet";
-  const drawer = widePresentation === "drawer";
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -111,28 +107,36 @@ export const Dialog = ({
     }
   }, [open]);
 
+  /* A caller that unmounts the dialog instead of passing `open={false}` - the usual
+     `x === null ? null : <Dialog open …/>` - would remove a modal without closing it,
+     and the browser restores focus to the invoker only on `close()`. Closing it before
+     the node leaves the document keeps that restoration for every way out, the backdrop
+     included. A layout effect, because its cleanup runs before the node is removed. */
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    return () => {
+      if (dialog?.open) {
+        closedForUnmount.current = true;
+        dialog.close();
+      }
+    };
+  }, []);
+
   return (
     <dialog
       aria-describedby={description === undefined ? undefined : `${headingId}-description`}
       aria-labelledby={headingId}
-      className={surfaceClasses(
-        cx(
-          `${heightClass} m-auto w-full ${
-            size === "wide" ? "max-w-3xl" : "max-w-xl"
-          } overflow-hidden bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:transition-opacity`,
-          /* The desktop dialog is a borderless card with the sheet's large radius, its
-             parts divided by space rather than rules; a confirmation is narrower. */
-          "lg:rounded-sheet lg:border-0",
-          !sheet && "lg:max-w-lg",
-          drawer && "lg:me-0 lg:h-dvh lg:max-h-dvh lg:max-w-[28.75rem] lg:rounded-none",
-          /* The sheet drops to the bottom edge - a modal dialog is fixed to the viewport,
-             so a zero bottom margin under an auto top one is the whole anchoring - and
-             spans the width with only its top corners rounded. Below `sm` the UA's own
-             max-width would leave a gutter beside it, so the width cap goes too. */
-          sheet
-            ? "cv-sheet max-lg:mb-0 max-lg:rounded-t-sheet max-lg:rounded-b-none max-lg:border-b-0 max-sm:max-w-none"
-            : "max-lg:w-[calc(100%-2rem)] max-lg:rounded-sheet",
-        ),
+      className={cx(
+        `${heightClass} m-auto w-full ${
+          size === "wide" ? "max-w-3xl" : "max-w-xl"
+        } overflow-hidden rounded-dialog border border-cv-hairline bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:transition-opacity`,
+        /* The sheet drops to the bottom edge - a modal dialog is fixed to the viewport,
+           so a zero bottom margin under an auto top one is the whole anchoring - and
+           spans the width with only its top corners rounded. Below `sm` the UA's own
+           max-width would leave a gutter beside it, so the width cap goes too. */
+        sheet
+          ? "cv-sheet max-lg:mb-0 max-lg:rounded-t-sheet max-lg:rounded-b-none max-lg:border-0 max-lg:shadow-sheet max-sm:max-w-none"
+          : "max-lg:w-[calc(100%-2rem)]",
       )}
       onCancel={(event) => {
         if (!dismissible) {
@@ -158,6 +162,10 @@ export const Dialog = ({
            close event, so without stopping it here the child's event reaches an owning
            dialog and dismisses that one as well. */
         event.stopPropagation();
+        if (closedForUnmount.current) {
+          closedForUnmount.current = false;
+          return;
+        }
         onClose();
         restoreFocusTo?.current?.focus();
       }}
@@ -165,58 +173,49 @@ export const Dialog = ({
     >
       {/* The bottom padding keeps a sheet's last control above the home indicator. It is
           zero wherever the device has no such inset, and a centred dialog never meets it. */}
-      <div
-        className={cx(
-          "flex flex-col",
-          heightClass,
-          sheet && "max-lg:pb-[env(safe-area-inset-bottom)]",
-          drawer && "lg:h-dvh lg:max-h-dvh",
-        )}
-        dir="rtl"
-      >
+      <div className={cx("flex flex-col", heightClass, sheet && "max-lg:pb-[env(safe-area-inset-bottom)]")} dir="rtl">
         {/* Drawn, not a control: a sheet is closed by its X, Escape or the backdrop. The
             handle only says what kind of surface this is. */}
         {sheet ? (
-          <div aria-hidden="true" className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-pill bg-cv-border lg:hidden" />
+          <div
+            aria-hidden="true"
+            className="mx-auto mt-2 h-1.25 w-10 shrink-0 rounded-pill bg-cv-border-soft lg:hidden"
+          />
         ) : null}
         <div
           className={cx(
-            "flex shrink-0 items-start justify-between gap-4 border-b border-cv-border px-6 py-5 lg:border-b-0 lg:px-7 lg:pt-7 lg:pb-0",
-            sheet
-              ? "max-lg:border-b-0 max-lg:px-4 max-lg:pt-2.5 max-lg:pb-3"
-              : "max-lg:border-b-0 max-lg:px-5 max-lg:pt-5 max-lg:pb-3",
+            "flex shrink-0 items-start justify-between gap-3 px-7 pt-7 pb-4",
+            sheet ? "max-lg:px-4 max-lg:pt-2.5 max-lg:pb-3" : "max-lg:px-5 max-lg:pt-5 max-lg:pb-3",
           )}
         >
-          <div className={cx("min-w-0", sheet && icon !== undefined && "lg:flex lg:items-center lg:gap-3.5")}>
+          <div className="min-w-0">
             {icon === undefined ? null : (
-              <div aria-hidden="true" className={cx("mb-3.5", sheet && "lg:mb-0 lg:shrink-0")}>
+              <div aria-hidden="true" className="mb-4">
                 {icon}
               </div>
             )}
-            <div className="min-w-0">
-              <h2
-                className="text-heading-md font-extrabold tracking-tight text-cv-text"
-                id={headingId}
-                ref={headingRef}
-                tabIndex={-1}
-              >
-                {title}
-              </h2>
-              {description === undefined ? null : (
-                <p className="mt-1 text-support text-cv-text-muted" id={`${headingId}-description`}>
-                  {description}
-                </p>
+            <h2
+              className={cx(
+                "text-heading-md font-extrabold tracking-tight text-cv-text",
+                sheet && "max-lg:text-heading-sheet",
               )}
-            </div>
+              id={headingId}
+              ref={headingRef}
+              tabIndex={-1}
+            >
+              {title}
+            </h2>
+            {description === undefined ? null : (
+              <p className="mt-0.5 text-label text-cv-text-muted" id={`${headingId}-description`}>
+                {description}
+              </p>
+            )}
           </div>
-          {/* A sheet always has its ×. A confirmation is answered by its own two buttons,
-              and on a phone that is all it draws; on a wide screen it keeps the × it always
-              had, so a reader who reaches for the corner still finds a way out. Escape
-              cancels either. */}
-          {dismissible ? (
+          {/* A confirmation is closed by its own two answers, as the design draws it. */}
+          {dismissible && sheet ? (
             <IconButton
               aria-label="סגירה"
-              className={cx("-me-2 -mt-1 text-cv-text-muted hover:text-cv-text", !sheet && "max-lg:hidden")}
+              className="-me-2 -mt-1.5 text-cv-text hover:bg-cv-surface-muted lg:size-10"
               onClick={onClose}
             >
               <svg aria-hidden="true" className="size-icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -227,8 +226,7 @@ export const Dialog = ({
         </div>
         <div
           className={cx(
-            "min-h-0 overflow-y-auto px-6 py-5 text-body leading-7 lg:px-7",
-            drawer && "lg:flex-1",
+            "min-h-0 overflow-y-auto px-7 pt-0.5 pb-2 text-body leading-relaxed",
             sheet ? "max-lg:px-4 max-lg:pt-1 max-lg:pb-4" : "max-lg:px-5 max-lg:pt-0 max-lg:pb-2",
           )}
         >
@@ -240,13 +238,12 @@ export const Dialog = ({
         {footer === undefined ? null : (
           <div
             className={cx(
-              "flex shrink-0 flex-wrap justify-end gap-3 border-t border-cv-border px-6 py-4 lg:border-t-0 lg:px-7 lg:pt-0 lg:pb-7",
-              "max-lg:gap-2 max-lg:text-body max-lg:*:min-h-12",
-              /* The desktop footer's commands are the design's 44px buttons, whatever size
-                 the caller asked for: they close the dialog's one decision. */
-              "lg:gap-2.5 lg:*:min-h-11 lg:*:px-5",
+              "flex shrink-0 flex-wrap justify-end gap-2.5 px-7 pt-4 pb-7",
+              "max-lg:gap-2 max-lg:*:min-h-12.5",
               footerLayout === "stack" ? "max-lg:flex-col max-lg:*:w-full" : "max-lg:*:flex-1",
-              sheet ? "max-lg:px-4 max-lg:pt-3" : "max-lg:border-t-0 max-lg:px-5 max-lg:pt-3 max-lg:pb-5",
+              sheet
+                ? "max-lg:border-t max-lg:border-cv-hairline max-lg:px-4 max-lg:pt-3 max-lg:pb-4"
+                : "max-lg:px-5 max-lg:pt-3 max-lg:pb-5",
             )}
           >
             {footer}

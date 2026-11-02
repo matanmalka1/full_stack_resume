@@ -1,19 +1,19 @@
-import type { FormEventHandler } from "react";
+import type { FormEventHandler, ReactNode } from "react";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 
 import type { DuplicateMatch } from "@/api/contracts";
-import { surfaceClasses } from "@/ui/surface";
-import type { IntakeDraftStatus as DraftStatus } from "../hooks/useApplicationIntakeDraft";
+import { cardClasses } from "@/ui/surface";
 import { type ApplicationIntakeFields } from "../model/applicationIntake";
 import { DuplicateChoices } from "./DuplicateChoices";
-import { IntakeDraftStatus } from "./IntakeDraftStatus";
 import { IntakeFeedback } from "./IntakeFeedback";
 import { JobDetailsFields } from "./JobDetailsFields";
 import { JobTextField } from "./JobTextField";
 
 interface ApplicationIntakeFormProps {
+  /* The form's own commands, closing its card on a wide screen. A phone draws them in the
+     bar on the screen's bottom edge instead, and passes nothing here. */
+  actions?: ReactNode;
   duplicates: DuplicateMatch[] | null;
-  draftStatus: DraftStatus;
   error: Error | null;
   errors: FieldErrors<ApplicationIntakeFields>;
   inlineFields: ReadonlySet<string>;
@@ -21,15 +21,17 @@ interface ApplicationIntakeFormProps {
   formId: string;
   jobText: string;
   onInputChanged: (field: keyof ApplicationIntakeFields) => void;
+  onPaste: (text: string) => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
   register: UseFormRegister<ApplicationIntakeFields>;
 }
 
-/* On a phone the form is not one card: each group is its own card on the canvas
-   (`intakeSectionClasses`), and the form around them stays flat. */
+/* A wide screen holds the whole form in one card: the posting, its details, and the
+   commands under a rule. On a phone each group is a card of its own on the canvas, and
+   the form around them stays flat. */
 export const ApplicationIntakeForm = ({
+  actions,
   duplicates,
-  draftStatus,
   error,
   errors,
   formId,
@@ -37,29 +39,32 @@ export const ApplicationIntakeForm = ({
   isStale,
   jobText,
   onInputChanged,
+  onPaste,
   onSubmit,
   register,
 }: ApplicationIntakeFormProps) => (
   <form
-    className={surfaceClasses(
-      "flex flex-col gap-6 bg-cv-surface p-5 shadow-surface sm:p-7 max-lg:gap-4 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none",
+    className={cardClasses(
+      "flex flex-col gap-7 p-6 max-lg:gap-4.5 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none",
     )}
     id={formId}
     noValidate
     onSubmit={onSubmit}
   >
-    <IntakeDraftStatus status={draftStatus} />
-    {/* The posting first, then the job it names: both designs lead with the text the step
-        is about. In the document as drawn, so the tab order and the reading order are the
-        visual one at every width. */}
-    <JobTextField
-      error={errors.job_text?.message}
-      jobText={jobText}
-      onInputChanged={onInputChanged}
-      register={register}
-    />
-    <JobDetailsFields errors={errors} onInputChanged={onInputChanged} register={register} />
+    <div className="max-lg:rounded-surface max-lg:border max-lg:border-cv-hairline max-lg:bg-cv-surface max-lg:p-3.5 max-lg:shadow-surface">
+      <JobTextField
+        error={errors.job_text?.message}
+        jobText={jobText}
+        onInputChanged={onInputChanged}
+        onPaste={onPaste}
+        register={register}
+      />
+    </div>
+    <div className="max-lg:rounded-surface max-lg:border max-lg:border-cv-hairline max-lg:bg-cv-surface max-lg:p-3.5 max-lg:shadow-surface">
+      <JobDetailsFields errors={errors} onInputChanged={onInputChanged} register={register} />
+    </div>
     {duplicates === null ? null : <DuplicateChoices matches={duplicates} />}
     <IntakeFeedback error={error} inlineFields={inlineFields} isStale={isStale} />
+    {actions === undefined ? null : <div className="border-t border-cv-hairline pt-5">{actions}</div>}
   </form>
 );

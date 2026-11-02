@@ -1,92 +1,51 @@
 import { describe, expect, it } from "vitest";
 
-import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListParams";
+import { BOARD_LIMIT, paramsFromQuery, queryFromParams } from "./applicationListParams";
 
 describe("application list URL parameters", () => {
-  it("reads every supported filter and rounds an offset down to a page boundary", () => {
+  it("reads the slice and the order, and always asks for the open board in one page", () => {
     const params = new URLSearchParams([
-      ["activity", "closed"],
-      ["stage", "ready_to_draft"],
-      ["stage", "not-a-stage"],
-      ["stage", "ready"],
-      ["recruitment_status", "interview"],
-      ["recruitment_status", "not-a-status"],
       ["preset", "needs_attention"],
-      ["search", "platform engineer"],
       ["sort", "company"],
-      ["offset", String(2 * PAGE_SIZE + 1)],
     ]);
 
     expect(queryFromParams(params)).toEqual({
-      activity: "closed",
-      stages: ["ready_to_draft", "ready"],
-      recruitmentStatuses: ["interview"],
+      activity: "open",
       preset: "needs_attention",
-      search: "platform engineer",
       sort: "company",
-      limit: PAGE_SIZE,
-      offset: 2 * PAGE_SIZE,
+      limit: BOARD_LIMIT,
     });
   });
 
-  it.each(["-1", "3abc", "1e9", "1.5", "9007199254740992"])(
-    "rejects an offset the pager could not have produced: %s",
-    (offset) => {
-      expect(queryFromParams(new URLSearchParams({ offset }))).toEqual({
-        activity: "open",
-        sort: "updated",
-        limit: PAGE_SIZE,
-      });
-    },
-  );
-
-  it("falls back from unknown closed-set values without forwarding them", () => {
+  /* The board no longer has a search box, stage menus or a pager. An old link that still
+     carries their parameters opens the plain board rather than a narrowing nothing on
+     screen can show or undo. */
+  it("ignores the parameters of the removed filter panel and pager", () => {
     expect(
       queryFromParams(
         new URLSearchParams({
-          activity: "deleted",
-          preset: "everything",
-          recruitment_status: "waiting_forever",
-          sort: "random",
-          stage: "invented",
+          activity: "closed",
+          offset: "48",
+          recruitment_status: "interview",
+          search: "Acme",
+          stage: "ready",
         }),
       ),
-    ).toEqual({
+    ).toEqual({ activity: "open", sort: "updated", limit: BOARD_LIMIT });
+  });
+
+  it("falls back from unknown closed-set values without forwarding them", () => {
+    expect(queryFromParams(new URLSearchParams({ preset: "everything", sort: "random" }))).toEqual({
       activity: "open",
       sort: "updated",
-      limit: PAGE_SIZE,
+      limit: BOARD_LIMIT,
     });
   });
 
-  it("writes only non-default state and preserves repeated filters", () => {
-    const params = paramsFromQuery({
-      activity: "closed",
-      stages: ["ready_to_draft", "ready"],
-      recruitmentStatuses: ["interview", "offer"],
-      preset: "active_interviews",
-      search: "Acme & Sons",
-      sort: "created",
-      limit: 100,
-      offset: 50,
-    });
+  it("writes only non-default state", () => {
+    const params = paramsFromQuery({ activity: "open", preset: "active_interviews", sort: "created", limit: 200 });
 
-    expect(params.get("activity")).toBe("closed");
-    expect(params.getAll("stage")).toEqual(["ready_to_draft", "ready"]);
-    expect(params.getAll("recruitment_status")).toEqual(["interview", "offer"]);
-    expect(params.get("preset")).toBe("active_interviews");
-    expect(params.get("search")).toBe("Acme & Sons");
-    expect(params.get("sort")).toBe("created");
-    expect(params.get("offset")).toBe("50");
-    expect(params.has("limit")).toBe(false);
-
-    expect(
-      paramsFromQuery({
-        activity: "open",
-        search: "",
-        sort: "updated",
-        limit: PAGE_SIZE,
-        offset: 0,
-      }).toString(),
-    ).toBe("");
+    expect(params.toString()).toBe("preset=active_interviews&sort=created");
+    expect(paramsFromQuery({ activity: "open", sort: "updated", limit: BOARD_LIMIT }).toString()).toBe("");
   });
 });

@@ -1,25 +1,11 @@
-import { Briefcase, Building2, Link2, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 
 import { Field } from "@/ui/Field";
-import { FormSection } from "@/ui/FormSection";
 import { Input } from "@/ui/Input";
+import { cx } from "@/ui/cx";
 import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS, validateSourceUrl } from "@/features/application-detail";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
-import { intakeSectionClasses } from "./intakeSection";
-
-const examplePlaceholder = (example: string) => `לדוגמה: \u2066${example}\u2069`;
-
-const IconField = ({ children, icon: Icon }: { children: ReactNode; icon: LucideIcon }) => (
-  <span className="relative block">
-    <Icon
-      aria-hidden="true"
-      className="pointer-events-none absolute start-3.5 top-1/2 z-(--cv-z-content-raised) size-icon-md -translate-y-1/2 text-cv-text-muted"
-    />
-    {children}
-  </span>
-);
 
 interface JobDetailsFieldsProps {
   errors: FieldErrors<ApplicationIntakeFields>;
@@ -27,68 +13,82 @@ interface JobDetailsFieldsProps {
   register: UseFormRegister<ApplicationIntakeFields>;
 }
 
+/* The job's three names - who, what, where it was posted - as one group under its own
+   legend. A phone sets company and role side by side over the link; a wide screen puts
+   all three on one row. */
 export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetailsFieldsProps) => (
-  <FormSection className={intakeSectionClasses} divided={false} title="פרטי המשרה">
-    <div className="grid gap-4 md:grid-cols-2">
-      <Field error={errors.company?.message} label="שם החברה">
+  <fieldset className="flex min-w-0 flex-col gap-3">
+    <legend className="mb-3 text-label font-bold text-cv-text max-lg:mb-2.5">פרטי המשרה</legend>
+    <div className="grid grid-cols-2 gap-x-2.5 gap-y-3 lg:grid-cols-3 lg:gap-x-3.5">
+      <DetailField error={errors.company?.message} label="חברה">
         {(control) => (
-          <IconField icon={Building2}>
-            <Input
-              {...control}
-              {...register("company", {
-                onChange: () => onInputChanged("company"),
-                validate: (value) => value.trim() !== "" || "יש להזין את שם החברה.",
-              })}
-              autoComplete="organization"
-              className="rtl-placeholder pr-10"
-              dir="auto"
-              maxLength={LABEL_MAX_CHARACTERS}
-              placeholder={examplePlaceholder("monday.com")}
-            />
-          </IconField>
+          <Input
+            {...control}
+            {...register("company", {
+              onChange: () => onInputChanged("company"),
+              validate: (value) => value.trim() !== "" || "יש להזין את שם החברה.",
+            })}
+            autoComplete="organization"
+            className="rtl-placeholder"
+            dir="auto"
+            maxLength={LABEL_MAX_CHARACTERS}
+            placeholder="שם החברה"
+          />
         )}
-      </Field>
-      <Field error={errors.target_role?.message} label="תפקיד היעד">
+      </DetailField>
+      <DetailField error={errors.target_role?.message} label="תפקיד">
         {(control) => (
-          <IconField icon={Briefcase}>
-            <Input
-              {...control}
-              {...register("target_role", {
-                onChange: () => onInputChanged("target_role"),
-                validate: (value) => value.trim() !== "" || "יש להזין את תפקיד היעד.",
-              })}
-              className="rtl-placeholder pr-10"
-              dir="auto"
-              maxLength={LABEL_MAX_CHARACTERS}
-              placeholder={examplePlaceholder("Account Manager")}
-            />
-          </IconField>
+          <Input
+            {...control}
+            {...register("target_role", {
+              onChange: () => onInputChanged("target_role"),
+              validate: (value) => value.trim() !== "" || "יש להזין את תפקיד היעד.",
+            })}
+            className="rtl-placeholder"
+            dir="auto"
+            maxLength={LABEL_MAX_CHARACTERS}
+            placeholder="שם התפקיד"
+          />
         )}
-      </Field>
-    </div>
-    <Field
-      error={errors.source_url?.message}
-      hint="הכתובת נשמרת לצורך תיעוד בלבד. תוכן המשרה לא מיובא ממנה אוטומטית."
-      label="כתובת המשרה"
-      optional
-    >
-      {(control) => (
-        <IconField icon={Link2}>
+      </DetailField>
+      <DetailField className="max-lg:col-span-2" error={errors.source_url?.message} label="קישור למודעה (לא חובה)">
+        {(control) => (
           <Input
             {...control}
             {...register("source_url", { onChange: () => onInputChanged("source_url"), validate: validateSourceUrl })}
-            /* Marked as an example like its two neighbours. A bare URL in muted grey read as
-               an address already filled in. The empty field sits on the RTL edge with them;
-               a typed address is still an LTR island. */
-            className="ltr-island rtl-placeholder pr-10"
+            /* The empty field sits on the RTL edge with its neighbours; a typed address is
+               still an LTR island. */
+            className="ltr-island rtl-placeholder"
             dir="ltr"
             inputMode="url"
             maxLength={SOURCE_URL_MAX_CHARACTERS}
-            placeholder={examplePlaceholder("https://company.example/careers/job")}
+            placeholder={"\u2066https://\u2069"}
             type="url"
           />
-        </IconField>
-      )}
-    </Field>
-  </FormSection>
+        )}
+      </DetailField>
+    </div>
+  </fieldset>
+);
+
+/* A field of the group: a quieter label than a standalone field's, since the legend above
+   already names what the three are. The control's name and error wiring are `Field`'s. */
+const DetailField = ({
+  children,
+  className,
+  error,
+  label,
+}: {
+  children: Parameters<typeof Field>[0]["children"];
+  className?: string;
+  error: string | undefined;
+  label: ReactNode;
+}) => (
+  <Field
+    className={cx("min-w-0 [&_label]:text-support [&_label]:font-medium [&_label]:text-cv-text-muted", className)}
+    error={error}
+    label={label}
+  >
+    {children}
+  </Field>
 );

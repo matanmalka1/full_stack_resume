@@ -1,3 +1,5 @@
+import { TriangleAlert } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationDetail, Reason } from "@/api/contracts";
@@ -5,7 +7,6 @@ import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
-import { cx } from "@/ui/cx";
 import { ReasonCallout } from "../../components/ReasonCallout";
 import { type PreparationScreen, actionDestination, screenPath } from "../../model/actionDestinations";
 import {
@@ -13,6 +14,7 @@ import {
   actionLabel,
   blockedReasonLabel,
   missingRequirement,
+  reasonTitle,
   warningDetail,
   warningTitle,
 } from "../../model/preparationLabels";
@@ -68,35 +70,13 @@ const ResolvableReasonCallout = ({
   );
 };
 
-/* One alert backdrop with a fixed severity/order: review blockers, warnings, then the
-   blocked actions no callout above already explains. There is no staleness to report:
-   an outdated approval or check is a state of the document (§6), not a reason here.
-   Keeping this region visually quiet lets the action surface beside it remain the clear
-   place to continue the workflow. */
-export const PreparationAlerts = ({
-  aside = false,
-  detail,
-  screen = "preparation",
-  showReviewReasons = true,
-}: {
-  /* Whether the region is the preparation step's desktop aside: from the large breakpoint
-     it then takes the grid's end column beside the work and names itself in view. The
-     editor and the ready screen place it in their own flow and leave this off. */
-  aside?: boolean;
-  detail: ApplicationDetail;
-  /* The current screen decides whether a reason's resolution is already beside it. */
-  screen?: PreparationScreen;
-  /* The editor renders review reasons with their inline resolution controls. */
-  showReviewReasons?: boolean;
-}) => {
-  const currentPath = screenPath(screen, detail.application.id);
-  const reviewReasons = showReviewReasons ? detail.review_reasons : [];
+/* `blocked_actions` holds only actions the stage allows and a blocker withholds. A reason
+   already stated by its own callout is not repeated once for every action it blocks, and a
+   reason with no sentence in the translation table stays quiet until the UI has an
+   intentional one. */
+const exceptionalBlockedActions = (detail: ApplicationDetail) => {
   const statedReasonCodes = new Set(detail.review_reasons.map((reason) => reason.code));
-  /* `blocked_actions` holds only actions the stage allows and a blocker withholds. A
-     reason already stated by its own callout is not repeated once for every action it
-     blocks, and a reason with no sentence in the translation table stays quiet until the
-     UI has an intentional one. */
-  const exceptionalBlockedActions = detail.blocked_actions.flatMap((blocked) => {
+  return detail.blocked_actions.flatMap((blocked) => {
     const reasons = blocked.reasons.flatMap((reason) => {
       if (statedReasonCodes.has(reason)) {
         return [];
@@ -106,32 +86,139 @@ export const PreparationAlerts = ({
     });
     return reasons.length === 0 ? [] : [{ action: blocked.action, reasons: [...new Set(reasons)] }];
   });
-  const hasAlerts = reviewReasons.length > 0 || detail.warnings.length > 0 || exceptionalBlockedActions.length > 0;
+};
 
-  if (!hasAlerts) {
+/* Whether the region has anything to say, for a caller that lays out a column around it. */
+export const hasPreparationAlerts = (detail: ApplicationDetail, showReviewReasons = true): boolean =>
+  (showReviewReasons && detail.review_reasons.length > 0) ||
+  detail.warnings.length > 0 ||
+  exceptionalBlockedActions(detail).length > 0;
+
+/* One alert in the compact list: its title, the sentence behind it folded under a press,
+   and the way to the control that answers it where one exists elsewhere. */
+const CompactAlert = ({ action, children, title }: { action?: ReactNode; children?: ReactNode; title: string }) => (
+  <li className="flex items-start gap-2.5">
+    <TriangleAlert aria-hidden="true" className="mt-0.5 size-icon-lg shrink-0 text-cv-text" />
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      <p className="text-label font-bold text-cv-text">{title}</p>
+      {children === undefined ? null : (
+        <details className="group text-support text-cv-text-muted">
+          <summary className="w-fit cursor-pointer list-none text-cv-text underline underline-offset-4 [&::-webkit-details-marker]:hidden">
+            פרטי האזהרה
+          </summary>
+          <div className="mt-1.5 leading-relaxed">{children}</div>
+        </details>
+      )}
+      {action}
+    </div>
+  </li>
+);
+
+/* One alert backdrop with a fixed severity/order: review blockers, warnings, then the
+   blocked actions no callout above already explains. There is no staleness to report:
+   an outdated approval or check is a state of the document (§6), not a reason here.
+   Keeping this region visually quiet lets the action surface beside it remain the clear
+   place to continue the workflow. */
+export const PreparationAlerts = ({
+  compact = false,
+  detail,
+  screen = "preparation",
+  showReviewReasons = true,
+}: {
+  /* The verification step's quiet list: one line per alert, its sentence folded under a
+     press, instead of a callout each. */
+  compact?: boolean;
+  detail: ApplicationDetail;
+  /* The current screen decides whether a reason's resolution is already beside it. */
+  screen?: PreparationScreen;
+  /* The editor renders review reasons with their inline resolution controls. */
+  showReviewReasons?: boolean;
+}) => {
+  const currentPath = screenPath(screen, detail.application.id);
+  const reviewReasons = showReviewReasons ? detail.review_reasons : [];
+  const blockedActions = exceptionalBlockedActions(detail);
+
+  if (!hasPreparationAlerts(detail, showReviewReasons)) {
     return null;
+  }
+
+  const rebuildHrefFor = (code: string) =>
+    code === "DOCUMENT_ON_OLDER_ANALYSIS" && detail.available_actions.includes("build_from_analysis")
+      ? actionDestination("build_from_analysis", detail.application.id)
+      : null;
+
+  if (compact) {
+    const actionLink = (href: string | null, action: string) =>
+      href === null || href === currentPath ? undefined : (
+        <Link className="text-support font-bold text-cv-text underline underline-offset-4" to={href}>
+          {actionLabel(action)}
+        </Link>
+      );
+
+    return (
+      <section
+        aria-labelledby="preparation-alerts-heading"
+        className="flex flex-col gap-3 rounded-surface bg-cv-surface-muted p-4"
+      >
+        <h2 className="text-support font-bold text-cv-text-muted" id="preparation-alerts-heading">
+          התראות
+        </h2>
+        <ul className="flex flex-col gap-3">
+          {reviewReasons.map((reason) => {
+            const resolution = reason.allowed_resolution_actions
+              .map((action) => ({ action, href: actionDestination(action, detail.application.id) }))
+              .find((candidate) => candidate.href !== null && candidate.href !== currentPath);
+            return (
+              <CompactAlert
+                action={resolution === undefined ? undefined : actionLink(resolution.href, resolution.action)}
+                key={reason.code}
+                title={reasonTitle(reason.code, "נדרשת החלטה לפני המשך")}
+              >
+                <p dir="auto">{reason.message}</p>
+              </CompactAlert>
+            );
+          })}
+          {detail.warnings.map((warning) => {
+            const localized = warningDetail(warning.code, "");
+            const missing = warning.code === "REQUIREMENT_NOT_IN_DOCUMENT" ? missingRequirement(warning, detail) : null;
+            return (
+              <CompactAlert
+                action={actionLink(rebuildHrefFor(warning.code), "build_from_analysis")}
+                key={warning.code}
+                title={warningTitle(warning.code)}
+              >
+                {missing !== null ? (
+                  <MissingRequirementDetail missing={missing} />
+                ) : localized === "" ? (
+                  <p dir="auto">{warning.message}</p>
+                ) : (
+                  localized
+                )}
+              </CompactAlert>
+            );
+          })}
+          {blockedActions.map((blocked) => (
+            <CompactAlert key={blocked.action} title={`הפעולה ${actionLabel(blocked.action)} חסומה כרגע`}>
+              <ul className="flex list-disc flex-col gap-1 ps-5">
+                {blocked.reasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            </CompactAlert>
+          ))}
+        </ul>
+      </section>
+    );
   }
 
   return (
     /* On a phone the backdrop is a rounded, borderless block like the cards around it:
        there the step is a column of cards on the canvas, and a square hairline box read
        as a different kind of thing. */
-    /* From the large breakpoint the alerts are the step's aside: the column on the end
-       side beside the work, spanning its rows, as the desktop design draws "התראות". */
     <Card
       aria-label="התראות"
-      className={cx(
-        "flex flex-col gap-3 bg-cv-surface-muted p-3 max-lg:rounded-surface max-lg:border-0 max-lg:p-3.5",
-        aside && "lg:col-start-2! lg:row-span-3 lg:row-start-1 lg:ms-5 lg:w-80 lg:rounded-surface lg:border-0 lg:p-4",
-      )}
+      className="flex flex-col gap-3 bg-cv-surface-muted p-3 max-lg:rounded-surface max-lg:border-0 max-lg:p-3.5"
     >
-      {/* The aside's name, drawn where it stands apart from the work; on a phone the
-          backdrop reads as part of the column and the region's label is enough. */}
-      {aside ? (
-        <h2 aria-hidden="true" className="text-support font-bold text-cv-text max-lg:hidden">
-          התראות
-        </h2>
-      ) : null}
       {reviewReasons.map((reason) => (
         <ResolvableReasonCallout
           applicationId={detail.application.id}
@@ -156,10 +243,7 @@ export const PreparationAlerts = ({
         /* The older-analysis warning has an explicit answer, `build_from_analysis`, which
            lives beside the analysis. Offered from another screen only while the projection
            offers the action, and never as a link to the screen the reader is on. */
-        const rebuildHref =
-          warning.code === "DOCUMENT_ON_OLDER_ANALYSIS" && detail.available_actions.includes("build_from_analysis")
-            ? actionDestination("build_from_analysis", detail.application.id)
-            : null;
+        const rebuildHref = rebuildHrefFor(warning.code);
 
         return (
           <Callout
@@ -187,7 +271,7 @@ export const PreparationAlerts = ({
         );
       })}
 
-      {exceptionalBlockedActions.map((blocked) => (
+      {blockedActions.map((blocked) => (
         <Callout key={blocked.action} title={`הפעולה ${actionLabel(blocked.action)} חסומה כרגע`} tone="blocker">
           <ul className="flex list-disc flex-col gap-1 ps-5">
             {blocked.reasons.map((reason) => (

@@ -1,3 +1,5 @@
+import { Split } from "lucide-react";
+
 import type { ClaimAddition, ClaimPatch } from "@/api/contracts";
 import { outlineClaims } from "@/api/documents";
 import type { EditableDocument } from "../model/drafts.types";
@@ -44,41 +46,53 @@ export const DraftConflictDialog = ({
           {/* On a phone the two outcomes stack, and the one that keeps the reader's own
               text leads: it is what they were in the middle of. The DOM order, and with it
               the desktop's, is unchanged. */}
-          <Button className="max-lg:order-last" onClick={onDiscardLocal} variant="secondary">
-            שמירה על הגרסה הנוכחית
+          <Button className="max-lg:order-last" onClick={onDiscardLocal} size="default" variant="secondary">
+            השארת הגרסה הנוכחית
           </Button>
-          <Button onClick={onReapplyLocal}>החלת הטקסט שלי על הגרסה הנוכחית</Button>
+          <Button onClick={onReapplyLocal} size="default">
+            החלת הטקסט שלי על הגרסה הנוכחית
+          </Button>
         </>
       }
       headingId="draft-conflict-heading"
       onClose={onDiscardLocal}
       open={open}
-      title="הטיוטה השתנתה בזמן העריכה"
+      size="wide"
+      /* The design sets the mark beside the title rather than over it. Decorative: the
+         title says it. */
+      title={
+        <span className="flex items-center gap-3.5">
+          <span
+            aria-hidden="true"
+            className="flex size-11 shrink-0 items-center justify-center rounded-control bg-cv-text text-cv-canvas max-lg:size-10"
+          >
+            <Split className="size-icon-lg" />
+          </span>
+          הטיוטה השתנתה בזמן העריכה
+        </span>
+      }
     >
-      <p>
+      {/* The title and the two answers say it to the eye: a newer version was saved
+          first, nothing was merged and nothing deleted. Assistive tech hears it in full. */}
+      <p className="sr-only">
         גרסה חדשה יותר של הטיוטה נשמרה לפני השמירה שלך, ולכן השמירה נעצרה. שום דבר לא אוחד אוטומטית ושום טקסט לא נמחק.
       </p>
 
-      <ul className="mt-3 flex flex-col gap-4">
+      <ul className="flex flex-col gap-3.5">
         {pending.map((edit) => (
-          /* Each text is its own panel - the reader's framed in the strong border, the
-             saved one muted - so the two read as the two sides of the choice below them
-             rather than as one paragraph. A phone stacks them; a desktop sets them side by
-             side, the reader's own at the start, as its design does. */
-          <li className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-3" key={edit.claim_id}>
-            <div className="rounded-control border border-cv-border-strong p-card-padding">
-              <p className="text-support font-medium text-cv-text lg:text-caption lg:font-bold lg:text-cv-text-muted">
-                הטקסט שלי
-              </p>
+          /* Each text its own panel - the reader's framed in the strong edge, the saved
+             one recessed - side by side where there is room, so the two read as the two
+             sides of the choice below them. */
+          <li className="grid gap-3.5 sm:grid-cols-2" key={edit.claim_id}>
+            <div className="flex flex-col gap-2 rounded-control-lg border-[1.5px] border-cv-accent p-4">
+              <p className="text-caption font-bold text-cv-text-muted">הטקסט שלי</p>
               <p className="text-body text-cv-text" dir="auto">
                 {edit.text ?? ""}
               </p>
             </div>
-            <div className="rounded-control border border-cv-border bg-cv-surface-muted p-card-padding">
-              <p className="text-support font-medium text-cv-text lg:text-caption lg:font-bold lg:text-cv-text-muted">
-                הגרסה הנוכחית
-              </p>
-              <p className="text-body text-cv-text-muted" dir="auto">
+            <div className="flex flex-col gap-2 rounded-control-lg border border-cv-hairline bg-cv-canvas p-4">
+              <p className="text-caption font-bold text-cv-text-muted">הגרסה הנוכחית</p>
+              <p className="text-body text-cv-accent" dir="auto">
                 {texts.get(edit.claim_id) ?? "השורה אינה קיימת עוד בגרסה הנוכחית."}
               </p>
             </div>
@@ -87,13 +101,13 @@ export const DraftConflictDialog = ({
       </ul>
 
       {pendingRemovals.length === 0 ? null : (
-        <p className="text-support leading-6 text-cv-text-muted">
+        <p className="mt-3 text-support leading-6 text-cv-text-muted">
           ההסרה שביקשת עדיין ממתינה. החלת הטקסט שלי תבצע גם אותה על הגרסה הנוכחית.
         </p>
       )}
 
       {pendingAdditions.length === 0 ? null : (
-        <ul className="flex flex-col gap-2">
+        <ul className="mt-3 flex flex-col gap-2">
           {pendingAdditions.map((addition) => (
             <li
               className="text-support leading-6 text-cv-text-muted"
@@ -107,7 +121,7 @@ export const DraftConflictDialog = ({
       )}
 
       {Object.keys(pendingClaimOrders).length === 0 ? null : (
-        <p className="text-support leading-6 text-cv-text-muted">
+        <p className="mt-3 text-support leading-6 text-cv-text-muted">
           שינויי הסדר שלך עדיין ממתינים. החלת הגרסה שלך תחיל גם אותם על הטיוטה הנוכחית, אם המבנה עדיין תואם.
         </p>
       )}

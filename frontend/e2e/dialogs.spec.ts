@@ -1,5 +1,7 @@
 import type { Page } from "@playwright/test";
 
+import type { Operation } from "../src/api/contracts";
+import { HASH, cvDocument, detail as recordDetail, operation } from "../src/test/records";
 import { expect, json, test } from "./fixtures";
 
 /* Real keyboard navigation verifies Tab boundary wrapping, native modal focus
@@ -47,20 +49,27 @@ test.describe("dialogs", () => {
     );
   });
 
-  const openJobPostingDialog = async (page: Page) => {
+  /* Whether focus is inside the open modal. Read from `document.activeElement` rather
+     than a `:focus` locator, which misses a date field whose focus sits in the input's
+     own shadow parts. */
+  const focusInsideOpenDialog = (page: Page) =>
+    page.evaluate(() => document.activeElement?.closest("dialog[open]") != null);
+
+  /* The hub's status sheet: a modal form with a free-text field, so it carries both the
+     focus trap and the rule that a stray backdrop click does not discard typing. */
+  const openStatusDialog = async (page: Page) => {
     await page.goto("/applications/app-1");
-    await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
-    const invoker = page.getByRole("button", { name: "עדכון נוסח המשרה" });
+    const invoker = page.getByRole("button", { name: "עדכון סטטוס" });
     await invoker.click();
-    const dialog = page.getByRole("dialog", { name: "עריכת נוסח המשרה" });
+    const dialog = page.getByRole("dialog", { name: "עדכון סטטוס ומשימות" });
     await expect(dialog).toBeVisible();
     return { dialog, invoker };
   };
 
   test("opens on its heading, keeps Tab inside, and hands focus back on Escape", async ({ page }) => {
-    const { dialog, invoker } = await openJobPostingDialog(page);
+    const { dialog, invoker } = await openStatusDialog(page);
 
-    await expect(dialog.getByRole("heading", { name: "עריכת נוסח המשרה" })).toBeFocused();
+    await expect(dialog.getByRole("heading", { name: "עדכון סטטוס ומשימות" })).toBeFocused();
 
     await expect(dialog.locator("div").first()).toHaveAttribute("dir", "rtl");
 
@@ -72,13 +81,13 @@ test.describe("dialogs", () => {
       // oxlint-disable-next-line no-await-in-loop
       await page.keyboard.press("Tab");
       // oxlint-disable-next-line no-await-in-loop
-      await expect(dialog.locator(":focus")).toHaveCount(1);
+      await expect.poll(() => focusInsideOpenDialog(page)).toBe(true);
     }
     for (let step = 0; step < 12; step += 1) {
       // oxlint-disable-next-line no-await-in-loop
       await page.keyboard.press("Shift+Tab");
       // oxlint-disable-next-line no-await-in-loop
-      await expect(dialog.locator(":focus")).toHaveCount(1);
+      await expect.poll(() => focusInsideOpenDialog(page)).toBe(true);
     }
 
     await page.keyboard.press("Escape");
@@ -88,14 +97,14 @@ test.describe("dialogs", () => {
   });
 
   test("does not discard typing when the backdrop is clicked", async ({ page }) => {
-    const { dialog, invoker } = await openJobPostingDialog(page);
-    const jobText = dialog.getByRole("textbox", { name: "טקסט המשרה" });
+    const { dialog, invoker } = await openStatusDialog(page);
+    const notes = dialog.getByRole("textbox", { name: "הערות" });
 
-    await jobText.fill("נוסח משרה מעודכן");
+    await notes.fill("שיחה טובה עם המגייסת");
     await page.mouse.click(5, 5);
 
     await expect(dialog).toBeVisible();
-    await expect(jobText).toHaveValue("נוסח משרה מעודכן");
+    await expect(notes).toHaveValue("שיחה טובה עם המגייסת");
 
     /* The deliberate route out still closes, and still returns focus. */
     await page.keyboard.press("Escape");
@@ -104,7 +113,7 @@ test.describe("dialogs", () => {
   });
 
   test("closes on the backdrop while nothing has been typed", async ({ page }) => {
-    const { dialog, invoker } = await openJobPostingDialog(page);
+    const { dialog, invoker } = await openStatusDialog(page);
 
     await page.mouse.click(5, 5);
 
@@ -115,6 +124,8 @@ test.describe("dialogs", () => {
   test("opens the search palette on the shortcut with focus in its field", async ({ page }) => {
     await page.goto("/applications/app-1");
     const palette = page.getByRole("dialog", { name: "מעבר מהיר למועמדות" });
+    /* The shortcut is the shell's listener; pressing before the screen has drawn races it. */
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(palette).toBeHidden();
 
     await page.keyboard.press("ControlOrMeta+k");
@@ -148,36 +159,58 @@ test.describe("dialogs", () => {
     await expect(trigger).toBeFocused();
   });
 
-  /* Work in flight sits over the page. Hiding it with Escape hands focus to the chip that
-     reopens it - not to whatever held focus when the screen opened the overlay by itself -
-     and does not make the page safe to change: the commands that conflict with the run
-     stay locked while it is live. */
-  test("puts a live run's panel away only from its close button, keeps conflicting actions locked, and opens the report from its chip", async ({
+  /* Work in flight on a step that stays on screen - the draft editor's regeneration - sits
+     beside the page. Hiding it with Escape hands focus to the chip that reopens it - not to
+     whatever held focus when the screen opened the overlay by itself - and the report the
+     chip opens is a dialog that does close on Escape. (The analysis and the draft's
+     creation are the step's whole screen while they run; see OperationOverlay.) */
+  test("puts a live run's panel away only from its close button and opens the report from its chip", async ({
     api,
     page,
   }) => {
-    const running = {
-      id: "op-1",
-      application_id: "app-1",
-      operation_type: "create_draft",
+    const running: Operation = {
+      ...operation(),
+      operation_type: "regenerate_section",
       status: "running",
       phase: "executing",
       is_terminal: false,
-      available_actions: [],
-      outputs: [],
-      message: "",
-      created_at: "2026-08-24T07:00:00Z",
     };
+    const documentPath = "/api/v1/applications/app-1/document";
     api.stub(
       "GET /api/v1/applications/app-1",
-      json({ ...detail, active_operation: running, latest_operation: running }),
+      json(
+        recordDetail({
+          content_check: "none",
+          available_actions: ["edit", "check", "approve"],
+          recommended_action: "check",
+          active_operation: running,
+          latest_operation: running,
+        }),
+      ),
     );
-    api.stub("GET /api/v1/operations/op-1", json(running));
+    api.stub(`GET ${documentPath}`, json(cvDocument({ content_check: "none" }), { headers: { ETag: `"${HASH}"` } }));
+    api.stub(
+      `GET ${documentPath}/page-count`,
+      json({
+        application_id: "app-1",
+        document_id: "doc-1",
+        document_hash: HASH,
+        template: null,
+        pages: 1,
+        maximum: 1,
+      }),
+    );
+    api.stub(`GET ${documentPath}/preview?v=${HASH}`, (route) =>
+      route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Preview</title>" }),
+    );
+    api.stub(`GET /api/v1/operations/${running.id}`, json(running));
+    api.stub("GET /api/v1/facts", json({ items: [] }));
+    api.stub("GET /api/v1/facts/history", json({ events: [] }));
 
-    await page.goto("/applications/app-1");
+    await page.goto("/applications/app-1/draft");
     /* Live work is a panel beside the page, not a modal: Escape leaves it where it is,
        and only its own close button puts it away. */
-    const panel = page.getByRole("region", { name: "הרצת יצירת הטיוטה" });
+    const panel = page.getByRole("region", { name: "הרצת יצירה מחדש של פרק" });
     await expect(panel).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(panel).toBeVisible();
@@ -186,21 +219,8 @@ test.describe("dialogs", () => {
     await expect(panel).toBeHidden();
     const chip = page.getByRole("button", { name: /פירוט ההרצה/ });
     await expect(chip).toBeFocused();
-    /* The run's own progress sentence, which for draft generation names its phase. */
-    await expect(chip).toContainText("מנסחת ובודקת את הטענות");
 
-    /* The form opens - reading and drafting a new posting is harmless - but the command
-       that would replace the job text the run is working from waits for it. */
-    await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
-    await page.getByRole("button", { name: "עדכון נוסח המשרה" }).click();
-    const postingForm = page.getByRole("dialog", { name: "עריכת נוסח המשרה" });
-    await expect(postingForm.getByRole("button", { name: "שמירת הנוסח" })).toBeDisabled();
-    await expect(postingForm.getByText(/פעולה מתבצעת כעת על המועמדות/)).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(postingForm).toBeHidden();
-
-    /* The chip opens the run's full report, which is a dialog and does close on Escape. */
-    const report = page.getByRole("dialog", { name: "הרצת יצירת הטיוטה" });
+    const report = page.getByRole("dialog", { name: "הרצת יצירה מחדש של פרק" });
     await chip.click();
     await expect(report).toBeVisible();
     await page.keyboard.press("Escape");

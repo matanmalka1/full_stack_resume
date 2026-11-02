@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 /* What a signed-in reader leaves in this browser: saved board views, the intake draft,
-   unsent editor text, the board's return address, the sidebar and theme choices. Signing
+   unsent editor text, the board's return address, the theme choice. Signing
    out removes all of it, so the next person at the keyboard starts from nothing.
 
    A session that merely expires keeps it: the reader signs back in and finds their

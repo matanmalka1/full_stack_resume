@@ -7,6 +7,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { Textarea } from "@/ui/Input";
 import { StatusBadge } from "@/ui/StatusBadge";
+import { cardClasses } from "@/ui/surface";
 import { useAnswerGapQuestion, useSkipGapQuestion } from "../../../api/gapQuestions";
 import { coverageLabels, coverageTones } from "../../../model/analysisLabels";
 import {
@@ -64,22 +65,21 @@ export const GapQuestionCard = ({
   const trimmed = answer.trim();
 
   return (
-    <article
-      aria-labelledby={headingId}
-      className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 max-lg:p-3.5"
-    >
+    <article aria-labelledby={headingId} className={cardClasses("flex flex-col gap-3 p-4 max-lg:p-3.5")}>
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge tone={coverageTones[question.coverage]}>{coverageLabels[question.coverage]}</StatusBadge>
-          <span className="text-support text-cv-text-muted">דרישה {importanceLabels[question.importance]}</span>
+          <span className="text-caption font-bold text-cv-text-muted">
+            דרישה {importanceLabels[question.importance]}
+          </span>
         </div>
         <p className="text-support leading-6 text-cv-text-muted">
           <span className="font-semibold text-cv-text">הדרישה: </span>
           <bdi>{question.requirement_text}</bdi>
         </p>
-        <h4 className="text-body font-semibold leading-7 text-cv-text" dir="auto" id={headingId}>
+        <h3 className="text-body leading-snug font-bold text-cv-text" dir="auto" id={headingId}>
           {question.question}
-        </h4>
+        </h3>
       </div>
 
       {view.kind === "open" ? (
@@ -105,19 +105,19 @@ export const GapQuestionCard = ({
           </Field>
           <div className="flex flex-wrap gap-2 max-lg:grid max-lg:grid-cols-2">
             <Button
-              className="max-lg:min-h-11"
               disabled={trimmed === "" || skipping.isPending}
               pending={answering.isPending}
               pendingLabel="שולח…"
+              size="compact"
               type="submit"
             >
               שליחה
             </Button>
             <Button
-              className="max-lg:min-h-11"
               disabled={answering.isPending}
               onClick={() => skipping.mutate()}
               pending={skipping.isPending}
+              size="compact"
               variant="secondary"
             >
               דילוג
@@ -137,7 +137,10 @@ export const GapQuestionCard = ({
         <p className="text-support text-cv-text-muted">דילגת על השאלה הזו.</p>
       ) : (
         <>
-          <blockquote className="border-s-2 border-cv-border ps-3 text-support leading-6 text-cv-text-muted" dir="auto">
+          <blockquote
+            className="border-s-2 border-cv-border-strong ps-3 text-label leading-relaxed text-cv-text-muted"
+            dir="auto"
+          >
             {view.answer}
           </blockquote>
           {view.fact === null ? null : (

@@ -34,7 +34,9 @@ describe("preparationResumeDestination", () => {
   });
 
   it("falls back to analysis while the document has no content", () => {
-    expect(preparationResumeDestination(item({ preparation_state: "ready_to_draft" }))).toBe("/applications/app-1");
+    expect(preparationResumeDestination(item({ preparation_state: "ready_to_draft" }))).toBe(
+      "/applications/app-1/analysis",
+    );
   });
 });
 

@@ -9,7 +9,7 @@ import { cx } from "./cx";
 export const Input = ({ className, type, ...rest }: ComponentProps<"input">) => {
   return (
     <input
-      className={cx("cv-field cv-field-input block w-full rounded-control border px-3 py-2", className)}
+      className={cx("cv-field cv-field-input block min-h-11.5 w-full rounded-control border px-3 py-2", className)}
       type={type ?? "text"}
       {...rest}
     />
@@ -20,7 +20,7 @@ export const Textarea = ({ className, ...rest }: ComponentProps<"textarea">) => 
   return (
     <textarea
       className={cx(
-        "cv-field cv-field-textarea block min-h-32 w-full resize-y rounded-control border px-3.5 py-2.5",
+        "cv-field cv-field-textarea block min-h-32 w-full resize-y rounded-control border px-3 py-2.5",
         className,
       )}
       {...rest}

@@ -22,13 +22,20 @@ export const reasoningEffortLabels: Record<NonNullable<Settings["default_reasoni
   high: "גבוה",
 };
 
+/* The three colour schemes by name, as the theme control and a settings conflict say them. */
+export const themeLabels: Record<Settings["ui_theme"], string> = {
+  light: "בהיר",
+  dark: "כהה",
+  system: "לפי המכשיר",
+};
+
 export const settingsFieldLabels: Record<keyof UpdateSettingsRequest, string> = {
   auto_generate_when_review_not_required: "יצירת טיוטה אוטומטית",
   default_ai_model: "מודל AI",
   default_reasoning_effort: "מאמץ חשיבה",
   ui_density: "צפיפות תצוגה",
   ui_text_size: "גודל טקסט",
-  ui_theme: "ערכת נושא",
+  ui_theme: "ערכת צבעים",
   default_template: "תבנית ברירת מחדל",
 };
 
@@ -36,9 +43,7 @@ export const settingValueLabel = (value: UpdateSettingsRequest[keyof UpdateSetti
   if (value == null) return "ברירת מחדל של הסביבה";
   if (typeof value === "boolean") return value ? "פעיל" : "כבוי";
   const labels: Record<string, string> = {
-    system: "לפי המערכת",
-    light: "בהירה",
-    dark: "כהה",
+    ...themeLabels,
     comfortable: "נוחה",
     compact: "צפופה",
     normal: "רגיל",

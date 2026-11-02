@@ -33,7 +33,7 @@ const detail = {
   },
 };
 
-test.describe("the Job Detail screen", () => {
+test.describe("the Application hub", () => {
   test.beforeEach(({ api }) => {
     api.stub("GET /api/v1/applications/app-1", json(detail));
   });
@@ -45,14 +45,27 @@ test.describe("the Job Detail screen", () => {
 
     expect(results.violations).toEqual([]);
 
-    await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
-    await page.getByRole("button", { name: "עדכון נוסח המשרה" }).click();
-    const updateDialog = page.getByRole("dialog", { name: "עריכת נוסח המשרה" });
+    await page.getByRole("button", { name: "עדכון סטטוס" }).click();
+    const updateDialog = page.getByRole("dialog", { name: "עדכון סטטוס ומשימות" });
     await expect(updateDialog).toBeVisible();
     await expect(updateDialog).toHaveCSS("opacity", "1");
     const dialogResults = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();
     expect(dialogResults.violations).toEqual([]);
+  });
+
+  test("edits the posting from the record's menu in an accessible dialog", async ({ page }) => {
+    await page.goto("/applications/app-1");
+
+    await page.locator('button[aria-label="פעולות נוספות"]:visible').click();
+    await page.getByRole("menuitem", { name: "עריכת נוסח המשרה" }).click();
+    const dialog = page.getByRole("dialog", { name: "עריכת נוסח המשרה" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveCSS("opacity", "1");
+    await expect(dialog.getByRole("textbox", { name: "טקסט המשרה" })).toHaveValue("Senior Backend Engineer");
+
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+    expect(results.violations).toEqual([]);
   });
 });

@@ -175,7 +175,7 @@ export const ClaimReviewClarification = ({
           <Link
             onClick={onNavigate}
             className={buttonClasses("secondary")}
-            to={routePaths.application(operation.application_id)}
+            to={routePaths.verification(operation.application_id)}
           >
             חזרה להכנת טיוטה
           </Link>

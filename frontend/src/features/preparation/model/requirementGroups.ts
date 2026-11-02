@@ -9,9 +9,9 @@ const coveragePriority: Record<RequirementCoverage, number> = {
   matched: 3,
 };
 
-export const needsAttention = (requirement: Requirement): boolean => requirement.coverage !== "matched";
+const needsAttention = (requirement: Requirement): boolean => requirement.coverage !== "matched";
 
-interface RequirementGroup {
+export interface RequirementGroup {
   importance: RequirementImportance;
   /* Matched and total count the whole group, whatever the filter shows. */
   matched: number;

@@ -11,52 +11,54 @@ import {
   setDocumentTemplate,
 } from "@/api/documents";
 import type { TemplateName } from "@/api/templates";
+import { CommitBar } from "@/ui/CommitBar";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { OperationOverlay, type PendingWork, isOperationLive, operationTypeLabels } from "@/features/operations";
-import { applicationLabel } from "@/features/application-detail";
-import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
-import { DraftApprovalBar } from "../components/DraftApprovalBar";
+import { PreparationAlerts } from "@/features/preparation";
+import { type DraftApprovalState, DraftApprovalNote, DraftApproveButton } from "../components/DraftApproval";
 import { DraftAttentionPanel } from "../components/DraftAttentionPanel";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";
 import { DraftConflictDialog } from "../components/DraftConflictDialog";
-import { DraftContentSummary } from "../components/DraftContentSummary";
 import { DraftEditorNotices } from "../components/DraftEditorNotices";
 import { DraftEmptyState } from "../components/DraftEmptyState";
 import { DraftFitCard } from "../components/DraftFitCard";
+import { DraftHeader } from "../components/DraftHeader";
 import { DraftHistoryControls } from "../components/DraftHistoryControls";
 import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
 import { DraftPreviewToggle } from "../components/DraftPreviewToggle";
-import { DraftProgress } from "../components/DraftProgress";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
 import { DraftRequirementsPanel } from "../components/DraftRequirementsPanel";
-import { RegenerationDiffPanel } from "../components/RegenerationDiffPanel";
+import { DraftSaveState } from "../components/DraftSaveState";
+import { DraftSectionNav } from "../components/DraftSectionNav";
 import { DraftTemplateControl } from "../components/DraftTemplateControl";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
-import { type DraftWorkspaceMode, DraftWorkspace, DraftWorkspaceSwitch } from "../components/DraftWorkspace";
+import { type DraftWorkspaceMode, DraftWorkspace } from "../components/DraftWorkspace";
+import { RegenerationDiffPanel } from "../components/RegenerationDiffPanel";
 import { useDraftDocument } from "../api/queries";
 import { useDocumentCheck } from "../hooks/useDocumentCheck";
 import { useDraftEditing } from "../hooks/useDraftEditing";
 import { useRegenerationDiff } from "../hooks/useRegenerationDiff";
 import { useRenderDocument } from "../hooks/useRenderDocument";
-import { draftFit } from "../model/draftFit";
-import { summarizeContent, summarizeSelection } from "../model/draftOverview";
+import { claimRequirements, draftFit } from "../model/draftFit";
+import { unsupportedClaims } from "../model/draftOverview";
+import { defaultPart, draftParts, partOfClaim } from "../model/draftParts";
 import { isEditable } from "../model/drafts.types";
 import { revertEdit } from "../model/regenerationDiff";
 
 /* The workspace's own shape, held while the document behind it is read. */
 const draftLoading = (
-  <div className="flex flex-col gap-6">
+  <div className="flex flex-col gap-3.5 lg:grid lg:grid-cols-[minmax(0,10.625rem)_minmax(0,1fr)_minmax(0,16.25rem)] lg:gap-5">
     <LiveRegion>טוען את הטיוטה…</LiveRegion>
-    <div className="flex justify-end">
-      <Skeleton className="block h-10 w-72 max-w-full" />
-    </div>
-    <Skeleton className="block h-[32rem] w-full" />
+    <Skeleton className="block h-44 w-full max-lg:h-11" />
+    <Skeleton className="block h-96 w-full" />
+    <Skeleton className="block h-36 w-full max-lg:hidden" />
   </div>
 );
 
@@ -81,6 +83,7 @@ const DOCUMENT_WRITING_OPERATIONS = new Set([
    ready step. */
 export const DraftEditorPage = () => {
   const applicationId = useRequiredParam("applicationId");
+  const isPhone = useIsPhone();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedClaim = searchParams.get("claim");
@@ -102,7 +105,7 @@ export const DraftEditorPage = () => {
     watch,
   } = useDraftDocument(applicationId);
 
-  const [mode, setMode] = useState<DraftWorkspaceMode>("split");
+  const [mode, setMode] = useState<DraftWorkspaceMode>("read");
   const [approvalOpen, setApprovalOpen] = useState(false);
   /* Set by this screen's own approval, so the render it starts is the automatic
      continuation of a press - never something a visit to an approved document starts. */
@@ -223,8 +226,6 @@ export const DraftEditorPage = () => {
     setMode(next);
   };
 
-  const applicationHref = routePaths.application(applicationId);
-
   const beforeResolve = async () => {
     setResolutionError(null);
     setApprovalOpen(false);
@@ -338,16 +339,14 @@ export const DraftEditorPage = () => {
       const result = await check.checkExact(draft);
       if (result.passed) setApprovalOpen(true);
     } catch {
-      // useDocumentCheck exposes the mutation error beside the preview.
+      // useDocumentCheck exposes the mutation error beside the draft.
     }
   };
 
   const noContent = detail !== undefined && (!hasDocument || (document !== undefined && draft === undefined));
 
-  /* What the document is made of, read from its own outline and fact accounting: shared
-     by the progress strip, the list of what blocks approval, and the account of how the
-     content was built, so the three never count differently. */
-  const content = useMemo(() => (draft === undefined ? undefined : summarizeContent(draft)), [draft]);
+  /* The lines nothing authorizes, read from the document's own outline. */
+  const unsupported = useMemo(() => (draft === undefined ? [] : unsupportedClaims(draft)), [draft]);
   /* A refused review is history once no line it refused still reads as it was refused -
      edited, undone, or removed. Its status row would otherwise stay red over a document
      that no longer holds the wording, until some later run happened to replace it. */
@@ -358,10 +357,63 @@ export const DraftEditorPage = () => {
     const current = new Map(outlineClaims(draft.outline).map((claim) => [claim.claim_id, claim.text]));
     return operation.failure_reason.claims.every((refused) => current.get(refused.claim_id) !== refused.text);
   }, [draft, operation]);
-  const selection = useMemo(() => (draft === undefined ? undefined : summarizeSelection(draft)), [draft]);
   /* The posting's requirements against the facts, from the analysis the projection
      already carries - no read of its own. */
   const fit = useMemo(() => (detail === undefined ? null : draftFit(detail)), [detail]);
+  const requirements = useMemo(() => (detail === undefined ? new Map() : claimRequirements(detail)), [detail]);
+
+  /* The part of the CV on screen. Chosen once when the draft arrives - the line a link
+     asked for, else the first part holding a line to decide - and after that only by the
+     reader: resolving that line must not move the screen to another part under them. */
+  const parts = useMemo(() => (draft === undefined ? [] : draftParts(draft)), [draft]);
+  const [chosenPart, setChosenPart] = useState<string | null>(null);
+  if (chosenPart === null && draft !== undefined) {
+    setChosenPart((requestedClaim === null ? undefined : partOfClaim(draft, requestedClaim)) ?? defaultPart(parts));
+  }
+  const activePart = parts.some((part) => part.id === chosenPart) ? (chosenPart ?? "") : defaultPart(parts);
+
+  const showClaim = (claimId: string) => {
+    if (draft === undefined) return;
+    setMode("read");
+    setChosenPart(partOfClaim(draft, claimId) ?? activePart);
+    // A fresh request also supports jumping to the same claim again.
+    setClaimTarget({ claimId });
+  };
+
+  const approval: DraftApprovalState = {
+    passing: check.passing,
+    onApprove: () => {
+      if (!approvalUnavailable && check.passing) setApprovalOpen(true);
+    },
+    onValidate: () => {
+      void checkAndOpenApproval();
+    },
+    reviewBlocked: (detail?.review_reasons ?? []).length > 0,
+    stale: check.stale,
+    unavailable: approvalUnavailable,
+    validationPending: check.isPending,
+    validationResult:
+      check.error !== null && check.error !== undefined
+        ? "לא ניתן להשלים את בדיקת הקובץ. פרטי השגיאה מופיעים בתצוגה המקדימה."
+        : check.lastCheck === undefined
+          ? undefined
+          : check.lastCheck.passed
+            ? approvalUnavailable
+              ? "הבדיקה עברה על הגרסה המוצגת. יש לפתור את החסמים לפני הכנת ה־PDF."
+              : "הבדיקה הושלמה בהצלחה. אפשר לאשר ולהכין את ה־PDF."
+            : "הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים כאן, לצד הטיוטה.",
+  };
+  /* Approval is the step's command until the document is approved; from then on the
+     render panel carries the step's next act. */
+  const approvable = draft !== undefined && !renderStage;
+  /* What the check found, beside the lines while it asks for something - a failure, an
+     outdated result or a refused approval. A passing report has nothing to ask, and stays
+     with the rendered document behind the preview button. */
+  const checkNeedsReader =
+    check.stale ||
+    check.contentCheck === "failed" ||
+    check.contentCheck === "outdated" ||
+    (check.error !== null && check.error !== undefined);
 
   return (
     <div
@@ -376,51 +428,26 @@ export const DraftEditorPage = () => {
         }
       }}
     >
-      <WizardStepShell
-        applicationId={applicationId}
-        /* From the large breakpoint the step is a grid of two columns: the workspace in
-           the wide one, and the fit card pinned in the narrow end column beside it, as the
-           desktop design draws them - in the `read` and `document` modes. In `split` the
-           workspace needs the whole row and both span it. Everything else - status, alerts, the progress line,
-           the commit bar the shell portals in - spans both, so it reads above or below the
-           pair rather than squeezed beside it. The fit card comes first in the DOM (it
-           opens the step on a phone); `order` places it last, and the dense flow then puts
-           it in the first free end cell, which is the workspace's row. */
-        bodyClassName="lg:grid lg:grid-flow-row-dense lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start lg:[&>*]:col-span-full lg:[&>.contents>*]:col-span-full"
-        desktopHeader={{
-          /* The desktop's way to the preview, at the masthead's end as the design puts
-             it. A phone has the header's icon toggle for the same choice. */
-          actions:
-            draft === undefined ? undefined : (
-              <span className="max-lg:hidden">
-                <DraftWorkspaceSwitch mode={mode} onModeChange={changeMode} />
-              </span>
-            ),
-          title: "טיוטת קורות החיים",
-        }}
-        detail={detail}
-        eyebrow={
-          detail === undefined ? (
-            <Skeleton className="inline-block w-56 max-w-full align-middle" />
-          ) : (
-            <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
-          )
-        }
-        measure="wide"
-        /* The phone's compact header, as the design draws it: the document as title, who
-           it is for under it, and the preview toggle where the desktop has its mode
-           switch. The stage bar stays, though the design drops it: with the approval
-           bar's back link gone on a phone, it is the one tap back to the analysis step. */
-        phoneHeader={{
-          action: draft === undefined ? undefined : <DraftPreviewToggle mode={mode} onModeChange={changeMode} />,
-          subtitle:
-            detail === undefined ? undefined : (
-              <span dir="auto">{`${detail.application.target_role} · ${detail.application.company}`}</span>
-            ),
-          title: "טיוטת קורות החיים",
-        }}
-        stage="draft"
+      {/* The page's own frame rather than the wizard's: the design draws this step with
+          no stage bar, its heading row carrying the way back, the preview and the
+          approval. */}
+      <section
+        aria-labelledby="route-heading"
+        className="page-frame flex flex-col gap-5 max-lg:min-h-[calc(100dvh-2.5rem)] max-lg:gap-3.5"
       >
+        <DraftHeader
+          actions={
+            draft === undefined ? undefined : (
+              <>
+                <DraftPreviewToggle mode={mode} onModeChange={changeMode} />
+                {approvable && !isPhone ? <DraftApproveButton state={approval} /> : null}
+              </>
+            )
+          }
+          applicationId={applicationId}
+          detail={detail}
+        />
+
         <QueryState
           error={applicationError}
           errorTitle="לא ניתן לטעון את מצב המועמדות"
@@ -433,19 +460,6 @@ export const DraftEditorPage = () => {
 
         {detail === undefined ? null : (
           <>
-            {/* First in the step, as the design opens it: what the posting asks against
-                what the facts meet, before anything about the draft's own state. */}
-            {fit === null || draft === undefined ? null : <DraftFitCard beside={mode !== "split"} fit={fit} />}
-            {draft === undefined || content === undefined ? null : (
-              <DraftProgress
-                content={content}
-                detail={detail}
-                dirty={editing.dirty}
-                draft={draft}
-                saveState={editing.saveState}
-              />
-            )}
-
             <OperationOverlay
               awaitingRecord={awaitingRecord}
               continuation={continuation}
@@ -492,75 +506,105 @@ export const DraftEditorPage = () => {
           <QueryState loading loadingState={draftLoading} />
         ) : null}
 
-        {draft === undefined || content === undefined || selection === undefined ? null : (
+        {draft === undefined ? null : (
           <>
             {detail === undefined ? null : (
               <DraftAttentionPanel
                 detail={detail}
                 draft={draft}
-                onShowClaim={(claimId) => {
-                  /* The rows, in whichever layout already shows them. */
-                  setMode((current) => (current === "document" ? "split" : current));
-                  // A fresh request also supports jumping to the same claim again.
-                  setClaimTarget({ claimId });
-                }}
-                unsupportedClaims={content.unsupportedClaims}
+                onShowClaim={showClaim}
+                unsupportedClaims={unsupported}
               />
             )}
             <DraftWorkspace
               editor={
-                <>
-                  <DraftContentSummary content={content} draft={draft} selection={selection} />
+                /* Three columns on a wide screen, as the design draws them: the parts of
+                   the CV, the open part, and what is kept beside it - the fit, the save
+                   state, and what the approval is waiting on. On a phone one column, in
+                   the design's order: the fit, the parts as tabs, the open part, then the
+                   rest. The side column dissolves there so its blocks can take their own
+                   places in that order. */
+                <div className="flex flex-col gap-3.5 lg:grid lg:grid-cols-[minmax(0,10.625rem)_minmax(0,1fr)_minmax(0,16.25rem)] lg:items-start lg:gap-5">
+                  <div className="max-lg:order-2">
+                    <DraftSectionNav active={activePart} onSelect={setChosenPart} parts={parts} />
+                  </div>
 
-                  <DraftEditorNotices
-                    aiUnavailable={editing.aiUnavailable}
-                    dirty={editing.dirty}
-                    regenerationError={editing.regenerationError}
-                  />
+                  <div className="flex min-w-0 flex-col gap-3.5 max-lg:order-3">
+                    <DraftEditorNotices
+                      aiUnavailable={editing.aiUnavailable}
+                      dirty={editing.dirty}
+                      regenerationError={editing.regenerationError}
+                    />
 
-                  <RegenerationDiffPanel
-                    changes={regenerationDiff.changes}
-                    locked={operationLive}
-                    onDismiss={regenerationDiff.dismiss}
-                    onRevert={(change) => {
-                      const edit = revertEdit(change, (editing.visibleDraft ?? draft).outline);
-                      if (edit === null) return;
-                      editing.claimActions.onEdit(edit.claim, edit.text);
-                      editing.claimActions.onCommit();
-                    }}
-                    outline={(editing.visibleDraft ?? draft).outline}
-                    target={regenerationDiff.target}
-                  />
+                    <RegenerationDiffPanel
+                      changes={regenerationDiff.changes}
+                      locked={operationLive}
+                      onDismiss={regenerationDiff.dismiss}
+                      onRevert={(change) => {
+                        const edit = revertEdit(change, (editing.visibleDraft ?? draft).outline);
+                        if (edit === null) return;
+                        editing.claimActions.onEdit(edit.claim, edit.text);
+                        editing.claimActions.onCommit();
+                      }}
+                      outline={(editing.visibleDraft ?? draft).outline}
+                      target={regenerationDiff.target}
+                    />
 
-                  {detail === undefined ? null : (
-                    <DraftRequirementsPanel detail={detail} outline={(editing.visibleDraft ?? draft).outline} />
-                  )}
+                    <DraftOutlineEditor
+                      actions={claimActions}
+                      active={activePart}
+                      draft={editing.visibleDraft ?? draft}
+                      factContext={{
+                        beforeResolve,
+                        afterResolve: afterFactResolved,
+                        onResolvingChange: setResolving,
+                        analysisId: draft.analysis_id,
+                        applicationId,
+                        language: draft.language,
+                        profile: detail?.application.profile ?? null,
+                      }}
+                      facts={draft}
+                      onMoveClaim={editing.history.moveClaim}
+                      onRegenerateSection={regenerateSection}
+                      requirements={requirements}
+                    />
+                  </div>
 
-                  <DraftOutlineEditor
-                    actions={claimActions}
-                    draft={editing.visibleDraft ?? draft}
-                    factContext={{
-                      beforeResolve,
-                      afterResolve: afterFactResolved,
-                      onResolvingChange: setResolving,
-                      analysisId: draft.analysis_id,
-                      applicationId,
-                      language: draft.language,
-                      profile: detail?.application.profile ?? null,
-                    }}
-                    facts={draft}
-                    history={
-                      <DraftHistoryControls
-                        canRedo={!operationLive && editing.history.canRedo}
-                        canUndo={!operationLive && editing.history.canUndo}
-                        onRedo={editing.history.redo}
-                        onUndo={editing.history.undo}
+                  <div className="flex min-w-0 flex-col gap-3.5 max-lg:contents">
+                    {fit === null ? null : (
+                      <div className="max-lg:order-1">
+                        <DraftFitCard fit={fit} />
+                      </div>
+                    )}
+                    {/* Each requirement against the lines on screen, under the fit it
+                        details; on a phone after the rest, folded until opened. */}
+                    {detail === undefined ? null : (
+                      <div className="max-lg:order-7">
+                        <DraftRequirementsPanel detail={detail} outline={(editing.visibleDraft ?? draft).outline} />
+                      </div>
+                    )}
+                    <div className="max-lg:order-4">
+                      <DraftSaveState
+                        dirty={editing.dirty}
+                        state={editing.saveState}
+                        trailing={
+                          <DraftHistoryControls
+                            canRedo={!operationLive && editing.history.canRedo}
+                            canUndo={!operationLive && editing.history.canUndo}
+                            onRedo={editing.history.redo}
+                            onUndo={editing.history.undo}
+                          />
+                        }
                       />
-                    }
-                    onMoveClaim={editing.history.moveClaim}
-                    onRegenerateSection={regenerateSection}
-                  />
-                </>
+                    </div>
+                    {approvable ? <DraftApprovalNote className="max-lg:order-5" state={approval} /> : null}
+                    {mode === "read" && checkNeedsReader ? (
+                      <div className="max-lg:order-6">
+                        <DraftValidationPanel check={check} />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               }
               mode={mode}
               preview={
@@ -572,38 +616,21 @@ export const DraftEditorPage = () => {
                     stamped={renderStage}
                   />
                   <DraftPreview draft={draft} />
-                  <DraftValidationPanel check={check} />
+                  {mode === "document" ? <DraftValidationPanel check={check} /> : null}
                 </>
               }
             />
 
-            {renderStage ? null : (
-              <DraftApprovalBar
-                applicationHref={applicationHref}
-                passing={check.passing}
-                onApprove={() => {
-                  if (!approvalUnavailable && check.passing) setApprovalOpen(true);
-                }}
-                onValidate={() => {
-                  void checkAndOpenApproval();
-                }}
-                unavailable={approvalUnavailable}
-                reviewBlocked={(detail?.review_reasons ?? []).length > 0}
-                stale={check.stale}
-                validationPending={check.isPending}
-                validationResult={
-                  check.error !== null && check.error !== undefined
-                    ? "לא ניתן להשלים את בדיקת הקובץ. פרטי השגיאה מופיעים בתצוגה המקדימה."
-                    : check.lastCheck === undefined
-                      ? undefined
-                      : check.lastCheck.passed
-                        ? approvalUnavailable
-                          ? "הבדיקה עברה על הגרסה המוצגת. יש לפתור את החסמים לפני הכנת ה־PDF."
-                          : "הבדיקה הושלמה בהצלחה. אפשר לאשר ולהכין את ה־PDF."
-                        : "הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים בתצוגה המקדימה."
-                }
-              />
-            )}
+            {/* A phone's command is the bar pinned to the screen's bottom edge. The spacer
+                before it takes what a short part leaves of the screen, so the bar stands at
+                the bottom edge even then; the bar itself stays a child of the frame, which
+                is what gives `sticky` the room to pin it over a long one. */}
+            {approvable && isPhone ? (
+              <>
+                <div aria-hidden="true" className="-mt-3.5 flex-1" />
+                <CommitBar primary={<DraftApproveButton size="large" state={approval} />} />
+              </>
+            ) : null}
 
             <DraftApprovalDialog
               applicationId={applicationId}
@@ -634,7 +661,7 @@ export const DraftEditorPage = () => {
             />
           </>
         )}
-      </WizardStepShell>
+      </section>
     </div>
   );
 };

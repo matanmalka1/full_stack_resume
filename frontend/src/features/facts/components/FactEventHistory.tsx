@@ -1,11 +1,14 @@
 import { useEffect } from "react";
 
 import type { FactDetail } from "@/api/contracts";
+import { cx } from "@/ui/cx";
+import { DateTime } from "@/ui/DateTime";
 import { factStatusLabel } from "../model/factLabels";
 
-/* The fact's own trail, oldest first. Every line is an event that was written; nothing
-   here is inferred, and no event is ever rewritten - which is why the first one reads as
-   a creation rather than as a transition out of nothing. */
+/* The fact's own trail, oldest first: a dot, what happened, and when. Every line is an
+   event that was written; nothing here is inferred, and no event is ever rewritten -
+   which is why the first one reads as a creation rather than as a transition out of
+   nothing. A reason recorded with the event follows on the same line. */
 export const FactEventHistory = ({
   events,
   selectedEventId,
@@ -19,24 +22,32 @@ export const FactEventHistory = ({
   }, [selectedEventId]);
 
   return (
-    <ol className="flex flex-col gap-2">
-      {events.map((event) => (
-        <li
-          aria-current={event.id === selectedEventId ? "location" : undefined}
-          className={
-            event.id === selectedEventId
-              ? "scroll-mt-6 rounded-control border-s-2 border-cv-accent bg-cv-accent-soft ps-3 text-support text-cv-text"
-              : "scroll-mt-6 border-s-2 border-cv-border ps-3 text-support text-cv-text-muted"
-          }
-          id={`fact-event-${event.id}`}
-          key={event.id}
-        >
-          {event.from_status == null
-            ? "נוצרה כממתינה"
-            : `${factStatusLabel(event.from_status)} ← ${factStatusLabel(event.to_status)}`}
-          {event.reason === "" ? "" : ` · ${event.reason}`}
-        </li>
-      ))}
+    <ol className="flex flex-col gap-3">
+      {events.map((event) => {
+        const selected = event.id === selectedEventId;
+        return (
+          <li
+            aria-current={selected ? "location" : undefined}
+            className={cx(
+              "flex scroll-mt-6 items-start gap-2.5",
+              selected && "-mx-2 rounded-item bg-cv-accent-soft px-2 py-1",
+            )}
+            id={`fact-event-${event.id}`}
+            key={event.id}
+          >
+            <span aria-hidden="true" className="mt-1.75 size-2.5 shrink-0 rounded-pill bg-cv-accent" />
+            <span className="min-w-0 flex-1 text-label">
+              {(event.from_status == null
+                ? "נוצרה כממתינה"
+                : `${factStatusLabel(event.from_status)} ← ${factStatusLabel(event.to_status)}`) +
+                (event.reason === "" ? "" : ` · ${event.reason}`)}
+            </span>
+            <span className="shrink-0 pt-0.5 text-caption text-cv-text-muted">
+              <DateTime format="date" value={event.created_at} />
+            </span>
+          </li>
+        );
+      })}
     </ol>
   );
 };

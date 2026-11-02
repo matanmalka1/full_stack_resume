@@ -1,10 +1,9 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import type { Operation } from "@/api/contracts";
-import { cancelOperation, operationQueryKey, retryOperation } from "@/api/operations";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
+import { useOperationCommands } from "../hooks/useOperationCommands";
 
 interface OperationActionsProps {
   operation: Operation;
@@ -39,30 +38,7 @@ export const OperationActions = ({
   retryOffered = true,
   showCancel = true,
 }: OperationActionsProps) => {
-  const queryClient = useQueryClient();
-  /* One key per original Operation: an uncertain response can be retried safely, while
-     navigating to the newly queued Operation rotates the key for its own future retry.
-     Derived rather than cached, since a discarded useMemo would mint a new key on the
-     same Operation and send a second one to the server. */
-  const retryKey = `retry:${operation.id}`;
-
-  const cancel = useMutation({
-    mutationFn: () => cancelOperation(operation.id),
-    onSuccess: (cancelled) => {
-      queryClient.setQueryData(operationQueryKey(cancelled.id), cancelled);
-    },
-  });
-  const retry = useMutation({
-    mutationFn: () => retryOperation(operation.id, retryKey),
-    onSuccess: ({ operation: queued }) => {
-      queryClient.setQueryData(operationQueryKey(queued.id), queued);
-      /* The host screen's watch takes the new run and the overlay keeps reporting without
-         the reader going anywhere. */
-      onQueued(queued.id);
-    },
-  });
-
-  const error = cancel.error ?? retry.error;
+  const { cancel, error, retry } = useOperationCommands(operation, onQueued);
   const canCancel = showCancel && operation.available_actions.includes("cancel");
   const canRetry = retryOffered && operation.available_actions.includes("retry");
   /* Retry on a run that succeeded re-runs work that has a result on record and

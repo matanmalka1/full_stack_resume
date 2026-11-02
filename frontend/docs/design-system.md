@@ -10,8 +10,10 @@ values once through `light-dark()`. Semantic colours exposed to
 Tailwind use `--color-cv-{role}`. Components consume semantic utilities such as
 `bg-cv-surface` and never primitives or Tailwind palette colours.
 
-The palette is deliberately monochrome: bright snow and platinum establish the light
-surfaces, while gunmetal and carbon black carry text, actions and the dark theme. The
+The palette is deliberately monochrome: white surfaces stand on a light grey canvas
+(`#f1f3f5`), platinum and bright snow fill tracks and fields, while gunmetal and carbon
+black carry text, actions and the dark theme. Dark keeps the same relation - the canvas
+one step below the surface - rather than inverting it. The
 two supplied pale-slate values are named `pale-slate-light` (`#ced4da`) and
 `pale-slate` (`#adb5bd`) so both remain addressable without a duplicate token name.
 Semantic status roles share this neutral family; their meaning therefore comes from
@@ -28,7 +30,9 @@ follow the selected theme.
 | Role | Purpose |
 | --- | --- |
 | `canvas`, `surface*` | Page and elevation hierarchy |
-| `hairline` | Default separator for flat content regions |
+| `hairline` | The edge of a surface: a card, the sidebar, a divider inside a card |
+| `border`, `border-strong` | The edge of a control; `border-strong` for an outlined button or an attention chip |
+| `border-soft` | A sheet's grab handle and an empty state's dashed frame |
 | `nav-active*` | Flat navigation selection and its edge indicator |
 | `text`, `text-muted` | Primary and supporting copy |
 | `accent*` | Actions, selection, focus and active progress |
@@ -44,9 +48,13 @@ an icon.
 
 ## Typography and direction
 
-Heebo is the primary Hebrew and Latin family. Body text is 15px; supporting text is
-13px; headings are 16px, 22px and 36px. Small headings stay close to body size and
-gain hierarchy through weight, while route headings make the large statement. The
+Heebo is the primary Hebrew and Latin family. The scale: `caption` 12px, `support` 13px,
+`label` 14px (field labels, legends, nav rows - drawn bold), `body` 15px,
+`heading-sm` 16px, `heading-card` 17px (a card's own title), `heading-sheet` 20px (a
+phone sheet's title), `heading-md` 22px (a dialog's title), and the route `h1` at
+`title` 28px on a phone and `display` 32px from the large breakpoint, extra-bold.
+Small headings stay close to body size and gain hierarchy through weight, while route
+headings make the large statement. The
 product shell is RTL. Use `dir="auto"`
 for user/backend prose and `.ltr-island` or `.mono-code` for URLs, identifiers,
 filenames and code. Do not add tracking to Hebrew text.
@@ -71,29 +79,32 @@ continues to affect both route types.
 For example, prefer `p-card-padding` and `gap-section-gap` when the spacing expresses
 one of these roles. Raw spacing remains appropriate for local optical adjustment.
 
+## Radii
+
+From the inside out: `item` 8px (a row in a list, a segment in a switch), `control-sm`
+10px (the quick-search field, a switch's track, a compact button), `control` 12px (a
+full-size button or field), `control-lg` 14px (a sheet's or an empty state's large
+command), `surface` 16px (a card), `fab` 18px (the board's floating button), `dialog`
+22px (a centred dialog), `sheet` 24px (a bottom sheet's top corners and an empty
+state's dashed frame), and `pill` for chips and badges.
+
 ## Shell and surfaces
 
-On desktop the application uses a white navigation sidebar on the RTL inline-start edge.
-It reads top to bottom: the wordmark with its accent app mark, the new-job command, the
-quick switcher, the three destinations - each its icon then its label - and sign-out at
-the foot. Active navigation is a flat background step, a heavier label and a 2px edge
-indicator.
+On desktop the application uses a 248px white sidebar on the RTL inline-start edge,
+top to bottom: the brand (an accent square with a page mark, then "סביבת קורות החיים"),
+the full-width "משרה חדשה" command, the quick switcher drawn as a search field that
+names ⌘K, the three areas, and sign-out pinned to the foot. A nav row is icon then label;
+the active one is a flat background step, a bold label and a 2px edge indicator. The
+sidebar does not fold: the design has no rail, so there is no collapse control.
 
-Every route's masthead is a page header (`PageShell`): a 30px extrabold title with no
-rule under it, an optional bordered back chevron (`back`) or trail (`breadcrumb`), a
-leading mark (`leading`), the sub-line, and the page's commands at the inline end. A step
-of the CV wizard passes its header through `WizardStepShell`'s `desktopHeader` and draws
-a thin stepper under it. The step's commands stay in its pinned action bar at every
-width, so a command is one control rather than a copy in the header and another in the
-bar.
-
-Below the large breakpoint the masthead keeps only the wordmark, led by an accent app
-mark, and the quick switcher as an icon button. The three destinations move to a bar
-pinned to the bottom of the viewport: icon over a short visible label, the active one
-marked by a pill behind its icon and a heavier label. The new-job command becomes a
-floating button over the board, above the bottom bar; sign-out moves to the Settings
-account card. The board's own search field folds away there, and its action hub becomes
-a dark accent frame around a light list. The bar's
+Below the large breakpoint the sidebar becomes a top bar of the brand and a round
+search button. The three destinations move to a tab bar pinned to the bottom of the
+viewport: icon over a short visible label, the active one marked by a pill behind its
+icon and a bold label. The new-job command becomes a
+floating button over the board, above the bottom bar; sign-out moves to the account
+list at the end of Settings. The board's action hub is a dark accent frame around a light
+list at every width: above the cards on a phone, a column beside them from the large
+breakpoint. The bar's
 height is `--cv-bottom-nav-height` (zero at the large breakpoint), and every other
 bottom-pinned surface - `CommitBar`, a sticky `ActionBar`, the Settings save row, the
 page's own bottom padding and scroll padding - stands on top of it by that height.
@@ -102,47 +113,47 @@ A single choice among a few visible options (the theme) uses `SegmentedControl`:
 radios in a fieldset, drawn as segments, rather than a pair of switches encoding three
 states.
 
-The reader can fold the desktop sidebar to an icon rail. The choice is a per-browser
-convenience kept in local storage, not a Setting, and it never reaches the narrow
-masthead. On the rail every control keeps its accessible name and gains a `Tooltip` with
-`placement="rail"`, which hangs beside the trigger and opens across the page rather than
-off the viewport edge.
+`Card` is the design's surface on every screen: white on the canvas, `rounded-surface`,
+a hairline edge and the faint `shadow-surface`. `cardClasses` gives a list item or a link
+that is a card the same look; `surfaceClasses` is the edge and radius alone. A region
+inside a card separates itself with a hairline, not a second card.
 
-A content panel on the canvas is a raised card: white, `rounded-surface`, one hairline
-and `shadow-card` (`Card variant="raised"`, or `"wide-raised"` for a panel that is raised
-on desktop only and flat on a phone; `raisedSurfaceClasses()` for other elements). A
-region inside a card stays flat - `Card`'s default, one hairline and no radius - and
-separates itself with a hairline or a background step. `surfaceClasses` remains for
-genuinely floating UI such as dropdowns and popovers.
+The shared primitives draw the design's vocabulary, so a screen composes them rather
+than restyling them:
 
-On desktop the board's cards take the same compact form as on a phone - who, the
-employer's status beside a segmented CV track, and when it last moved - in a grid beside
-the action hub, which is a dark column at the inline end. A card's next action and its
-commands are in its details (a drawer beside the board) and its menu; a stage card
-carries the same menu. The facts pool is a table, a fact is a page chosen by the URL at
-every width, and Settings lays each section out as its title and description beside a
-card.
-
-A dialog on desktop is a borderless rounded card with no rules between its parts. A
-confirmation (`presentation="alert"`, and always `ConfirmDialog`) has its icon tile and
-no ×; its two buttons and Escape answer it. `widePresentation="drawer"` docks a dialog to
-the inline-end edge.
+- `Button` sizes: `default` 46px, `large` 52px, `compact` 40px; `secondary` is an
+  outlined white button on `border-strong`.
+- `StatusBadge` is a 12px bold pill; `variant` `soft` (tinted fill, the default),
+  `solid` (accent fill, for the one chip that asks for the reader) or `outline`.
+- `FilterChip` / `filterChipClasses` is a quick filter's pill with an optional count;
+  `ChoiceChips` is a radio group drawn as pills, with an optional dashed second set.
+- `SegmentedControl` and `ViewSwitch` are a grey track with a white, lifted segment.
+- `ProgressSegments` is a run of equal segments for a CV's progress; `InitialTile` is
+  an employer's initial on a soft square; `ListCard` and `ListRow` are a card of rows
+  divided by hairlines, a row that leads somewhere ending in a chevron.
+- `EmptyState` is a dashed frame on the canvas, with no surface of its own.
 
 Hover labels use the `Tooltip` component, never a native `title` attribute: the browser's
 own tooltip arrives late, cannot be styled, and never shows on keyboard focus. Pass
 `wrap` for a label longer than a control's name. Text that only repeats what is already
 visible gets no tooltip; clamp it to two lines instead of truncating it.
 
-Workflow routes place their stage spine beside the active content at desktop widths.
-The spine uses heading-weight labels, larger marks and a continuous vertical connector.
-Below the large breakpoint a step gets the whole screen: the masthead and bottom bar
-fold away (`--cv-bottom-nav-height` is the home-indicator inset alone there) and the
-spine becomes the step's compact header - back chevron, role over company, an optional
-trailing action (`WizardStepShell`'s `phoneHeader`), then the open stage's name and
-position over one segment per stage. The page heading stays in the document for
-assistive tech (`phoneHeading="compact"`). Intake keeps a numbered stepper under its
-heading, led by a close mark. It stays the same navigation landmark, and every step
-keeps its accessible name.
+Workflow routes draw their stage rail under the heading at desktop widths: one row of
+24px marks in a white hairline card - a tick behind the work, a filled number for the
+open stage, an outlined number ahead - joined by 2px connectors that are solid as far
+as the work has come. The preparation steps (analysis, its matching settings, and the
+verification step that creates the draft) share `StepFrame`: a 40px bordered back
+square, the heading with role · company under it, the step's commands at the row's end,
+then the rail. Below the large breakpoint a step gets the whole screen: the masthead and
+bottom bar fold away (`--cv-bottom-nav-height` is the home-indicator inset alone there)
+and the header becomes the step's compact header - back chevron, role over company -
+then the open stage's name and position over one segment per stage, with the step's
+commands in a `PhoneActionBar` on the bottom edge. The page heading stays in the
+document for assistive tech unless the screen shows it (`phoneHeading`). The new-job
+screen has no record yet: it draws a close mark and the draft's saved state over its
+heading, and a numbered stepper (three short names on a phone, the four stage names
+wide). The rail stays one navigation landmark, and every step keeps its accessible
+name.
 
 ### Phone surfaces
 
@@ -151,30 +162,73 @@ components through `max-lg:` utilities - never a second tree, which would double
 name a test or a screen reader finds:
 
 - List screens (the board, the facts pool, Settings) draw their groups as rounded
-  white cards on the canvas under plain labels, extending the board exception to phones.
-  A filter used often becomes chips; the rest fold behind a "סינון" toggle that counts
-  the active ones. A list and its record are two views chosen by the URL, and the
+  white cards on the canvas under plain labels. A wide Settings puts each area's name
+  and a line about it in a column beside its card, with a rule between areas; a setting
+  is a row whose control sits at its end, and the save row appears only while something
+  is unsaved. The one place the account commands are drawn twice is Settings: the wide
+  account card holds them under the email, a phone lists them last, and CSS shows one;
+  only the hidden copy is out of the accessibility tree, but a component test sees both.
+  A filter used often becomes chips (`FilterChip`); the board has no other filter -
+  finding a record by name is the quick search's. A list and its record are two views
+  chosen by the URL, and the
   record's one command is pinned above the bottom bar.
+  The facts pool is one `<table>` at every width: each knowledge file is a `tbody`
+  opened by a heading row naming the file and how many facts it holds - a label over a
+  card of rows on a phone, a row across the table on a wide screen - and a phone
+  stretches each row's link over the row. It has no "סינון" toggle - its search field, pending banner
+  and knowledge-file chips are its only filters - and an open fact is its own page on
+  both widths (`/facts?fact=…`), with its rare command (deletion) behind a ⋮ menu.
 - `Dialog` is a bottom sheet (`presentation="sheet"`, the default): grab handle,
-  `rounded-t-sheet`, an X, safe-area inset. A two-answer question is a centred card
-  (`presentation="alert"`, and always for `ConfirmDialog`) with an icon tile. A footer
+  `rounded-t-sheet`, an X, safe-area inset, and its commands on a hairline-topped bar.
+  A two-answer question is a centred card (`presentation="alert"`, and always for
+  `ConfirmDialog`) with an icon tile. From the large breakpoint every dialog is a
+  centred `rounded-dialog` card with 28px padding and no dividers; an alert keeps its
+  icon tile and draws no X there either. A footer
   splits its commands into halves or stacks them (`footerLayout`). A record menu becomes
   an action sheet, and the quick switcher is full screen.
 - `CommitBar` and a sticky `ActionBar` run edge to edge on the bottom bar with 48px
   commands; `CommitBar` takes a `secondary` beside its primary and can drop `back`.
   Folded reference material is a `Disclosure variant="card"` row with a 56px summary.
-- A run reported inline is the step's whole screen: a turning ring, its phases stacked
-  in a card, and a bar with the way back and cancel. A run that ended without a result
-  is a page in its report sheet - warning mark, the catalogue's title, a "מה קרה" card
-  and the steps with the failed one marked.
-- The application screen opens on the recruitment stage card and the dark next-action
-  card at every width; the draft step opens with the job-fit card. On phones a draft's
-  sections are cards under a pinned segmented strip of anchors - every section stays
-  mounted - and a claim's edit and remove are labelled pills.
+- A run that is a step's whole body (`OperationOverlay`'s `screen`) is the screen at
+  every width: a turning ring round the AI mark, the run's heading as the route
+  heading, its four phases (sent, queued, running, done) stacked in a card on a phone
+  and in columns on a wide screen, and the way back to the board and cancel - in the
+  phone's bottom bar, under the card wide, where the run is one centred card. A run
+  that ended without a result is reported in the same place: warning mark, the
+  catalogue's title, what happened, that the prior state was kept, the phases with the
+  failed one marked, and the ways on (Settings when a provider is missing, back to the
+  application, the run again). Elsewhere a failure is a page in the report sheet.
+- The Application hub (`/applications/:id`) opens on the recruitment stage card, then
+  the dark next-action card, the five-step CV checklist and the folded posting; its one
+  command and the PDF are pinned at the bottom, and its record menu (⋮) is an action
+  sheet; that menu also edits the posting until a Submission locks it. From the large
+  breakpoint the commands move to the header, the checklist
+  becomes a row of tiles, and the reminder, the record's facts and the PDF stand in a
+  300px side column. The preparation steps have addresses of their own: the analysis
+  (`/analysis`), its matching settings (`/analysis/matching`) and the verification
+  (`/verification`). On the analysis step a requirement no fact supports offers "הוסף
+  עובדה" in its row (the table's evidence cell on a wide screen), and the gap questions
+  stand under the requirements table as a card per question - in the main column beside
+  the verdict on a wide screen, after the rows on a phone.
+- The draft and ready steps draw no stage bar: their heading row carries the way back.
+  The draft editor shows one part of the CV at a time - a card of part rows beside it on
+  a wide screen, a segmented strip above it on a phone; every part stays mounted - with
+  the job fit, the folded card of the job's requirements marked against the lines on
+  screen, the save state and the approval's notes in a side column that a phone stacks
+  in order (fit first, requirements last). A regeneration's before and after open as a
+  card above the lines. Its approval is in the heading row on
+  a wide screen and a pinned bar on a phone; the rendered document is behind the
+  heading's preview toggle. A line is a bullet, its text and a quiet status line; its
+  tools appear on hover or focus (a tap on a phone). A line nothing authorizes sits on a
+  recessed ground with "השארה / עריכה / הסרה" pills. The ready step is the finished page
+  (a sketch) beside its facts, its two commands and a `ListCard` of ways into how it was
+  made; a phone shrinks the page to a thumbnail and pins the two commands.
 - Every touch target is at least 44px.
 
-Route frames start at the navigation edge rather than centring, so a page heading keeps
-its position when moving between routes whatever the route's measure. Top-level areas
+Route frames are centred in the content column, as the design draws them: 70rem for a
+listing or record, 55rem for a page of settings or inputs (`measure="form"`), 51.25rem
+for a single-question step (`measure="wizard"`). The gutter is 16px on a phone and 40px
+beside the sidebar. The page heading stands on the canvas with no rule under it. Top-level areas
 reached from the primary navigation carry no breadcrumb: the navigation already marks
 where the reader is, and a trail through the board implied a hierarchy that does not
 exist.
@@ -231,10 +285,11 @@ Use them through Tailwind's custom-property syntax:
 4. `z-(--cv-z-overlay)` — non-native overlay surfaces; native `<dialog>` uses the browser top layer.
 5. `z-(--cv-z-toast)` — notifications that must remain visible above overlays.
 
-Shadows follow the same progression: `surface`, `floating`, `overlay`, `document`.
+Shadows follow the same progression: `surface` (a card's faint lift), `segment` (the
+selected segment of a switch), `action` (a large primary command), `fab`, `floating`,
+`overlay` (a centred dialog), `sheet` (a bottom sheet, cast upwards), `document`.
 Dark shadows combine a faint light edge with a black drop so adjacent dark surfaces
-remain distinguishable. Ordinary content regions should use a hairline or a single
-background shift; radius, border and shadow together are reserved for floating UI.
+remain distinguishable.
 The token guard rejects numeric z-index utilities in component code.
 
 ## Icons
@@ -260,4 +315,5 @@ text and icons rather than preserved author colours.
 
 `npm run lint:tokens` derives the available semantic colours, radii and shadows from
 `@theme`. It rejects literal component colours, raw Tailwind palettes, unknown design
-tokens, focus-outline removal and numeric z-index utilities.
+tokens, arbitrary `rounded-[…]` and `shadow-[…]` values, focus-outline removal and
+numeric z-index utilities.

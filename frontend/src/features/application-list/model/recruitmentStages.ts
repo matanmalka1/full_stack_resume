@@ -1,63 +1,41 @@
-import { Archive, Award, Bookmark, PhoneCall, Send, Users, type LucideIcon } from "lucide-react";
+import { Award, Bookmark, PhoneCall, Send, Users, type LucideIcon } from "lucide-react";
 
 import type { RecruitmentStatus } from "@/api/contracts";
-
-type RecruitmentStageTone = "neutral" | "accent" | "warning" | "success";
+import type { BadgeVariant } from "@/ui/StatusBadge";
 
 interface RecruitmentStageShape {
   id: string;
   label: string;
   statuses: readonly RecruitmentStatus[];
   icon: LucideIcon;
-  tone: RecruitmentStageTone;
+  /* How loud the stage's chip draws on a card: a stage not yet started is an outline, one
+     under way a soft fill, and the stages where the employer is talking to the reader the
+     solid accent - the cards that matter most this week stand out in a column of them. */
+  badge: BadgeVariant;
 }
 
-/* Single source for "which recruitment stage does this status belong to": the filter
-   bar and the pipeline board used to answer this differently, so the same application
-   could sit in different columns depending on which screen was open. assignment groups
-   with interviews and final_stage groups with offer/accepted - a product decision, not
-   a default either screen is free to redraw locally. */
+/* Single source for "which recruitment stage does this status belong to": the cards'
+   chips and the stages view's columns answer it from here, so the same Application cannot
+   sit under different names depending on which view is open. assignment groups with
+   interviews and final_stage groups with offer/accepted - a product decision, not a
+   default either view is free to redraw locally. */
 export const recruitmentStages = [
-  { id: "saved", label: "טרם הוגש", statuses: ["saved"], icon: Bookmark, tone: "neutral" },
-  { id: "applied", label: "הוגשה מועמדות", statuses: ["applied"], icon: Send, tone: "accent" },
-  { id: "screening", label: "סינון טלפוני / HR", statuses: ["recruiter_screen"], icon: PhoneCall, tone: "warning" },
-  {
-    id: "interviews",
-    label: "ראיונות ומטלות",
-    statuses: ["interview", "assignment"],
-    icon: Users,
-    tone: "success",
-  },
+  { id: "saved", label: "טרם הוגש", statuses: ["saved"], icon: Bookmark, badge: "outline" },
+  { id: "applied", label: "הוגשה מועמדות", statuses: ["applied"], icon: Send, badge: "soft" },
+  { id: "screening", label: "סינון טלפוני / HR", statuses: ["recruiter_screen"], icon: PhoneCall, badge: "soft" },
+  { id: "interviews", label: "ראיונות ומטלות", statuses: ["interview", "assignment"], icon: Users, badge: "solid" },
   {
     id: "offer",
     label: "שלב סופי והצעה",
     statuses: ["final_stage", "offer", "accepted"],
     icon: Award,
-    tone: "success",
+    badge: "solid",
   },
 ] as const satisfies readonly RecruitmentStageShape[];
 
-/* Not one of the active stages a filter click can select - a closed application has left
-   the pipeline rather than reached a further stage of it. Shown only by views that also
-   render closed applications alongside the active ones. */
-export const closedStage = {
-  id: "closed",
-  label: "תהליכים סגורים",
-  statuses: ["rejected", "withdrawn", "closed"],
-  icon: Archive,
-  tone: "neutral",
-} as const satisfies RecruitmentStageShape;
+export type RecruitmentStage = (typeof recruitmentStages)[number];
 
-export type RecruitmentStageId = (typeof recruitmentStages)[number]["id"];
-
-export const selectedStage = (statuses: readonly RecruitmentStatus[] | undefined): RecruitmentStageId | null => {
-  if (statuses == null || statuses.length === 0) {
-    return null;
-  }
-
-  return (
-    recruitmentStages.find((stage) =>
-      statuses.every((status) => (stage.statuses as readonly RecruitmentStatus[]).includes(status)),
-    )?.id ?? null
-  );
-};
+/* The active stage a status belongs to, or null for a closed one - a closed Application
+   has left the pipeline rather than reached a further stage of it. */
+export const recruitmentStageOf = (status: string): RecruitmentStage | null =>
+  recruitmentStages.find((stage) => (stage.statuses as readonly string[]).includes(status)) ?? null;

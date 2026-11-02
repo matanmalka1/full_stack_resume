@@ -34,6 +34,7 @@ export const RequirementFactAction = ({
           setCreated(false);
           setOpen(true);
         }}
+        size="compact"
         variant="secondary"
       >
         <Plus aria-hidden="true" className="size-icon-md shrink-0" />

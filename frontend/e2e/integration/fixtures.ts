@@ -17,7 +17,7 @@ export const test = base.extend({
     await page.goto("/login");
     await page.getByLabel("אימייל").fill(email);
     await page.getByLabel("סיסמה").fill(password);
-    await page.getByRole("button", { name: "התחברות" }).click();
+    await page.getByRole("button", { name: "כניסה", exact: true }).click();
     await expect(page).not.toHaveURL(/\/login/);
     await use(page);
   },

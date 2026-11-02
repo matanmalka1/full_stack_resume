@@ -6,11 +6,11 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
 import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
 import { useCreatePendingFact } from "../api/mutations";
-import { useFactPool } from "../api/queries";
 import { emptyFactForm, type FactFormFields, parseFactTags } from "../model/factForm";
 import {
-  FactCoreFields,
+  FactEnglishField,
   FactHebrewRenderingField,
+  FactMeaningField,
   FactProvenanceField,
   FactSourceField,
   FactStyleField,
@@ -41,16 +41,14 @@ interface FactCreationDialogProps {
 }
 
 /* A new fact entered by hand, which always starts pending: nothing typed here becomes
-   canonical without a separate, explicit confirmation. The Hebrew rendering is optional
+   canonical without a separate, explicit promotion. The Hebrew rendering is optional
    because the English one is what the CV is built from.
 
-   It is a modal rather than a disclosure on the page. Eight fields unfolding inline
-   pushed the fact pool and the selected fact - the two things the screen exists to show -
-   below the fold every time someone opened it, and a half-filled form stayed on screen
-   competing with the list for the same column. As a dialog the writing task owns the
-   screen while it is open and gives the whole page back when it closes. The fields are
-   drawn one size down (`cv-fields-compact`): a form of eight controls at full field size
-   outgrows a dialog, and none of these values is longer than a sentence.
+   Laid out as the design draws it - the kind as a row of pills, then the fields in pairs:
+   the two wordings side by side, the tags beside the knowledge file. The design has no
+   place for the fact's meaning or its provenance, but the store requires both and never
+   infers them, so they close the form as a third pair. A phone stacks every pair and
+   ends the sheet on its one command; its X is the way out.
 
    The same dialog serves the correction of a canonical fact - same command, same pending
    result, only seeded with the original's values and carrying a `replaces` link - so the
@@ -71,27 +69,12 @@ export const FactCreationDialog = ({
   const form = useAppForm<FactFormFields>({ defaultValues: initialValues ?? emptyFactForm(null) });
   const {
     formState: { errors },
-    getValues,
     register,
     reset,
     setError,
     setValue,
     watch,
   } = form;
-  /* Already cached by the pool this dialog was opened from; no request of its own. */
-  const pool = useFactPool();
-  const chosen = parseFactTags(watch("tags"));
-  const poolTags = [...new Set((pool.data?.entries ?? []).flatMap(({ fact }) => fact.tags))];
-  const knownTags = poolTags
-    .filter((tag) => !chosen.includes(tag))
-    /* Sorting a list this expression just built, not a caller's array. */
-    // oxlint-disable-next-line unicorn/no-array-sort
-    .sort((first, second) => first.localeCompare(second));
-  /* An empty store has no vocabulary to choose from, and a tag is required, so the first
-     facts fall back to typing their tags. The picker takes over as soon as one exists. */
-  const hasVocabulary = poolTags.length > 0;
-
-  const writeTags = (tags: string[]) => setValue("tags", tags.join(", "), { shouldDirty: true, shouldValidate: true });
   const create = useCreatePendingFact((factId) => {
     reset();
     onCreated(factId);
@@ -130,10 +113,17 @@ export const FactCreationDialog = ({
     <Dialog
       footer={
         <>
-          <Button onClick={onClose} variant="secondary">
+          <Button className="max-lg:hidden" onClick={onClose} size="default" variant="secondary">
             ביטול
           </Button>
-          <Button form={formId} pending={create.isPending} pendingLabel="יוצר…" type="submit">
+          <Button
+            className="max-lg:min-h-13 max-lg:rounded-control-lg"
+            form={formId}
+            pending={create.isPending}
+            pendingLabel="יוצר…"
+            size="default"
+            type="submit"
+          >
             {submitLabel}
           </Button>
         </>
@@ -144,37 +134,20 @@ export const FactCreationDialog = ({
       size="wide"
       title={title}
     >
-      {intro}
+      {intro === undefined ? null : <div className="mb-4">{intro}</div>}
 
-      <form
-        className="cv-fields-compact mt-4 grid gap-3 sm:grid-cols-2"
-        id={formId}
-        onSubmit={form.handleSubmit(submit)}
-      >
-        <FactSourceField register={register} />
-        {/* A wide dialog leads with the presentation type, its chips on one line across
-            the form, as the desktop design draws it; a phone keeps the source first. */}
-        <FactStyleField className="lg:order-first lg:col-span-2" register={register} />
-        <FactCoreFields className="sm:col-span-2" errors={errors} register={register} />
-        <FactHebrewRenderingField register={register} />
-        <FactTagsField
-          errors={errors}
-          picker={
-            hasVocabulary
-              ? {
-                  chosen,
-                  known: knownTags,
-                  onAdd: (tag) => writeTags([...parseFactTags(getValues("tags")), tag]),
-                  onRemove: (tag) => writeTags(parseFactTags(getValues("tags")).filter((current) => current !== tag)),
-                }
-              : undefined
-          }
-          register={register}
-        />
-        <FactProvenanceField errors={errors} register={register} />
+      <form className="flex flex-col gap-4.5" id={formId} onSubmit={form.handleSubmit(submit)}>
+        <FactStyleField onChange={(style) => setValue("style", style, { shouldDirty: true })} value={watch("style")} />
+        <div className="grid gap-4 lg:grid-cols-2 lg:gap-3.5">
+          <FactHebrewRenderingField register={register} />
+          <FactEnglishField errors={errors} register={register} />
+          <FactTagsField errors={errors} register={register} />
+          <FactSourceField register={register} />
+          <FactMeaningField errors={errors} register={register} />
+          <FactProvenanceField errors={errors} register={register} />
+        </div>
         {create.error === null ? null : (
           <ErrorCallout
-            className="sm:col-span-2"
             error={create.error}
             fallbackDetail="הפרטים שהוזנו נשארו בטופס. אפשר לנסות שוב."
             inlineFields={inlineFields}

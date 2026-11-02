@@ -25,16 +25,13 @@ export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "acc
   return (
     <>
       {eyebrow === undefined ? null : (
-        <p className={cx("mb-1 text-support font-bold tracking-wide", eyebrowClasses[eyebrowTone])}>{eyebrow}</p>
+        <p className={cx("mb-1 text-label font-bold", eyebrowClasses[eyebrowTone])}>{eyebrow}</p>
       )}
       {/* A.3: a heading is usually a Hebrew constant, but the route error boundary
           passes a backend title and detail through here, so each picks its own
           direction rather than inheriting the RTL shell. */}
-      {/* The desktop design sets a route's title as the page's one display line - 30px,
-          extrabold - over a 15px sub-line; a phone keeps the compact 22px heading its own
-          design draws. */}
       <h1
-        className="text-heading-md font-bold tracking-tight text-cv-text lg:text-heading-page lg:font-extrabold"
+        className="text-title font-extrabold tracking-tight text-cv-text lg:text-display"
         data-route-heading
         dir="auto"
         id={id}
@@ -43,7 +40,7 @@ export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "acc
         {children}
       </h1>
       {description === undefined ? null : (
-        <p className="mt-1 max-w-2xl text-support leading-6 text-cv-text-muted lg:text-body" dir="auto">
+        <p className="mt-1 max-w-2xl text-label text-cv-text-muted lg:mt-1.5 lg:text-body" dir="auto">
           {description}
         </p>
       )}

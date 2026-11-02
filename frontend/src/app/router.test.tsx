@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { NewApplicationPage } from "@/features/application-intake/pages/NewApplicationPage";
 import { ApplicationListPage } from "@/features/application-list/pages/ApplicationListPage";
+import { AnalysisPage } from "@/features/preparation/pages/AnalysisPage";
 import { ApplicationPage } from "@/features/application-detail/pages/ApplicationPage";
 import { ApplicationResumePage } from "@/features/application-detail/pages/ApplicationResumePage";
 import { DraftEditorPage } from "@/features/drafts/pages/DraftEditorPage";
@@ -58,6 +59,7 @@ describe("the route table", () => {
      depending on which one had been used to arrive. */
   it("answers only the canonical Application addresses", async () => {
     expect(await elementType("applications/:applicationId")).toBe(ApplicationPage);
+    expect(await elementType("applications/:applicationId/analysis")).toBe(AnalysisPage);
     expect(await elementType("applications/:applicationId/resume")).toBe(ApplicationResumePage);
     expect(route("applications/:applicationId/preparation")).toBeUndefined();
     expect(route("applications/:applicationId/tracking")).toBeUndefined();

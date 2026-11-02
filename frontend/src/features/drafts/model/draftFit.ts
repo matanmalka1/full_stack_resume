@@ -28,3 +28,24 @@ export const draftFit = (detail: ApplicationDetail): DraftFit | null => {
     ].map(({ requirementId, requirement, severity }) => ({ requirementId, requirement, severity })),
   };
 };
+
+/* Which of the posting's requirements each fact answers, by fact id - read from the same
+   analysis as the fit above, so a line can say what it is there for ("עונה על …"). A
+   line answers whatever its facts answer. Empty whenever `draftFit` would be null. */
+export type ClaimRequirements = ReadonlyMap<string, readonly string[]>;
+
+export const claimRequirements = (detail: ApplicationDetail): ClaimRequirements => {
+  const classification = classificationFromAnalysis(detail);
+  const byFact = new Map<string, string[]>();
+  for (const requirement of classification?.requirements ?? []) {
+    for (const factId of requirement.supportingFactIds) {
+      byFact.set(factId, [...(byFact.get(factId) ?? []), requirement.text]);
+    }
+  }
+  return byFact;
+};
+
+/* The requirements one line answers, each named once, in the analysis' order. */
+export const requirementsForFacts = (requirements: ClaimRequirements, factIds: readonly string[]): string[] => [
+  ...new Set(factIds.flatMap((factId) => requirements.get(factId) ?? [])),
+];

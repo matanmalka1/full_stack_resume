@@ -399,7 +399,9 @@ Calls no AI. Deleted Applications are excluded from duplicate detection.
 Input: new text, optional URL, `expected_job_text_hash`. Replaces the job text in place
 and appends an audit record with both hashes. A hash mismatch is 409. Unchanged input
 writes nothing. After any Submission it is refused (409), also enforced by the trigger
-`lock_submitted_job_text`.
+`lock_submitted_job_text`. The Application hub offers it as "עריכת נוסח המשרה" in the
+record's ⋯ menu until the text is locked, opening a dialog (a sheet on a phone) with the
+current text and URL.
 
 ### `update_application_notes`
 
@@ -578,8 +580,9 @@ the document's template. No approval needed, nothing stored. 412 while `content 
 template without choosing it, for the template picker.
 
 `GET /templates/{template}/sample?language=en|he` renders a fictional sample CV
-(`rendering/samples/template-sample.json`) in one template, so Settings can show a
-template before any CV exists. It reads no user's data.
+(`rendering/samples/template-sample.json`) in one template, a template shown before
+any CV exists. It reads no user's data. No screen frames it at present: Settings choose
+the default template by name.
 
 ## 15. Check and approval commands
 

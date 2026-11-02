@@ -57,16 +57,6 @@ export const toneBackgroundClasses: Record<Tone, string> = {
   neutral: "bg-cv-surface-muted",
 };
 
-/* A solid swatch: the small dot that stands for a tone beside a word. */
-export const toneDotClasses: Record<Tone, string> = {
-  success: "bg-cv-success",
-  warning: "bg-cv-warning",
-  blocker: "bg-cv-blocker",
-  info: "bg-cv-info",
-  progress: "bg-cv-accent",
-  neutral: "bg-cv-text-muted",
-};
-
 /* The soft tinted treatment a badge or a marker draws: tinted edge, tinted fill, toned text. */
 export const toneSoftClasses = (tone: Tone): string =>
   `${toneBorderClasses[tone]} ${toneBackgroundClasses[tone]} ${toneTextClasses[tone]}`;

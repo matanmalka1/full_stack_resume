@@ -31,7 +31,7 @@ export const Field = ({ children, className, error, hint, label, optional = fals
   return (
     <div className={cx("flex flex-col gap-1.5", className)}>
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <label className="text-support font-medium text-cv-text" htmlFor={id}>
+        <label className="text-label font-bold text-cv-text" htmlFor={id}>
           {label}
         </label>
         {optional ? (
@@ -47,7 +47,7 @@ export const Field = ({ children, className, error, hint, label, optional = fals
         ) : null}
       </div>
       {hint === undefined ? null : (
-        <p className="text-support text-cv-text-muted" id={hintId}>
+        <p className="text-caption text-cv-text-muted" id={hintId}>
           {hint}
         </p>
       )}

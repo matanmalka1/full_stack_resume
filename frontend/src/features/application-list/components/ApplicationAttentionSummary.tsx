@@ -1,180 +1,123 @@
 import { useQuery } from "@tanstack/react-query";
-import { BellOff, ChevronDown, ChevronLeft, CircleCheck, Sparkles } from "lucide-react";
+import { Bell, CalendarDays, ChevronLeft, Clock, FileCheck2, TriangleAlert, type LucideIcon } from "lucide-react";
+import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { applicationListQueryOptions } from "@/api/applications";
-import type { ApplicationListItem } from "@/api/contracts";
-import { Button } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
-import { Tooltip } from "@/ui/Tooltip";
-import { DuplicateIdentityHint } from "./ApplicationIdentity";
-import { attentionHubItems, duplicatedApplicationIdentityIds } from "../model/applicationListPresentation";
+import { cx } from "@/ui/cx";
+import { BOARD_LIMIT } from "../model/applicationListParams";
+import { attentionHubItems, type HubItem } from "../model/applicationListPresentation";
 
-interface ApplicationAttentionSummaryProps {
-  /* Whether the board has any Application at all. An empty database already says so in
-     its own empty state; a hub reporting "nothing waiting" above it would be noise. */
-  boardHasApplications: boolean;
-  clearingApplicationId: string | null;
-  /* Whether the board below is already narrowed to the same preset. The offer to narrow
-     it is then withdrawn rather than shown as a control that does nothing. */
-  filterActive: boolean;
-  onClearNextAction: (application: ApplicationListItem) => void;
-  onOpenStatusDialog: (application: ApplicationListItem) => void;
-  onShowAll: () => void;
-}
+/* How many rows the panel draws before "all": two on a phone, where it sits above the
+   cards and must not push them off the first screen; three beside them on a wide screen. */
+const PHONE_ROWS = 2;
+const WIDE_ROWS = 3;
 
-export const ApplicationAttentionSummary = ({
-  boardHasApplications,
-  clearingApplicationId,
-  filterActive,
-  onClearNextAction,
-  onOpenStatusDialog,
-  onShowAll,
-}: ApplicationAttentionSummaryProps) => {
-  const attentionQuery = useQuery(applicationListQueryOptions({ preset: "needs_attention", limit: 3 }));
-  const sourceItems = attentionQuery.data?.items ?? [];
-  const displayItems = attentionHubItems(sourceItems);
-  const ambiguous = duplicatedApplicationIdentityIds(sourceItems);
-  /* The hub reads at most three; the server's match count is the whole preset, so the
-     badge says how much is waiting even when only the first three are drawn. */
-  const waitingCount = Math.max(attentionQuery.data?.matched ?? 0, displayItems.length);
+const rowIcons: Record<HubItem["type"], LucideIcon> = {
+  overdue: Clock,
+  due_today: Clock,
+  attention: TriangleAlert,
+  due_this_week: CalendarDays,
+  ready: FileCheck2,
+};
 
-  if (displayItems.length === 0) {
-    /* Only a successful read may say nothing is waiting. While loading, or after a
-       failure, the hub stays silent rather than claim a state it has not seen. */
-    if (!attentionQuery.isSuccess || !boardHasApplications) {
-      return null;
-    }
+const HubRow = ({ hidden, item }: { hidden: string | undefined; item: HubItem }) => {
+  const Icon = rowIcons[item.type];
+  const urgent = item.type === "overdue";
 
-    return (
-      <section
-        aria-labelledby="urgent-action-heading"
-        className="flex items-center gap-2 rounded-surface border border-cv-border bg-cv-surface px-3 py-2.5"
+  return (
+    <li className={cx("border-t border-cv-hairline first:border-t-0", hidden)}>
+      <Link
+        className="flex min-h-14 items-center gap-3 px-3.5 py-3 text-cv-text transition-colors hover:bg-cv-surface-muted"
+        to={item.to}
       >
-        <CircleCheck aria-hidden="true" className="size-icon-md shrink-0 text-cv-success" />
-        <h2 className="text-support font-bold text-cv-text" id="urgent-action-heading">
-          מוקד פעולות
-        </h2>
-        <p className="truncate text-support text-cv-text-muted">אין פעולות ממתינות.</p>
-      </section>
-    );
+        {/* The row's kind as a mark, on a phone only - the design's wide panel is text. */}
+        <span
+          aria-hidden="true"
+          className={cx(
+            "flex size-9 shrink-0 items-center justify-center rounded-control-sm lg:hidden",
+            urgent ? "bg-cv-text text-cv-surface" : "bg-cv-surface-muted text-cv-text",
+          )}
+        >
+          <Icon className="size-icon-md" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-label font-bold">
+            <bdi>{item.title}</bdi>
+          </span>
+          <span className="block truncate text-support text-cv-text-muted">
+            <span dir="auto">{item.application.company}</span> · <span dir="auto">{item.application.target_role}</span>
+          </span>
+        </span>
+        <StatusBadge icon={false} className="px-2.25 py-0.75" tone="progress" variant={urgent ? "solid" : "soft"}>
+          {item.label}
+        </StatusBadge>
+      </Link>
+    </li>
+  );
+};
+
+/* The board's one dark block: what waits on the reader across the open board, each row
+   the way to where it is done. It reads the whole open board itself - the same question
+   the unnarrowed board asks, so the two share one cached answer - because a slice chosen
+   below must not hide what is waiting from the panel that exists to say so.
+
+   It says nothing when nothing waits: the design has no "all clear" state, and an empty
+   panel would only push the cards down. */
+export const ApplicationAttentionSummary = () => {
+  const headingId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const hubQuery = useQuery(applicationListQueryOptions({ activity: "open", sort: "updated", limit: BOARD_LIMIT }));
+  const items = attentionHubItems(hubQuery.data?.items ?? []);
+
+  if (items.length === 0) {
+    return null;
   }
 
-  /* The hub is the board's one dark block: an accent frame whose heading sits on the
-     accent and whose rows sit on a light card inside it. On a phone it is the first thing
-     under the slices; on a wide screen it is the column beside the cards. */
+  /* Rows past the phone's two fold away below the large breakpoint, rows past three at
+     every width, until the reader asks for all of them. */
+  const hiddenClasses = (index: number): string | undefined =>
+    expanded ? undefined : index >= WIDE_ROWS ? "hidden" : index >= PHONE_ROWS ? "max-lg:hidden" : undefined;
+
+  /* One "all" for both widths: on a wide screen it is drawn only when there is more than
+     its three rows. */
+  const toggle =
+    items.length > PHONE_ROWS ? (
+      <button
+        aria-expanded={expanded}
+        className={cx(
+          "inline-flex min-h-8 items-center gap-0.5 text-support font-medium",
+          items.length > WIDE_ROWS ? undefined : "lg:hidden",
+        )}
+        onClick={() => setExpanded((value) => !value)}
+        type="button"
+      >
+        {expanded ? "פחות" : `הכל (${items.length})`}
+        <ChevronLeft aria-hidden="true" className={cx("size-icon-sm transition-transform", expanded && "-rotate-90")} />
+      </button>
+    ) : null;
+
   return (
     <section
-      aria-labelledby="urgent-action-heading"
-      className="rounded-surface border border-cv-accent bg-cv-accent p-1 shadow-floating"
+      aria-labelledby={headingId}
+      className="rounded-fab bg-cv-accent p-1 text-cv-on-accent shadow-fab lg:w-75 lg:shrink-0"
     >
-      <details className="group/attention" open>
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5">
-          <span className="flex min-w-0 items-baseline gap-2">
-            <Sparkles aria-hidden="true" className="size-icon-md shrink-0 self-center text-cv-on-accent" />
-            <h2 className="text-support font-bold text-cv-on-accent" id="urgent-action-heading">
-              מוקד פעולות
-            </h2>
-            <span className="shrink-0 self-center rounded-pill bg-cv-on-accent px-2 text-support font-bold text-cv-accent tabular-nums">
-              {waitingCount}
-              <span className="sr-only"> ממתינות</span>
-            </span>
-            <span className="truncate text-support text-cv-on-accent">
-              {waitingCount > displayItems.length
-                ? `${displayItems.length} הראשונות מוצגות`
-                : displayItems.length === 1
-                  ? "פעולה אחת בעדיפות"
-                  : `${displayItems.length} פעולות בעדיפות`}
-            </span>
-          </span>
-          <ChevronDown
-            aria-hidden="true"
-            className="size-icon-md shrink-0 text-cv-on-accent transition-transform group-open/attention:rotate-180"
-          />
-        </summary>
-
-        {/* The first column is a fixed width rather than `auto`: each row is its own
-            grid, so a badge-width column let every title start at a different x and the
-            three rows read as unrelated blocks. In the wide screen's side column there
-            is no room for three, so each row stacks. */}
-        <div className="divide-y divide-cv-border overflow-hidden rounded-control bg-cv-surface">
-          {displayItems.map((item) => (
-            <article
-              className="grid gap-x-3 gap-y-2 px-3 py-2.5 transition-colors hover:bg-cv-surface-muted sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:items-center lg:grid-cols-1 lg:items-start"
-              key={`${item.application.id}-${item.type}`}
-            >
-              <StatusBadge className="w-fit px-2 py-0.5 whitespace-nowrap" tone={item.tone}>
-                {item.label}
-              </StatusBadge>
-              {/* One combined line, not a single-script identity field like `CompanyMark`
-                  or `ApplicationSummary` carry - `dir="auto"` per line is wrong here: a
-                  Latin company name (most of them) flips just the subtitle to LTR while
-                  the Hebrew title above stays RTL, splitting the row into two halves with
-                  a gap between them. Both lines follow the page's own direction instead. */}
-              <div className="min-w-0" dir="rtl">
-                <h3 className="truncate text-support font-bold text-cv-text">{item.title}</h3>
-                <p className="truncate text-support text-cv-text-muted">
-                  {item.application.company} · {item.subtitle}
-                </p>
-                {ambiguous.has(item.application.id) ? (
-                  <DuplicateIdentityHint createdAt={item.application.created_at} />
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5 sm:justify-end lg:justify-start">
-                {item.type === "overdue" || item.type === "due_today" ? (
-                  <Tooltip label="הסרת התזכורת, ללא רישום השלמה">
-                    <Button
-                      className="text-cv-text-muted hover:text-cv-success"
-                      disabled={clearingApplicationId === item.application.id}
-                      onClick={() => onClearNextAction(item.application)}
-                      pending={clearingApplicationId === item.application.id}
-                      pendingLabel="מסיר…"
-                      size="compact"
-                      variant="ghost"
-                    >
-                      <BellOff aria-hidden="true" className="size-icon-sm" />
-                      הסרת תזכורת
-                    </Button>
-                  </Tooltip>
-                ) : null}
-
-                {item.actionTo == null ? (
-                  <Button
-                    className="gap-1"
-                    onClick={() => onOpenStatusDialog(item.application)}
-                    size="compact"
-                    variant="secondary"
-                  >
-                    {item.actionLabel}
-                    <ChevronLeft aria-hidden="true" className="size-icon-sm" />
-                  </Button>
-                ) : (
-                  <Link
-                    className="inline-flex min-h-8 items-center gap-1 rounded-control bg-cv-accent-soft px-2.5 text-support font-semibold text-cv-accent transition-colors hover:bg-cv-accent hover:text-cv-on-accent"
-                    to={item.actionTo}
-                  >
-                    {item.actionLabel}
-                    <ChevronLeft aria-hidden="true" className="size-icon-sm" />
-                  </Link>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
-        {filterActive ? null : (
-          <div className="flex justify-end px-2 py-1">
-            <Button
-              className="gap-1 text-cv-on-accent hover:bg-transparent hover:underline"
-              onClick={onShowAll}
-              size="compact"
-              variant="ghost"
-            >
-              הצגת כל הדורשות טיפול בלוח
-              <ChevronLeft aria-hidden="true" className="size-icon-sm" />
-            </Button>
-          </div>
-        )}
-      </details>
+      <div className="flex items-center justify-between gap-3 px-3 pt-2 pb-2.5">
+        <h2 className="flex items-center gap-2 text-body font-bold" id={headingId}>
+          <Bell aria-hidden="true" className="size-icon-md" />
+          מוקד פעולות
+        </h2>
+        <span className="flex items-center gap-3">
+          <span className="text-support opacity-85 max-lg:hidden">{items.length} ממתינות</span>
+          {toggle}
+        </span>
+      </div>
+      <ul className="m-0 list-none overflow-hidden rounded-control-lg bg-cv-surface p-0">
+        {items.map((item, index) => (
+          <HubRow hidden={hiddenClasses(index)} item={item} key={item.application.id} />
+        ))}
+      </ul>
     </section>
   );
 };

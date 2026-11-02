@@ -5,6 +5,7 @@ import type { DocumentOutline } from "@/api/documents";
 import { Button } from "@/ui/Button";
 import { DisclosureSummary } from "@/ui/Disclosure";
 import { StatusBadge } from "@/ui/StatusBadge";
+import { cardClasses } from "@/ui/surface";
 import {
   type RegenerationChange,
   type RegenerationChangeState,
@@ -64,6 +65,7 @@ const ChangeRow = ({
             aria-label={`החזרת הנוסח הקודם: ${change.before.text}`}
             disabled={locked}
             onClick={() => onRevert(change)}
+            size="compact"
             variant="secondary"
           >
             <Undo2 aria-hidden="true" className="size-icon-md" />
@@ -106,28 +108,28 @@ export const RegenerationDiffPanel = ({
   return (
     <section
       aria-labelledby="regeneration-diff-heading"
-      className="flex flex-col gap-2 border border-cv-border border-s-4 border-s-cv-accent bg-cv-surface p-card-padding max-lg:rounded-surface max-lg:p-3.5"
+      className={cardClasses("flex flex-col gap-2 p-4 max-lg:p-3.5")}
     >
       <details onToggle={(event) => setOpen(event.currentTarget.open)} open={open}>
-        <DisclosureSummary className="text-body font-semibold text-cv-text max-lg:min-h-11" open={open}>
+        <DisclosureSummary className="min-h-8 text-label font-bold text-cv-text max-lg:min-h-11" open={open}>
           <span className="inline-flex items-center gap-2" id="regeneration-diff-heading">
             <History aria-hidden="true" className="size-icon-md text-cv-text-muted" />
             {changes.length === 1 ? "היצירה מחדש שינתה שורה אחת" : `היצירה מחדש שינתה ${changes.length} שורות`}
             {subject}
           </span>
         </DisclosureSummary>
-        <p className="mt-2 text-support leading-6 text-cv-text-muted">
+        <p className="mt-1 text-support leading-relaxed text-cv-text-muted">
           החזרה שולחת את הנוסח הקודם כעריכה רגילה. השרת בודק אותו מחדש מול העובדות: נוסח שאינו נגזר מהן ישירות יסומן
           כממתין לבדיקה.
         </p>
-        <ul className="flex flex-col divide-y divide-cv-border">
+        <ul className="flex flex-col divide-y divide-cv-hairline">
           {changes.map((change) => (
             <ChangeRow change={change} key={change.claimId} locked={locked} onRevert={onRevert} outline={outline} />
           ))}
         </ul>
       </details>
       <div className="flex justify-end">
-        <Button onClick={onDismiss} variant="ghost">
+        <Button onClick={onDismiss} size="compact" variant="quiet">
           סגירת ההשוואה
         </Button>
       </div>

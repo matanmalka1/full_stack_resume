@@ -1,9 +1,9 @@
 import {
   Briefcase,
+  CircleCheck,
   Clock3,
   Code2,
   FileText,
-  ShieldCheck,
   Sparkles,
   Trash2,
   UserRound,
@@ -46,12 +46,12 @@ export const factStatusTones: Record<FactStatus, Tone> = {
 
 export const factStatusIcons: Record<FactStatus, LucideIcon> = {
   pending: Clock3,
-  canonical: ShieldCheck,
+  canonical: CircleCheck,
   deleted: Trash2,
 };
 
 /* The mark a phone's pool row leads with, so the knowledge file a fact sits in reads at a
-   glance where the wide screen's group heading is far up the scroll. */
+   glance even after its group heading has scrolled away. */
 const factSourceIcons: Record<FactSource, LucideIcon> = {
   "common.json": UserRound,
   "sales.json": Briefcase,
@@ -78,6 +78,11 @@ export const factLabel = (fact: Fact): string => fact.renderings.he ?? fact.rend
 
 export const factLabelInLanguage = (fact: Fact, language: string): string =>
   fact.renderings[language] ?? fact.renderings.en ?? fact.meaning;
+
+/* The line under a fact's wording on the pool and on its page: where it came from and,
+   when the store has them, its dates. A fact with neither has no line. */
+export const factContextLine = (fact: Fact): string =>
+  [fact.provenance, fact.effective_dates].filter((part) => part != null && part.trim() !== "").join(" · ");
 
 /* Sources that belong to no single career track. A fact filed under one of these is
    meant to be reused across tracks, so attaching it anywhere raises nothing. */

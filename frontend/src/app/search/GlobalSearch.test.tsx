@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -100,8 +100,17 @@ describe("GlobalSearch", () => {
     expect(dialog.isConnected).toBe(true);
   });
 
-  it("opens every application match on the paged board with the search preserved", async () => {
-    const firstPage = Array.from({ length: 8 }, (_, index) => application(index + 1));
+  /* The board has no search of its own any more, so the palette is where an Application is
+     found by name: a match opens it at the step the server recommends, with the matched
+     letters marked. */
+  it("opens an application match at its step and marks what matched", async () => {
+    const matches = [
+      application(1),
+      {
+        ...application(2),
+        warnings: [{ code: "ANALYSIS_LOW_CONFIDENCE", message: "low", entity_references: {} }],
+      } as ApplicationListItem,
+    ];
     vi.stubGlobal(
       "fetch",
       vi.fn((input: string | URL | Request) => {
@@ -109,7 +118,7 @@ describe("GlobalSearch", () => {
         if (url.startsWith("/api/v1/applications")) {
           const searching = url.includes("search=Acme");
           return Promise.resolve(
-            json({ items: searching ? firstPage : [], matched: searching ? 11 : 0, total: 11, limit: 8, offset: 0 }),
+            json({ items: searching ? matches : [], matched: searching ? 2 : 0, total: 2, limit: 8, offset: 0 }),
           );
         }
         if (url === "/api/v1/facts") return Promise.resolve(json({ items: [] }));
@@ -127,12 +136,20 @@ describe("GlobalSearch", () => {
       </>,
     );
     fireEvent.click(screen.getByRole("button", { name: "מעבר מהיר למועמדות" }));
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "Acme" } });
+    const field = await screen.findByRole("combobox");
+    fireEvent.change(field, { target: { value: "Acme" } });
 
-    const allResults = await screen.findByRole("button", { name: "כל 11 תוצאות המועמדויות" });
-    expect(screen.getAllByRole("option")).toHaveLength(8);
-    fireEvent.click(allResults);
-    expect(screen.getByTestId("location")).toHaveTextContent("/?activity=all&search=Acme");
+    const results = await screen.findByRole("group", { name: "תוצאות חיפוש" });
+    const options = await within(results).findAllByRole("option");
+    expect(options).toHaveLength(2);
+    expect(options[0]).toHaveTextContent("Engineer");
+    expect(options[0]).toHaveTextContent("Acme 1 · מועמדות");
+    expect(within(options[0]!).getByText("Acme", { selector: "mark" })).toBeInTheDocument();
+    expect(within(options[0]!).getByText("טרם הוגש")).toBeInTheDocument();
+    expect(within(options[1]!).getByText("דורש טיפול")).toBeInTheDocument();
+
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(screen.getByTestId("location")).toHaveTextContent("/applications/app-1");
   });
 
   it("finds facts and their exact history events while excluding deleted facts", async () => {
@@ -170,8 +187,12 @@ describe("GlobalSearch", () => {
     fireEvent.change(field, { target: { value: "אישור" } });
 
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
-    expect(screen.getByRole("option", { name: /עובדה/ })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /היסטוריה/ })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("group", { name: "תוצאות חיפוש" })).getByRole("option", { name: /עובדה/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("group", { name: "היסטוריה" })).getByRole("option", { name: /אישור בראיון/ }),
+    ).toBeInTheDocument();
     fireEvent.keyDown(field, { key: "ArrowDown" });
     fireEvent.keyDown(field, { key: "Enter" });
     expect(screen.getByTestId("location")).toHaveTextContent("/facts?fact=fact.active&event=event-active");

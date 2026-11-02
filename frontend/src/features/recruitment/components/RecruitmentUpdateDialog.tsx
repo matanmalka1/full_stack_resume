@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 
 import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
@@ -7,143 +7,46 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { LiveRegion } from "@/ui/LiveRegion";
-import { ViewSwitch } from "@/ui/ViewSwitch";
-import { cx } from "@/ui/cx";
 import { useRecruitmentUpdate } from "../hooks/useRecruitmentUpdate";
 import type { RecruitmentManagerTarget } from "../model/recruitment.types";
 import { RecruitmentHistoryPanel } from "./RecruitmentHistoryPanel";
-import { RecruitmentSummary } from "./RecruitmentSummary";
 import { RecruitmentUpdateForm } from "./RecruitmentUpdateForm";
 
-const managerViews = [
-  { label: "עדכון", value: "update" },
-  { label: "היסטוריה", value: "history" },
-] as const;
-
-type ManagerView = (typeof managerViews)[number]["value"];
-
-interface RecruitmentUpdateDialogProps {
+interface RecruitmentDialogProps {
   application: RecruitmentManagerTarget | null;
   onClose: () => void;
 }
 
-const DialogFrame = ({
+interface DialogShape {
+  description: ReactNode;
+  headingId: string;
+  size?: "default" | "wide";
+  title: ReactNode;
+}
+
+/* The Application's projection, read for a dialog opened over a screen that may hold
+   only a list item, with the wait and the failure drawn inside the dialog's own frame. */
+const RecruitmentDialogLoader = ({
   application,
   children,
-  dismissible = true,
-  footer,
   onClose,
-}: {
-  application: RecruitmentManagerTarget;
-  children: ReactNode;
-  dismissible?: boolean;
-  footer?: ReactNode;
-  onClose: () => void;
-}) => (
-  <Dialog
-    dismissible={dismissible}
-    footer={footer}
-    headingId="recruitment-update-heading"
-    onClose={onClose}
-    open
-    size="wide"
-    title={`ניהול מועמדות: ${application.company}`}
-  >
-    <p className="mb-4 truncate text-support text-cv-text-muted" dir="auto">
-      {application.target_role}
-    </p>
-    {children}
-  </Dialog>
-);
-
-const LoadedRecruitmentDialog = ({
-  application,
-  detail,
-  onClose,
-}: {
-  application: RecruitmentManagerTarget;
-  detail: ApplicationDetail;
-  onClose: () => void;
+  shape,
+}: RecruitmentDialogProps & { application: RecruitmentManagerTarget; shape: DialogShape } & {
+  children: (detail: ApplicationDetail) => ReactNode;
 }) => {
-  const queryClient = useQueryClient();
-  const [view, setView] = useState<ManagerView>("update");
-  const update = useRecruitmentUpdate(detail, onClose);
-  const refresh = () => void invalidateApplicationViews(queryClient, application.id);
+  const detailQuery = useQuery(applicationDetailQueryOptions(application.id));
+
+  if (detailQuery.data !== undefined) return children(detailQuery.data);
 
   return (
-    <DialogFrame
-      application={application}
-      dismissible={!update.save.isPending}
-      footer={
-        <>
-          <Button disabled={update.save.isPending} onClick={onClose} variant="secondary">
-            ביטול
-          </Button>
-          <Button
-            disabled={!update.hasChanges}
-            form="recruitment-update-form"
-            pending={update.save.isPending}
-            pendingLabel="שומר…"
-            type="submit"
-          >
-            שמירת שינויים
-          </Button>
-        </>
-      }
-      onClose={onClose}
-    >
-      <div className="flex flex-col gap-5">
-        <RecruitmentSummary detail={detail} />
-        <div className="lg:hidden">
-          <ViewSwitch label="בחירת אזור בניהול המועמדות" onChange={setView} options={managerViews} value={view} />
-        </div>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(19rem,0.9fr)]">
-          <RecruitmentUpdateForm
-            detail={detail}
-            fields={update.fields}
-            form={update.form}
-            inlineFields={update.inlineFields}
-            onSubmit={update.form.handleSubmit((values) => update.save.mutate(values))}
-            saveError={update.save.error}
-            serverChanged={update.serverChanged}
-            statusOptions={update.statusOptions}
-            visible={view === "update"}
-          />
-          <RecruitmentHistoryPanel
-            className={cx(view === "history" ? "block" : "hidden", "lg:block")}
-            detail={detail}
-            onChanged={refresh}
-          />
-        </div>
-      </div>
-    </DialogFrame>
-  );
-};
-
-export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpdateDialogProps) => {
-  const applicationId = application?.id ?? "";
-  const detailQuery = useQuery({
-    ...applicationDetailQueryOptions(applicationId),
-    enabled: application !== null,
-  });
-
-  if (application === null) return null;
-
-  if (detailQuery.isPending) {
-    return (
-      <DialogFrame application={application} onClose={onClose}>
+    <Dialog {...shape} onClose={onClose} open>
+      {detailQuery.error === null ? (
         <LiveRegion className="text-support text-cv-text-muted" visuallyHidden={false}>
           טוען את פרטי המועמדות…
         </LiveRegion>
-      </DialogFrame>
-    );
-  }
-
-  if (detailQuery.error !== null) {
-    return (
-      <DialogFrame application={application} onClose={onClose}>
-        {/* Not `QueryState`: its not-found answer replaces the whole route, which a
-            dialog over the board must not do. */}
+      ) : (
+        /* Not `QueryState`: its not-found answer replaces the whole route, which a
+           dialog over the board must not do. */
         <ErrorCallout
           action={
             <Button onClick={() => void detailQuery.refetch()} variant="secondary">
@@ -155,16 +58,100 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
           label="שגיאה"
           title="לא ניתן לטעון את פרטי המועמדות"
         />
-      </DialogFrame>
-    );
-  }
+      )}
+    </Dialog>
+  );
+};
 
-  return detailQuery.data === undefined ? null : (
-    <LoadedRecruitmentDialog
-      application={application}
-      detail={detailQuery.data}
-      key={application.id}
+const updateShape: DialogShape = {
+  description: "עדכון ההתקדמות מול המעסיק.",
+  headingId: "recruitment-update-heading",
+  title: "עדכון סטטוס ומשימות",
+};
+
+const LoadedRecruitmentDialog = ({ detail, onClose }: { detail: ApplicationDetail; onClose: () => void }) => {
+  const update = useRecruitmentUpdate(detail, onClose);
+
+  return (
+    <Dialog
+      {...updateShape}
+      dismissible={!update.save.isPending}
+      footer={
+        <>
+          {/* A phone's sheet closes by its own mark and leaves the row to the command. */}
+          <Button
+            className="max-lg:hidden"
+            disabled={update.save.isPending}
+            onClick={onClose}
+            size="default"
+            variant="secondary"
+          >
+            ביטול
+          </Button>
+          <Button
+            disabled={!update.hasChanges}
+            form="recruitment-update-form"
+            pending={update.save.isPending}
+            pendingLabel="שומר…"
+            size="default"
+            type="submit"
+          >
+            עדכון
+          </Button>
+        </>
+      }
       onClose={onClose}
-    />
+      open
+    >
+      <RecruitmentUpdateForm
+        detail={detail}
+        fields={update.fields}
+        form={update.form}
+        inlineFields={update.inlineFields}
+        onSubmit={update.form.handleSubmit((values) => update.save.mutate(values))}
+        saveError={update.save.error}
+        serverChanged={update.serverChanged}
+        statusOptions={update.statusOptions}
+      />
+    </Dialog>
+  );
+};
+
+/* The status sheet: where the application stands with the employer, the next thing to do
+   and the reader's notes, in one form with one command. The board and the hub open the
+   same sheet. What happened before - the events, corrections to them and submissions made
+   outside the system - is the history dialog's, a separate command in the record's menu. */
+export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentDialogProps) =>
+  application === null ? null : (
+    <RecruitmentDialogLoader application={application} key={application.id} onClose={onClose} shape={updateShape}>
+      {(detail) => <LoadedRecruitmentDialog detail={detail} onClose={onClose} />}
+    </RecruitmentDialogLoader>
+  );
+
+/* The application's recruitment history: every status event, reminder and submission on
+   record, with the two ways to add to it - a submission made outside the system, and a
+   correction of an event recorded wrongly. History is only ever appended to. */
+export const RecruitmentHistoryDialog = ({ application, onClose }: RecruitmentDialogProps) => {
+  const queryClient = useQueryClient();
+  if (application === null) return null;
+
+  const shape: DialogShape = {
+    description: <span dir="auto">{`${application.company} · ${application.target_role}`}</span>,
+    headingId: "recruitment-history-dialog-heading",
+    size: "wide",
+    title: "היסטוריית המועמדות",
+  };
+
+  return (
+    <RecruitmentDialogLoader application={application} key={application.id} onClose={onClose} shape={shape}>
+      {(detail) => (
+        <Dialog {...shape} onClose={onClose} open>
+          <RecruitmentHistoryPanel
+            detail={detail}
+            onChanged={() => void invalidateApplicationViews(queryClient, application.id)}
+          />
+        </Dialog>
+      )}
+    </RecruitmentDialogLoader>
   );
 };

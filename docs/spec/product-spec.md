@@ -92,10 +92,12 @@ and tracking all work without a provider.
   autosave, reordering within a section, undo/redo, section and claim regeneration,
   review of a user-written line, and HTML and draft-PDF previews.
 - Content check, explicit approval, rendering with PDF/ATS validation, and Ready.
-- Facts screen ("מאגר העובדות"): list, inspect, create pending, edit pending, confirm,
-  delete, attach to Profile sections; create a fact from a claim; `Confirm and use`.
-  *Not built:* editing a canonical fact in place (§17).
-- Dashboard with search, filters, presets, facets, and sorting; Application Detail with
+- Facts screen ("מאגר העובדות"): list, inspect, create pending, confirm, delete, attach
+  to Profile sections; create a fact from a claim; `Confirm and use`. A pending fact
+  drafted from a gap question is edited in place on the analysis step. *Not built:*
+  editing a canonical fact in place (§17).
+- Dashboard with presets, an action hub, sorting, and a cards or recruitment-stage view;
+  quick search (⌘K) for finding an Application or fact by name; Application Detail with
   preparation state, blockers, next action, notes, timeline, and submissions.
 - Recruitment status, corrections, one next action with overdue warning, internal and
   external submissions, close, soft delete.
@@ -130,8 +132,8 @@ and tracking all work without a provider.
    Another user's record behaves exactly like a missing one (§22).
 3. Each Application has exactly one `CVDocument`, created with its first analysis.
 4. JobAnalysis, AI call records, Submissions, recruitment/audit/fact events, gap
-   questions and their answers, and finished Operations are immutable, and job text is locked once submitted. Database
-   triggers enforce this.
+   questions and their answers, and finished Operations are immutable, and job text is
+   locked once submitted. Database triggers enforce this.
 5. Editing an approved or Ready document is always allowed and returns it to draft.
 6. Approval and Ready are derived on read by comparing `approved_basis` and
    `rendered_basis` with the current `basis` (state-and-use-cases.md §3–§4).
@@ -393,7 +395,7 @@ Each renders in both directions. A two-column template places list sections (eve
 line an `item`: education, skills, tools, languages) in its side column, and its
 reading order is checked per column. The template is part of the document hash
 (state-and-use-cases.md §3), so changing it outdates approval and Ready. The editor's
-picker shows the user's own CV in each template; Settings show a sample CV.
+picker shows the user's own CV in each template; Settings choose the default by name.
 
 Rendering is an Operation, available while the document is approved. It revalidates,
 renders HTML and PDF, and checks layout, page count, extracted text, links, direction,
@@ -430,8 +432,9 @@ basis.
 In the Web editor, rendering starts automatically after the user approves. No chained
 flow bypasses a blocker.
 
-The Ready screen shows the preview, PDF download, content report, and provenance, and
-offers editing and submission.
+The Ready screen shows the file's facts, PDF download, and provenance (the decision
+explanation and the chosen facts), and offers editing and submission. The content
+report stays with the editor.
 
 ## 12. AI behavior
 
@@ -486,11 +489,17 @@ owns action policy; React does not duplicate it.
 
 ## 14. Recruitment tracking
 
-The Dashboard is a table with search, filters, presets (needs attention, ready to send,
-active interviews), facet counts, sorting, and paging.
+The Dashboard shows every open Application at once, as cards or in columns by recruitment
+stage, narrowed only by presets (needs attention, ready to send, active interviews) with
+their counts, and sorted. An action hub lists what waits on the user: overdue, today's and
+this week's reminders, blockers, and Ready documents. Finding an Application by name is the
+quick search's. The list endpoint itself still takes search, stage and status filters, and
+paging.
 
-Application Detail shows status, next action, notes, preparation and blockers, a
-unified timeline, the document, and submissions.
+Application Detail shows the recruitment status, the next action, preparation progress
+and the document's PDF, with notes, the unified timeline (corrections and external
+submissions included) and the record's close and delete one command away. Blockers are
+shown on the preparation step they block.
 
 `submit_application` records a send that already happened outside the system. It
 requires a Ready document, copies its content, HTML, and PDF (with SHA-256) into an
@@ -604,8 +613,7 @@ state-and-use-cases.md §22.
 - **Built:** the full workflow from intake through submission and tracking; AI
   analysis and drafting with writer/reviewer; rejected-wording guidance; check →
   approve → render in the Web client; user accounts and per-user isolation; gap
-  questions and editing a pending fact (backend and API; the Web screens are not built
-  yet).
+  questions and editing their pending facts on the analysis step.
 - **Not built:** hosted deployment (public origin, Host allowlist, HSTS) and editing a
   canonical fact in place.
 

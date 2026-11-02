@@ -2,6 +2,8 @@ import { ChevronLeft, Info, Sparkles, TriangleAlert, X } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
+import { routePaths } from "@/navigation/routePaths";
+
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { useAiAvailability } from "@/features/settings";
@@ -10,9 +12,9 @@ import { Dialog } from "@/ui/Dialog";
 import { IconButton } from "@/ui/IconButton";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
-import { StatusSlot } from "@/ui/StatusSlot";
 import { type Tone, toneBorderClasses, tonePresentation, toneTextClasses } from "@/ui/tone";
 import {
+  operationRunNotes,
   operationTypeLabels,
   pageFitLabel,
   pageFitNotice,
@@ -21,15 +23,16 @@ import {
   statusTones,
   withheldLabel,
 } from "../model/operationLabels";
-import { useIsPhone } from "../hooks/useIsPhone";
+import { useIsPhone } from "@/ui/useIsPhone";
 import { failureSummary } from "../model/failureSummary";
 import { durationLabel } from "../model/operationElapsed";
 import { isOperationStarting } from "../model/operationLive";
 import { operationProgressLabel } from "../model/operationProgress";
 import { OperationFailurePage } from "./OperationFailurePage";
+import { FailedRunScreen, LiveRunScreen } from "./OperationScreen";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
 import { OperationReport } from "./OperationReport";
-import { OperationRunActions, OperationRunBar } from "./OperationRunBar";
+import { OperationRunBar } from "./OperationRunBar";
 
 export interface PendingWork {
   heading: ReactNode;
@@ -57,6 +60,10 @@ interface Session {
 }
 
 const SUCCESS_LINGER_MS = 3_000;
+
+/* The Application a run screen belongs to before its record names it: the id segment of
+   the route the host screen is on. */
+const applicationIdFromLocation = (pathname: string): string => decodeURIComponent(pathname.split("/")[2] ?? "");
 
 /* Proposed lines a succeeded run withheld. Its result stands, but those lines kept their
    wording from before the run, so it is an outcome that needs the reader like a failure:
@@ -104,15 +111,15 @@ export const OperationOverlay = ({
   onQueued,
   operation,
   pending,
-  runActions = false,
+  phoneRunBar = false,
+  screen = false,
   settled,
 }: {
   awaitingRecord: boolean;
   /* What happens next by itself, when this run succeeding is not the end of the work. */
   continuation?: string | undefined;
-  /* Whose work this is - role and company - over the inline run, where the run is the
-     step's whole body: on a phone the page's own heading is out of view, and on a wide
-     screen the run is a card of its own that names the work it is for. */
+  /* Whose work this is - role and company - over the inline run on a phone, where the
+     run is the whole screen and the page's own heading is out of view. */
   eyebrow?: ReactNode;
   /* Host-owned recovery for the record this Operation failed to produce. */
   failureAction?: ReactNode;
@@ -137,10 +144,15 @@ export const OperationOverlay = ({
   operation: Operation | undefined;
   /* Work this screen asked for before any Operation record exists to report it. */
   pending?: PendingWork | undefined;
-  /* An inline run closes on its own two ways on - back to the board, or cancel: a bar of
-     its own on a phone, the foot of the centred card on a wide screen. Only for a host
-     whose step has no bar of its own while the run is its body. */
-  runActions?: boolean;
+  /* On a phone, an inline run closes on a bar of its own - back to the board, or cancel.
+     Only for a host whose step has no bar of its own while the run is its body. */
+  phoneRunBar?: boolean;
+  /* The run is the host screen's whole body: nothing else is drawn while it lives, and a
+     run that ended without a result is reported in the same place rather than in a dialog
+     over an empty page. For a host whose step has no content until the run produces it -
+     the analysis before its first result, the draft step while the draft is written. The
+     heading here is then the route's own. */
+  screen?: boolean;
   settled: boolean;
 }) => {
   const headingId = useId();
@@ -199,9 +211,9 @@ export const OperationOverlay = ({
     });
   }
 
-  /* The inline run says how long it has been executing, so its clock ticks while it
-     lives. The record is polled on its own schedule; a second's tick is the clock's. */
-  const ticking = inline && live;
+  /* The phone's inline run says how long it has been executing, so its clock ticks while
+     it lives. The record is polled on its own schedule; a second's tick is the clock's. */
+  const ticking = ((isPhone && inline) || screen) && live;
   useEffect(() => {
     if (!ticking) return undefined;
     const interval = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -271,35 +283,41 @@ export const OperationOverlay = ({
   const elapsed =
     record?.started_at == null || isTerminalOperation(record) ? null : durationLabel(record.started_at, now);
   const activeNote =
-    !inline || record === undefined || elapsed === null
+    record === undefined || elapsed === null || !(screen || (isPhone && inline))
       ? undefined
-      : `${phaseLabels[record.phase]} · זמן שחלף: ${elapsed}`;
-  /* A run that ended without a result is a page of its own (see `OperationFailurePage`):
-     a phone's sheet, and on a wide screen the same page as a centred card. It once was
-     the phone's alone, the wide dialog reading the failure as a callout over the full
-     report; the desktop design draws it the phone's way, so both widths now say it once,
-     in one tree. A failed review keeps the full report: its own panel lists the lines
-     and the facts behind them, which the page has no room for. */
-  const failurePage =
+      : isPhone
+        ? `${phaseLabels[record.phase]} · זמן שחלף: ${elapsed}`
+        : elapsed;
+  /* On a phone a run that ended without a result is a page of its own (see
+     `OperationFailurePage`). A failed review keeps the full report: its own panel lists
+     the lines and the facts behind them, which the page has no room for. */
+  const phoneFailure =
+    isPhone &&
     record !== undefined &&
     isTerminalOperation(record) &&
     record.status !== "succeeded" &&
     record.failure_reason?.code !== "claim_review";
-  const failure = failurePage ? failureSummary(record, ai === "available", ai !== "loading") : null;
+  const failure = phoneFailure ? failureSummary(record, ai === "available", ai !== "loading") : null;
+  /* On a host whose body is the run, a run that ended without a result is that body: it
+     replaces the live screen in place, at every width, and opens no dialog over it. A
+     failed review keeps the report, as on a phone. */
+  const screenFailure =
+    screen &&
+    record !== undefined &&
+    isTerminalOperation(record) &&
+    record.status !== "succeeded" &&
+    record.failure_reason?.code !== "claim_review"
+      ? failureSummary(record, ai === "available", ai !== "loading")
+      : null;
 
   const showingSuccess = !session.active && session.succeededId !== null && session.succeededId === record?.id;
-  const showPanel = (session.active && !session.panelHidden) || showingSuccess;
+  const showPanel = !screen && ((session.active && !session.panelHidden) || showingSuccess);
   /* The row in the step's status slot: an outcome that needs the reader, or live work
      whose panel was put away. A plain success leaves nothing behind - the page shows its
      result - and neither does one the screen found on arrival. */
   const showChip =
-    (session.active && session.panelHidden) || (!session.active && record !== undefined && needsReader(record));
-  /* The run is the step's whole body and closes on its own ways on: on a wide screen it
-     is then the centred card of the design - who it is for, the ring, the run named large,
-     its steps in a row of their own, the note and the two ways on - rather than a card
-     at the top of an otherwise empty step. Inline runs on other hosts (the editor) sit
-     beside content of their own and keep the plain card there. */
-  const card = inline && runActions;
+    !screen &&
+    ((session.active && session.panelHidden) || (!session.active && record !== undefined && needsReader(record)));
   const openDialog = () => {
     setNavigating(false);
     setSession((current) => ({ ...current, dialogOpen: true }));
@@ -307,30 +325,53 @@ export const OperationOverlay = ({
 
   return (
     <>
+      {!screen ? null : screenFailure !== null && record !== undefined ? (
+        <FailedRunScreen
+          eyebrow={eyebrow}
+          heading={heading}
+          onQueued={onQueued}
+          record={record}
+          summary={screenFailure}
+        />
+      ) : (
+        <LiveRunScreen
+          activeNote={activeNote}
+          closeTo={routePaths.application(operation?.application_id ?? applicationIdFromLocation(location.pathname))}
+          eyebrow={eyebrow}
+          heading={heading}
+          note={
+            continuation ??
+            pending?.note ??
+            (record === undefined ? "ההרצה נשלחה. המצב שלה יופיע כאן מיד." : operationRunNotes[record.operation_type])
+          }
+          onQueued={onQueued}
+          record={record}
+          resultNote={inlineNote}
+        />
+      )}
+
       {showChip ? (
-        <StatusSlot>
-          <button
-            aria-haspopup="dialog"
-            className={cx(
-              "cv-settle-in flex w-full items-center gap-3 rounded-surface border bg-cv-surface px-4 py-2.5 text-start text-support shadow-surface transition-colors hover:bg-cv-surface-muted",
-              toneBorderClasses[tone],
-              toneTextClasses[tone],
-            )}
-            onClick={openDialog}
-            ref={chipRef}
-            type="button"
-          >
-            <Icon aria-hidden="true" className={cx("size-icon-md shrink-0", tone === "progress" && "animate-spin")} />
-            <span className="min-w-0 flex-1 text-cv-text">
-              <span className="font-semibold">{heading}</span>
-              <span className="text-cv-text-muted"> · {statusText}</span>
-            </span>
-            <span className="flex shrink-0 items-center gap-1 font-medium underline underline-offset-4">
-              פירוט ההרצה
-              <ChevronLeft aria-hidden="true" className="size-icon-sm" />
-            </span>
-          </button>
-        </StatusSlot>
+        <button
+          aria-haspopup="dialog"
+          className={cx(
+            "cv-settle-in flex w-full items-center gap-3 rounded-surface border bg-cv-surface px-4 py-2.5 text-start text-support shadow-surface transition-colors hover:bg-cv-surface-muted",
+            toneBorderClasses[tone],
+            toneTextClasses[tone],
+          )}
+          onClick={openDialog}
+          ref={chipRef}
+          type="button"
+        >
+          <Icon aria-hidden="true" className={cx("size-icon-md shrink-0", tone === "progress" && "animate-spin")} />
+          <span className="min-w-0 flex-1 text-cv-text">
+            <span className="font-semibold">{heading}</span>
+            <span className="text-cv-text-muted"> · {statusText}</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1 font-medium underline underline-offset-4">
+            פירוט ההרצה
+            <ChevronLeft aria-hidden="true" className="size-icon-sm" />
+          </span>
+        </button>
       ) : null}
 
       {showPanel ? (
@@ -346,11 +387,7 @@ export const OperationOverlay = ({
               ? /* On a phone the inline run is the step's whole screen, not a card on it:
                    the frame falls away, the run is named large under a turning ring, and
                    only its steps keep a card of their own. */
-                cx(
-                  "shadow-surface max-lg:gap-4 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none",
-                  card &&
-                    "lg:mx-auto lg:mt-6 lg:w-full lg:max-w-[40rem] lg:items-center lg:gap-6 lg:rounded-sheet lg:border-cv-border lg:px-10 lg:py-12 lg:text-center lg:shadow-floating",
-                )
+                "shadow-surface max-lg:gap-4 max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none"
               : /* On a wide screen the corner is the lower one, above the step's pinned
                    bar. The top corner sat over the end of the workflow spine, hiding the
                    steps still ahead - what the reader checks while waiting - for as long
@@ -364,28 +401,17 @@ export const OperationOverlay = ({
             className={cx(
               "flex items-start gap-2.5",
               inline && "max-lg:flex-col max-lg:items-center max-lg:gap-4 max-lg:pt-2 max-lg:text-center",
-              card && "lg:w-full lg:flex-col lg:items-center lg:gap-5",
             )}
           >
             {inline && eyebrow !== undefined ? (
-              <p
-                className={cx(
-                  "self-stretch truncate text-start text-support text-cv-text-muted",
-                  card ? "lg:text-center" : "lg:hidden",
-                )}
-                dir="auto"
-              >
+              <p className="self-stretch truncate text-start text-support text-cv-text-muted lg:hidden" dir="auto">
                 {eyebrow}
               </p>
             ) : null}
             {inline ? (
-              /* The run's mark: a ring that turns while it lives, round the sign of AI work,
-                 or round the outcome's own icon once it has one. A phone's, and the wide
-                 card's. */
-              <span
-                aria-hidden="true"
-                className={cx("relative flex size-22 shrink-0 items-center justify-center", !card && "lg:hidden")}
-              >
+              /* The phone's mark for the run: a ring that turns while it lives, round the
+                 sign of AI work, or round the outcome's own icon once it has one. */
+              <span aria-hidden="true" className="relative flex size-22 shrink-0 items-center justify-center lg:hidden">
                 <span className="absolute inset-0 rounded-pill border-4 border-cv-border" />
                 <span
                   className={cx(
@@ -408,21 +434,16 @@ export const OperationOverlay = ({
                 "mt-0.5 size-icon-md shrink-0",
                 tone === "progress" && "animate-spin",
                 inline && "max-lg:hidden",
-                card && "lg:hidden",
               )}
             />
-            <div className={cx("min-w-0 flex-1 text-support", card && "lg:flex lg:flex-col lg:gap-2")}>
+            <div className="min-w-0 flex-1 text-support">
               <h2
-                className={cx(
-                  "font-semibold text-cv-text",
-                  inline && "max-lg:text-heading-md max-lg:font-extrabold",
-                  card && "lg:text-heading-md lg:font-extrabold",
-                )}
+                className={cx("font-semibold text-cv-text", inline && "max-lg:text-heading-md max-lg:font-extrabold")}
                 id={panelHeadingId}
               >
                 {heading}
               </h2>
-              <p className={cx("text-cv-text-muted", card && "lg:text-body")}>{statusText}</p>
+              <p className="text-cv-text-muted">{statusText}</p>
             </div>
             {showingSuccess || inline ? null : (
               <IconButton
@@ -446,7 +467,6 @@ export const OperationOverlay = ({
                 className={cx(
                   inline &&
                     "max-lg:flex max-lg:flex-col max-lg:gap-3 max-lg:rounded-surface max-lg:border max-lg:border-cv-border max-lg:bg-cv-surface max-lg:p-4",
-                  card && "lg:w-full lg:rounded-surface lg:bg-cv-surface-muted lg:px-8 lg:py-6",
                 )}
               >
                 {/* The list's own name, shown where the steps get a card of their own. */}
@@ -457,9 +477,8 @@ export const OperationOverlay = ({
                 ) : null}
                 <OperationPhaseSteps
                   activeNote={activeNote}
+                  layout={isPhone && inline ? "stacked" : "row"}
                   phase={record.phase}
-                  prominent={card}
-                  stackOnPhone={inline}
                 />
               </div>
               {/* In place of the page's own content, the card says what fills it. */}
@@ -477,7 +496,6 @@ export const OperationOverlay = ({
               className={cx(
                 "w-fit text-support font-medium text-cv-text underline underline-offset-4",
                 inline && "max-lg:min-h-11 max-lg:self-center",
-                card && "lg:self-center",
               )}
               onClick={openDialog}
               type="button"
@@ -485,19 +503,12 @@ export const OperationOverlay = ({
               פירוט ההרצה
             </button>
           )}
-          {card &&
-          !isPhone &&
-          !showingSuccess &&
-          record !== undefined &&
-          !continuing &&
-          !isTerminalOperation(record) ? (
-            <OperationRunActions operation={record} />
-          ) : null}
         </section>
       ) : null}
 
-      {card &&
+      {phoneRunBar &&
       isPhone &&
+      inline &&
       showPanel &&
       !showingSuccess &&
       record !== undefined &&
@@ -511,22 +522,12 @@ export const OperationOverlay = ({
       <Dialog
         headingId={headingId}
         onClose={() => setSession((current) => ({ ...current, dialogOpen: false }))}
-        open={session.dialogOpen}
+        open={session.dialogOpen && screenFailure === null}
         {...(navigating ? {} : { restoreFocusTo: chipRef })}
         {...(failure === null
           ? {}
           : {
-              /* The status word tells a failure from a cancellation or an interruption,
-                 as the report's callout did. A phone's design line leaves it out, so
-                 there it is for assistive tech only. */
-              description: (
-                <>
-                  {heading} · הפעולה לא בוצעה
-                  {record === undefined ? null : (
-                    <span className="max-lg:sr-only"> · {statusLabels[record.status]}</span>
-                  )}
-                </>
-              ),
+              description: <>{heading} · הפעולה לא בוצעה</>,
               icon: (
                 <span className="flex size-16 items-center justify-center rounded-pill bg-cv-accent text-cv-on-accent">
                   <TriangleAlert className="size-7" />
@@ -537,7 +538,6 @@ export const OperationOverlay = ({
       >
         {failure !== null && record !== undefined ? (
           <OperationFailurePage
-            failureAction={failureAction}
             onClose={() => setSession((current) => ({ ...current, dialogOpen: false }))}
             onQueued={onQueued}
             operation={record}

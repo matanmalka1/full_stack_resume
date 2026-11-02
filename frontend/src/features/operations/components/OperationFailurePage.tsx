@@ -1,18 +1,16 @@
 import { ShieldCheck } from "lucide-react";
-import { type ReactNode, useEffect } from "react";
 import { Link } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
 import { routePaths } from "@/navigation/routePaths";
 import { Button, buttonClasses } from "@/ui/Button";
-import { reportError } from "@/ui/reportError";
 import type { FailureSummary } from "../model/failureSummary";
 import { OperationActions } from "./OperationActions";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
+import { failedPhaseStep } from "../model/operationPhases";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
 
-/* A run that ended without a result, as a page of its own - a phone's sheet, a wide
-   screen's centred card: what happened, that
+/* A run that ended without a result, as a phone's page of its own: what happened, that
    nothing the reader had was lost, where the run stopped, and the two ways on - back to
    the application, or the run again.
 
@@ -22,39 +20,20 @@ import { OperationPhaseSteps } from "./OperationPhaseSteps";
    never shown. The sheet's title carries the headline and its icon the warning mark; this
    is the body under them. */
 export const OperationFailurePage = ({
-  failureAction,
   onClose,
   onQueued,
   operation,
   summary,
 }: {
-  /* The host's recovery for the record the run failed to produce, as the report offers
-     it - beside the way back, in the one action row. */
-  failureAction?: ReactNode;
   onClose: () => void;
   onQueued: (operationId: string) => void;
   operation: Operation;
   summary: FailureSummary;
 }) => {
-  /* The run stopped in the queue if it never started, otherwise while executing. */
-  const failedStep = operation.started_at == null ? 0 : 1;
-  /* A failure this client has no wording for: the server's detail is English and meant
-     for diagnosis, so it goes to the console, as the report sends it, while the reader
-     gets the safe general line. */
-  const unreportedDetail = operation.failure_code == null ? (operation.safe_failure_detail ?? null) : null;
-  useEffect(() => {
-    if (unreportedDetail !== null) {
-      reportError("operation_failure", { failure_code: operation.failure_code, detail: unreportedDetail });
-    }
-  }, [operation.failure_code, unreportedDetail]);
-
   return (
     <div className="flex flex-col gap-5">
-      {/* Announced as it appears, the way the report's failure callout was: the page
-          opens by itself on an outcome, and this is the outcome. */}
       <section
         aria-labelledby="operation-failure-what"
-        role="alert"
         className="rounded-surface border border-cv-border bg-cv-surface p-4"
       >
         <h3 className="mb-2 text-support font-bold text-cv-text" id="operation-failure-what">
@@ -76,7 +55,7 @@ export const OperationFailurePage = ({
           שלבי ההרצה
         </p>
         <div className="rounded-surface border border-cv-border bg-cv-surface px-4 py-3 text-support">
-          <OperationPhaseSteps failedStep={failedStep} phase={operation.phase} />
+          <OperationPhaseSteps failedStep={failedPhaseStep(operation.started_at)} from={1} phase={operation.phase} />
         </div>
       </div>
 
@@ -97,9 +76,7 @@ export const OperationFailurePage = ({
               <Link className={buttonClasses("primary")} to={routePaths.settings}>
                 פתיחת ההגדרות
               </Link>
-            ) : (
-              failureAction
-            )}
+            ) : null}
           </>
         }
         retryOffered={!summary.missingProvider}

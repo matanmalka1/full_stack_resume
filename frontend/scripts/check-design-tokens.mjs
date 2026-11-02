@@ -9,7 +9,9 @@
  *   2. raw Tailwind palette utilities, which bypass the semantic tokens of A.2;
  *   3. outline-none / outline-hidden, since the global :focus-visible rule owns focus;
  *   4. a cv- color, radius, or shadow utility whose token does not exist.
- *   5. numeric z-index utilities, which bypass the named layer stack.
+ *   5. numeric z-index utilities, which bypass the named layer stack;
+ *   6. arbitrary radius or shadow values (`rounded-[…]`, `shadow-[…]`), which bypass
+ *      the radius and elevation scales the design draws every surface from.
  *
  * EXCEPTIONS is deliberately empty. Add an entry only with a reason, so forgetting to
  * register something fails instead of passing.
@@ -100,6 +102,11 @@ const rules = [
     name: "focus-opt-out",
     pattern: /\boutline-(?:none|hidden)\b/g,
     message: "the global :focus-visible rule owns focus; do not clear the outline",
+  },
+  {
+    name: "arbitrary-radius-or-shadow",
+    pattern: /\b(?:rounded|shadow)(?:-[a-z]{1,2})?-\[[^\]]+\]/g,
+    message: "arbitrary radius or shadow; use a --radius-* or --shadow-* token",
   },
   {
     name: "numeric-z-index",

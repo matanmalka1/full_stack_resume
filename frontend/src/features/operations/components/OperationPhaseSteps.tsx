@@ -3,143 +3,158 @@ import { Fragment, type ReactNode } from "react";
 
 import type { OperationPhase } from "@/api/contracts";
 import { cx } from "@/ui/cx";
-import { operationPhaseStep, operationPhaseSteps } from "../model/operationPhases";
+import { PENDING_STEP, operationPhaseStep, operationPhaseSteps } from "../model/operationPhases";
 
-/* Where a live run is, as named steps. It replaces a bar that swept back and forth:
-   Operations report no percentage, so the bar looked like progress while measuring
-   nothing, and the phase the record does report went unshown.
+/* How the steps are laid out for their host:
+   - "row": marks and words on one line joined by rules - the corner panel and the
+     failure report, where the steps are one line among others;
+   - "stacked": one step per line down a card, joined by a vertical rule - a phone's run
+     screen, where the steps are the run's body;
+   - "columns": four equal columns, each mark over its word - a wide run screen. */
+type StepsLayout = "row" | "stacked" | "columns";
 
-   Drawn the way the workflow spine draws its steps, at a smaller size: a filled mark with
-   a tick for a phase behind the run, a ring with a breathing dot for the one it is in, a
-   plain outline for what is ahead, joined by a line that is solid as far as the run has
-   come. The steps were once words between `›` marks, which read as a breadcrumb trail -
-   somewhere to navigate - rather than as a run moving. Shape and weight carry the state,
-   never colour alone.
+type StepState = "done" | "active" | "failed" | "upcoming";
 
-   `stackOnPhone`: below the large breakpoint the steps run down the card, a label on the
-   reading side and its mark on the far one, joined by a vertical line - for a host where
-   the steps are the run's body rather than one line of a report.
+const markClasses: Record<StepState, string> = {
+  done: "bg-cv-accent text-cv-on-accent",
+  failed: "bg-cv-accent text-cv-on-accent",
+  active: "border-2 border-cv-accent bg-cv-surface",
+  upcoming: "border-[1.5px] border-cv-border-strong bg-cv-surface",
+};
 
-   `prominent`: from the large breakpoint each step stands as a column - a larger mark over
-   its name - and the line between two marks stretches to share the row, for the wide
-   screen's centred run card, where the steps are the card's middle rather than a line of
-   a report.
+const Mark = ({ size, state }: { size: "sm" | "md"; state: StepState }) => (
+  <span
+    aria-hidden="true"
+    className={cx(
+      "flex shrink-0 items-center justify-center rounded-pill",
+      size === "sm" ? "size-5.5" : "size-6.5",
+      markClasses[state],
+    )}
+  >
+    {state === "done" ? (
+      <Check className={cx(size === "sm" ? "size-2.5" : "size-3.5", "[stroke-width:var(--stroke-icon-strong)]")} />
+    ) : null}
+    {state === "failed" ? (
+      <X className={cx(size === "sm" ? "size-2.5" : "size-3.5", "[stroke-width:var(--stroke-icon-strong)]")} />
+    ) : null}
+    {state === "active" ? (
+      <span
+        className={cx("rounded-pill bg-cv-accent motion-safe:animate-pulse", size === "sm" ? "size-1.5" : "size-2.5")}
+      />
+    ) : null}
+  </span>
+);
 
-   `activeNote` is a line under the open step's name - how long it has run. `failedStep`
-   marks the step a run that ended without a result stopped on: a filled mark with a
-   cross and the word, so where it broke is a shape and a word as well as a position. */
+/* Where a live run is, as named steps. Operations report no percentage, so the run is
+   shown as the stretch it is in rather than as a bar measuring nothing.
+
+   Shape and weight carry each step's state, never colour alone: a filled mark with a tick
+   for a step behind the run, a ring with a breathing dot for the one it is in, an outline
+   for what is ahead, and a filled mark with a cross - and the word - for the step a run
+   that ended without a result stopped on.
+
+   `pending` is a run asked for before its record exists: it is on the first step.
+   `from` leaves out the steps before it - a failure report starts at the queue, since
+   sending is not where anything went wrong. `activeNote` is a line under the open step's
+   name - how long it has run. */
 export const OperationPhaseSteps = ({
   activeNote,
   failedStep,
+  from = 0,
+  layout = "row",
+  pending = false,
   phase,
-  prominent = false,
-  stackOnPhone = false,
 }: {
   activeNote?: ReactNode;
   failedStep?: number | undefined;
+  from?: number;
+  layout?: StepsLayout;
+  pending?: boolean;
   phase: OperationPhase;
-  prominent?: boolean;
-  stackOnPhone?: boolean;
 }) => {
-  const current = failedStep ?? operationPhaseStep(phase);
+  const current = failedStep ?? (pending ? PENDING_STEP : operationPhaseStep(phase));
+  const stateOf = (index: number): StepState =>
+    failedStep === index ? "failed" : index < current ? "done" : index === current ? "active" : "upcoming";
+  const steps = operationPhaseSteps.map((label, index) => ({ index, label, state: stateOf(index) })).slice(from);
+
+  const word = (label: string, state: StepState) => (
+    <>
+      {label}
+      {state === "failed" ? " · נכשל" : null}
+    </>
+  );
+  const weight = (state: StepState) =>
+    state === "active" || state === "failed" ? "font-bold text-cv-text" : "text-cv-text-muted";
+
+  if (layout === "columns") {
+    return (
+      <ol aria-label="שלבי ההרצה" className="grid grid-cols-4 gap-3 text-label">
+        {steps.map(({ label, state }) => (
+          <li
+            aria-current={state === "active" || state === "failed" ? "step" : undefined}
+            className={cx("flex flex-col items-center gap-2 text-center", weight(state))}
+            key={label}
+          >
+            <Mark size="md" state={state} />
+            <span>{word(label, state)}</span>
+            {state === "active" && activeNote !== undefined ? (
+              <span className="-mt-1 text-caption font-medium text-cv-text-muted">{activeNote}</span>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    );
+  }
+
+  if (layout === "stacked") {
+    return (
+      <ol aria-label="שלבי ההרצה" className="flex flex-col text-body">
+        {steps.map(({ label, state }, position) => (
+          <li
+            aria-current={state === "active" || state === "failed" ? "step" : undefined}
+            className={cx("relative flex items-start gap-3", weight(state))}
+            key={label}
+          >
+            <span className="flex flex-col items-center self-stretch">
+              <Mark size="sm" state={state} />
+              {position === steps.length - 1 ? null : (
+                <span
+                  aria-hidden="true"
+                  className={cx("min-h-3 w-0.5 flex-1", state === "upcoming" ? "bg-cv-border" : "bg-cv-accent")}
+                />
+              )}
+            </span>
+            <span className={cx("flex min-w-0 flex-col", position === steps.length - 1 ? "pb-0" : "pb-4")}>
+              <span className="leading-6">{word(label, state)}</span>
+              {state === "active" && activeNote !== undefined ? (
+                <span className="text-support font-normal text-cv-text-muted">{activeNote}</span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+    );
+  }
 
   return (
-    <ol
-      aria-label="שלבי ההרצה"
-      className={cx(
-        "flex flex-wrap items-center gap-x-1.5 gap-y-1.5 text-caption",
-        stackOnPhone && "max-lg:flex-col max-lg:flex-nowrap max-lg:items-stretch max-lg:gap-0 max-lg:text-body",
-        prominent && "lg:flex-nowrap lg:items-start lg:gap-3 lg:text-support",
-      )}
-    >
-      {operationPhaseSteps.map((label, index) => {
-        const done = index < current;
-        const failed = failedStep === index;
-        const active = index === current && !failed;
-        return (
-          <Fragment key={label}>
-            {index === 0 ? null : (
-              <li
-                aria-hidden="true"
-                className={cx(
-                  "flex items-center",
-                  stackOnPhone && "max-lg:me-[0.6875rem] max-lg:self-end",
-                  prominent && "lg:mt-3.5 lg:min-w-6 lg:flex-1",
-                )}
-              >
-                <span
-                  className={cx(
-                    "h-px w-3",
-                    stackOnPhone && "max-lg:h-4 max-lg:w-px",
-                    prominent && "lg:w-full",
-                    index <= current ? "bg-cv-accent" : "workflow-track-upcoming",
-                  )}
-                />
-              </li>
-            )}
-            <li
-              aria-current={active || failed ? "step" : undefined}
-              className={cx(
-                "flex items-center gap-1.5",
-                stackOnPhone && "max-lg:flex-row-reverse max-lg:justify-between max-lg:gap-3",
-                prominent && "lg:shrink-0 lg:flex-col lg:gap-2 lg:text-center",
-                active || failed ? "font-bold text-cv-text" : done ? "font-medium text-cv-text" : "text-cv-text-muted",
-              )}
-            >
-              <span
-                aria-hidden="true"
-                className={cx(
-                  "flex size-4 shrink-0 items-center justify-center rounded-pill border",
-                  stackOnPhone && "max-lg:size-6 max-lg:border-2",
-                  prominent && "lg:size-7 lg:border-2",
-                  done || failed
-                    ? "border-cv-accent bg-cv-accent text-cv-on-accent"
-                    : active
-                      ? "border-cv-accent bg-cv-surface"
-                      : "border-cv-border-strong bg-cv-surface",
-                )}
-              >
-                {done ? (
-                  <Check
-                    className={cx(
-                      "size-2.5 [stroke-width:var(--stroke-icon-strong)]",
-                      stackOnPhone && "max-lg:size-3.5",
-                      prominent && "lg:size-4",
-                    )}
-                  />
-                ) : null}
-                {failed ? (
-                  <X
-                    className={cx(
-                      "size-2.5 [stroke-width:var(--stroke-icon-strong)]",
-                      stackOnPhone && "max-lg:size-3.5",
-                      prominent && "lg:size-4",
-                    )}
-                  />
-                ) : null}
-                {active ? (
-                  <span
-                    className={cx(
-                      "size-1.5 rounded-pill bg-cv-accent motion-safe:animate-pulse",
-                      stackOnPhone && "max-lg:size-2.5",
-                      prominent && "lg:size-3",
-                    )}
-                  />
-                ) : null}
-              </span>
-              <span className={cx("flex min-w-0 flex-col", prominent && "lg:items-center")}>
-                <span>
-                  {label}
-                  {failed ? " · נכשל" : null}
-                </span>
-                {active && activeNote !== undefined ? (
-                  <span className="text-support font-normal text-cv-text-muted">{activeNote}</span>
-                ) : null}
-              </span>
-            </li>
-          </Fragment>
-        );
-      })}
+    <ol aria-label="שלבי ההרצה" className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-label">
+      {steps.map(({ label, state }, position) => (
+        <Fragment key={label}>
+          {position === 0 ? null : <li aria-hidden="true" className="h-px min-w-3 flex-1 bg-cv-border-soft" />}
+          <li
+            aria-current={state === "active" || state === "failed" ? "step" : undefined}
+            className={cx("flex items-center gap-1.5", weight(state))}
+          >
+            <Mark size="sm" state={state} />
+            <span className="flex min-w-0 flex-col">
+              <span>{word(label, state)}</span>
+              {state === "active" && activeNote !== undefined ? (
+                <span className="text-support font-normal text-cv-text-muted">{activeNote}</span>
+              ) : null}
+            </span>
+          </li>
+        </Fragment>
+      ))}
     </ol>
   );
 };

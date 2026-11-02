@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
 import { cx } from "./cx";
-import { surfaceClasses } from "./surface";
 
 interface ViewSwitchOption<TValue extends string> {
   /* `label` always names icon options for assistive tech. Callers may also expose the
@@ -37,8 +36,9 @@ export const ViewSwitch = <TValue extends string>({
   return (
     <div
       aria-label={label}
-      className={surfaceClasses(
-        cx("inline-flex gap-1 bg-cv-surface-muted p-1 shadow-inner", stretch && "max-lg:flex max-lg:w-full"),
+      className={cx(
+        "inline-flex gap-0.5 rounded-control-sm bg-cv-surface-muted p-0.75",
+        stretch && "max-lg:flex max-lg:w-full",
       )}
       // A non-form group of toggle buttons; role="group" is the ARIA authoring-practices
       // pattern here, and none of the suggested native tags (fieldset, etc.) fit.
@@ -54,13 +54,13 @@ export const ViewSwitch = <TValue extends string>({
             aria-label={Icon === undefined ? undefined : option.label}
             aria-pressed={active}
             className={cx(
-              "min-h-11 rounded-control transition-all duration-200",
-              Icon === undefined || showLabels
-                ? "inline-flex items-center gap-1.5 px-3 text-support font-semibold"
-                : "p-2",
-              active ? "bg-cv-surface text-cv-accent shadow-surface" : "text-cv-text-muted hover:bg-cv-surface-muted",
+              "min-h-8.5 rounded-item text-support transition-colors duration-200",
+              Icon === undefined || showLabels ? "inline-flex items-center gap-1.5 px-3.5" : "px-2",
+              active
+                ? "bg-cv-surface font-bold text-cv-text shadow-segment"
+                : "font-medium text-cv-text-muted hover:text-cv-text",
               stretch &&
-                "max-lg:inline-flex max-lg:flex-1 max-lg:items-center max-lg:justify-center max-lg:gap-1.5 max-lg:px-3 max-lg:text-support max-lg:font-bold",
+                "max-lg:inline-flex max-lg:flex-1 max-lg:items-center max-lg:justify-center max-lg:gap-1.5 max-lg:px-3",
             )}
             key={option.value}
             onClick={() => onChange(option.value)}

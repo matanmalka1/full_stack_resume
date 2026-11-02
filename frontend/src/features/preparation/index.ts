@@ -10,19 +10,9 @@
    A consumer that needs something not listed here needs it added here, not imported from
    inside. */
 
-/* The CV-preparation step of the workflow wizard: the verdict, the one action the
-   workflow is waiting on, and the facts, diagnosis and posting a press away. The hub
-   renders it as the body of the preparation screen. */
-export { PreparationView } from "./components/PreparationView";
-/* The frame a step of the flow is drawn in: the spine that says where the work stands, the
-   heading named from the stage table, and the measure. A screen in the flow renders this
-   instead of assembling its own `PageShell` around the same three things - which is what
-   kept a step's heading and its chip two independently written answers to one question.
-   The spine itself is reached only through here. */
-export { WizardStepShell } from "./components/WizardStepShell";
-/* The Application screen's five-row account of its CV, with the way into the editor on
-   the open row. The screen places it; preparation decides what it says. */
-export { PreparationChecklist } from "./components/PreparationChecklist";
+/* The four stages' names, for the new-job screen's stepper: the step before an
+   Application exists draws the same stages without a record to locate it in. */
+export { workflowStageLabels, workflowStages } from "./model/workflowStages";
 /* What the projection is refusing and why, with the way to the control that answers it.
    The draft editor and the ready screen report the same review reasons and warnings this
    screen does, so it
@@ -30,21 +20,12 @@ export { PreparationChecklist } from "./components/PreparationChecklist";
    naming a way out. */
 export { PreparationAlerts } from "./stages/verification/PreparationAlerts";
 
-/* The Web automation continuation from a finished analysis to its draft. Called by the
-   screen that holds the watch, because that is where the Operation being followed is. */
-export { useAutomaticDraft } from "./api/mutations";
-
 /* What the projection is asking the reader to decide, for a caller that counts it into a
    badge. Where those decisions are taken stays inside. */
 
-export {
-  actionDestination,
-  preparationResumeDestination,
-  preparationResumeDestinationFromDetail,
-} from "./model/actionDestinations";
+export { preparationResumeDestination, preparationResumeDestinationFromDetail } from "./model/actionDestinations";
 export {
   classificationFieldLabels,
-  confidenceText,
   emphasisLabels,
   fitLevelLabel,
   languageLabels,
@@ -57,12 +38,4 @@ export { ReasonCallout, ReasonDetails } from "./components/ReasonCallout";
    supports, which the analysis step's rows offer too. */
 export { documentRequirements } from "./model/documentRequirements";
 export { RequirementFactAction } from "./components/RequirementFactAction";
-export {
-  actionDescription,
-  actionLabel,
-  preparationStateIcons,
-  preparationStateLabels,
-  preparationStateTones,
-  reasonTitle,
-  warningTitle,
-} from "./model/preparationLabels";
+export { actionLabel, preparationStateLabels, reasonTitle, warningTitle } from "./model/preparationLabels";

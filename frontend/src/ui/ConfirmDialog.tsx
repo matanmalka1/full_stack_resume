@@ -17,9 +17,9 @@ interface ConfirmDialogProps {
      answers whose labels are too long to share a row. */
   footerLayout?: "row" | "stack";
   headingId: string;
-  /* The question's subject as an icon, shown in a tile over the title on a phone. A
-     destructive question draws its tile filled, so the one that cannot be undone does not
-     look like the one that can. */
+  /* The question's subject as an icon, shown in a tile over the title. A destructive
+     question draws its tile filled, so the one that cannot be undone does not look like
+     the one that can. */
   icon?: ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
@@ -57,7 +57,7 @@ export const ConfirmDialog = ({
     footerLayout={footerLayout}
     footer={
       <>
-        <Button onClick={onCancel} variant="secondary">
+        <Button onClick={onCancel} size="default" variant="secondary">
           ביטול
         </Button>
         <Button
@@ -65,6 +65,7 @@ export const ConfirmDialog = ({
           onClick={onConfirm}
           pending={pending}
           pendingLabel={pendingLabel}
+          size="default"
           variant={confirmVariant}
         >
           {confirmLabel}
@@ -76,8 +77,8 @@ export const ConfirmDialog = ({
       icon === undefined ? undefined : (
         <span
           className={cx(
-            "flex size-12 items-center justify-center rounded-surface [&_svg]:size-icon-lg",
-            confirmVariant === "destructive" ? "bg-cv-accent text-cv-on-accent" : "bg-cv-surface-muted text-cv-text",
+            "flex size-12 items-center justify-center rounded-control-lg [&_svg]:size-icon-lg",
+            confirmVariant === "destructive" ? "bg-cv-blocker text-cv-on-accent" : "bg-cv-surface-muted text-cv-text",
           )}
         >
           {icon}

@@ -12,20 +12,18 @@ import { routePaths } from "@/navigation/routePaths";
    An action absent from the table has no screen yet, which is the honest default. */
 
 const destinations: Record<string, (applicationId: string) => string> = {
-  /* The Application screen is where preparation is executed - it is the preparation
-     screen, not a summary beside one. It carried a second URL ending in `/preparation`
-     for exactly these links; one address answers them now. */
-  analyze: routePaths.application,
-  /* `MatchingConfigurationEditor` is a control inside `PreparationView`, which this screen
-     renders, so the action resolves to the screen already holding it. */
-  edit_matching_configuration: routePaths.application,
-  /* Gap questions are asked and answered under the analysis whose requirements they are
-     about. */
-  ask_gap_questions: routePaths.application,
-  /* Re-pinning the document to a newer analysis sits beside the analysis it is decided
-     against. */
-  build_from_analysis: routePaths.application,
-  create_draft: routePaths.application,
+  /* The analysis step is where an analysis is run and read; a run in progress is reported
+     there too, so a resumed analysis lands on it. */
+  analyze: routePaths.analysis,
+  /* The matching settings are a screen of their own beneath the analysis. */
+  edit_matching_configuration: routePaths.matching,
+  /* Gap questions are asked and answered on the analysis step, under the requirements
+     they are about. */
+  ask_gap_questions: routePaths.analysis,
+  /* Creating the draft, and re-pinning the document to a newer analysis before it, are the
+     verification step's commands. */
+  build_from_analysis: routePaths.verification,
+  create_draft: routePaths.verification,
   /* The Draft Editor is where the patch is issued, so the commands it carries all lead
      to it. The regeneration commands and the fact resolution are controls on that screen
      rather than screens of their own: they act on the claim the user is looking at, and a
@@ -96,7 +94,8 @@ const resumeDestination = (application: ResumeProjection): string => {
     return routePaths.draft(application.id);
   }
 
-  return routePaths.application(application.id);
+  /* Before a document has content the work is the analysis step's. */
+  return routePaths.analysis(application.id);
 };
 
 export const preparationResumeDestination = (application: ApplicationListItem): string =>
@@ -119,9 +118,10 @@ export const preparationResumeDestinationFromDetail = (applicationId: string, de
    screen can answer, so it says which one it is rather than each caller re-deriving it. */
 export type PreparationScreen = "preparation" | "draft" | "ready";
 
+/* "preparation" is the verification step: the one preparation screen that reports alerts. */
 export const screenPath = (screen: PreparationScreen, applicationId: string): string =>
   screen === "draft"
     ? routePaths.draft(applicationId)
     : screen === "ready"
       ? routePaths.ready(applicationId)
-      : routePaths.application(applicationId);
+      : routePaths.verification(applicationId);
