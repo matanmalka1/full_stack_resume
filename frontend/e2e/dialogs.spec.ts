@@ -124,6 +124,8 @@ test.describe("dialogs", () => {
   test("opens the search palette on the shortcut with focus in its field", async ({ page }) => {
     await page.goto("/applications/app-1");
     const palette = page.getByRole("dialog", { name: "מעבר מהיר למועמדות" });
+    /* The shortcut is the shell's listener; pressing before the screen has drawn races it. */
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(palette).toBeHidden();
 
     await page.keyboard.press("ControlOrMeta+k");
