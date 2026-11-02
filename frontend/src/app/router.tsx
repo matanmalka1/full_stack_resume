@@ -72,13 +72,22 @@ export const routes: RouteObject[] = [
             ),
           },
 
-          /* The Application hub: its job record, its CV preparation, and its artifacts, on
-         one screen with one address. */
+          /* The Application hub: where it stands with the employer and with its CV, and
+         the way on to the step that is waiting. */
           {
             path: "applications/:applicationId",
             lazy: screen(
               () => import("@/features/application-detail/pages/ApplicationPage"),
               (module) => module.ApplicationPage,
+            ),
+          },
+          /* The analysis step of the wizard: the verdict, the matching and the action the
+         preparation is waiting on. */
+          {
+            path: "applications/:applicationId/analysis",
+            lazy: screen(
+              () => import("@/features/application-detail/pages/AnalysisPage"),
+              (module) => module.AnalysisPage,
             ),
           },
           {

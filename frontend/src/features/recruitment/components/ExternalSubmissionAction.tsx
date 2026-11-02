@@ -7,12 +7,12 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
 import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
 import { Button } from "@/ui/Button";
-import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
 import { Textarea } from "@/ui/Input";
 import { isoFromLocalDateTimeInput } from "@/utils/isoFromLocalDateTimeInput";
 import { localDateTimeInputValue } from "@/utils/localDateTimeInputValue";
+import { PermanentRecordNote } from "./PermanentRecordNote";
 import { SubmittedAtField, submittedAtRules } from "./SubmittedAtField";
 
 interface ExternalSubmissionFields {
@@ -78,9 +78,9 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
           id="external-submission-form"
           onSubmit={form.handleSubmit((fields) => submission.mutate(fields))}
         >
-          <Callout title="הרישום קבוע" tone="warning">
+          <PermanentRecordNote>
             ההגשה תתווסף להיסטוריה בלי להמציא גרסת קורות חיים או קובץ שלא נוצרו במערכת.
-          </Callout>
+          </PermanentRecordNote>
           <SubmittedAtField
             error={form.formState.errors.submittedAt?.message}
             registration={form.register("submittedAt", submittedAtRules)}

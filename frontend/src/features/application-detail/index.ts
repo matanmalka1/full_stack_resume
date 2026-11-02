@@ -6,6 +6,11 @@
    posting's source line are exported for the screens that name the same record from
    outside. Its screens are not exported: the route table loads each one on its own. */
 export { applicationLabel, sourceHostname } from "./model/applicationPresentation";
+/* The record's quick look and its two endings, which the board asks about its cards
+   exactly as the hub asks about its own record. */
+export { type ApplicationDetailsSummary, ApplicationDetailsSheet } from "./components/ApplicationDetailsSheet";
+export { CloseApplicationDialog } from "./components/CloseApplicationDialog";
+export { DeleteApplicationDialog } from "./components/DeleteApplicationDialog";
 export {
   isJobTextWithinBudget,
   JOB_TEXT_REQUIRED_MESSAGE,

@@ -391,7 +391,7 @@ describe("ApplicationListPage", () => {
     expect(within(stages).getAllByText("דורש טיפול")).toHaveLength(1);
 
     fireEvent.click(within(stages).getByRole("button", { name: /Platform Engineer/ }));
-    const details = screen.getByRole("dialog", { name: "פרטי משרה Platform Engineer" });
+    const details = screen.getByRole("dialog", { name: /פרטי משרה: Platform Engineer/ });
     expect(within(details).getByText("Referral from Dana")).toBeInTheDocument();
     expect(within(details).getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(within(details).getByText("פתוחה")).toBeInTheDocument();

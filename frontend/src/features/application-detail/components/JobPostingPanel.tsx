@@ -29,7 +29,7 @@ export const JobPostingPanel = ({
   const posting = detail.job_posting;
 
   return (
-    <Card aria-labelledby="job-posting-heading" className="rounded-surface bg-cv-surface p-4 shadow-surface sm:p-5">
+    <Card aria-labelledby="job-posting-heading" className="p-4 sm:p-5">
       <SectionHeader
         align="center"
         gap="wide"

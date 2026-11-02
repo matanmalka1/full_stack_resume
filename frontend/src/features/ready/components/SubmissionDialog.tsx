@@ -1,10 +1,13 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Send } from "lucide-react";
 import { useState } from "react";
+
+import { applicationDetailQueryOptions } from "@/api/applications";
 
 import { invalidateDocumentViews } from "@/api/documents";
 
 import { recordInternalSubmission } from "@/api/tracking";
-import { SubmittedAtField, submittedAtRules } from "@/features/recruitment";
+import { PermanentRecordNote, SubmittedAtField, submittedAtRules } from "@/features/recruitment";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
 import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
@@ -41,6 +44,9 @@ export const SubmissionDialog = ({
   previousSubmittedAt,
 }: SubmissionDialogProps) => {
   const queryClient = useQueryClient();
+  /* Which application is being sent, for the line under the title. The ready screen has
+     already read this projection, so it is answered from the cache. */
+  const application = useQuery(applicationDetailQueryOptions(applicationId)).data?.application;
   const [repeatAcknowledged, setRepeatAcknowledged] = useState(false);
   /* The native dialog keeps painting for its 0.18s exit transition after `open` turns
      false, and a successful recording invalidates the query that feeds
@@ -88,32 +94,35 @@ export const SubmissionDialog = ({
       dismissible={false}
       footer={
         <>
-          <Button onClick={close} variant="secondary">
-            חזרה
+          <Button onClick={close} size="default" variant="secondary">
+            ביטול
           </Button>
           <Button
             disabled={!submittedAtValid || (previousShown !== null && !repeatAcknowledged)}
             form="document-submission-form"
             pending={submission.isPending}
             pendingLabel="רושם…"
+            size="default"
             type="submit"
           >
-            אישור ורישום ההגשה
+            <Send aria-hidden="true" className="size-icon-md" />
+            רישום הגשה
           </Button>
         </>
       }
+      description={application === undefined ? undefined : `${application.company} · ${application.target_role}`}
       headingId="submission-dialog-heading"
       onClose={close}
       open={open}
       title={previousShown === null ? "רישום הגשה קבועה" : "רישום הגשה נוספת של אותם קורות חיים"}
     >
-      <form id="document-submission-form" onSubmit={form.handleSubmit((fields) => submission.mutate(fields))}>
-        <p className="mb-4">
-          הרישום קבוע: הוא שומר עותק של התוכן ושל קובצי ה־HTML וה־PDF המוצגים במסך הזה. אם המסמך השתנה מאז שנפתח, הרישום
-          יסורב ולא יירשם מסמך אחר.
-        </p>
+      <form
+        className="flex flex-col gap-4"
+        id="document-submission-form"
+        onSubmit={form.handleSubmit((fields) => submission.mutate(fields))}
+      >
         {previousShown === null ? null : (
-          <div className="mb-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-3">
             <Callout title="קורות החיים האלה כבר נרשמו כמוגשים" tone="warning">
               {`ההגשה הקיימת נרשמה ${formatDateTime(previousShown)}. הרישום הקיים לא ישתנה — יתווסף לו אירוע הגשה נוסף.`}
             </Callout>
@@ -130,6 +139,11 @@ export const SubmissionDialog = ({
           error={form.formState.errors.submittedAt?.message}
           registration={form.register("submittedAt", submittedAtRules)}
         />
+        {/* The document's content and its HTML and PDF are kept with the record; a document
+            that changed since this screen opened is refused rather than recorded. */}
+        <PermanentRecordNote>
+          ההגשה תישמר יחד עם קורות החיים בדיוק כפי שנשלחו, גם אם המסמך ישתנה אחר כך.
+        </PermanentRecordNote>
         {submission.error === null ? null : (
           <ErrorCallout
             error={submission.error}

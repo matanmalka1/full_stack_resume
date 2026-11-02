@@ -5,6 +5,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { ApplicationListItem, ApplicationListResponse } from "@/api/contracts";
 import { returnedApplicationId } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
+import { ApplicationDetailsSheet } from "@/features/application-detail";
+import { preparationResumeDestination } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageShell } from "@/ui/PageShell";
@@ -12,11 +14,11 @@ import { QueryState } from "@/ui/QueryState";
 import { cx } from "@/ui/cx";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
 import { ApplicationCardsSkeleton, ApplicationCardsView } from "../components/ApplicationCardsView";
-import { ApplicationDetailsDialog } from "../components/ApplicationDetailsDialog";
 import { ApplicationPipelineView } from "../components/ApplicationPipelineView";
 import { ApplicationPresetTabs } from "../components/ApplicationPresetTabs";
 import { BoardSort, BoardViewSwitch } from "../components/BoardControls";
 import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
+import { nextStepText } from "../model/applicationListPresentation";
 import { initialViewMode, rememberViewMode, type ViewMode } from "../model/applicationViews";
 
 /* How long the card the reader came back from stays marked. Matches `cv-returned`. */
@@ -171,6 +173,17 @@ export const ApplicationListPage = () => {
   }, [loaded, returnedId]);
 
   const detailsApplication = items.find((item) => item.id === detailsApplicationId) ?? null;
+  const detailsDestination = detailsApplication === null ? null : preparationResumeDestination(detailsApplication);
+  const detailsContinue =
+    detailsApplication === null || detailsDestination === null
+      ? null
+      : {
+          label:
+            detailsDestination === routePaths.ready(detailsApplication.id)
+              ? "פתיחת קורות החיים המוכנים"
+              : "המשך בהכנה",
+          to: detailsDestination,
+        };
   const showAll = () => updateQuery({ ...query, preset: undefined });
   const sort = query.sort ?? "updated";
   const setSort = (next: typeof sort) => updateQuery({ ...query, sort: next });
@@ -280,7 +293,14 @@ export const ApplicationListPage = () => {
           {results()}
         </div>
       </QueryState>
-      <ApplicationDetailsDialog application={detailsApplication} onClose={() => setDetailsApplicationId(null)} />
+      <ApplicationDetailsSheet
+        application={
+          detailsApplication === null ? null : { ...detailsApplication, closed: detailsApplication.is_closed }
+        }
+        continueTo={detailsContinue}
+        nextStep={detailsApplication === null ? undefined : nextStepText(detailsApplication)}
+        onClose={() => setDetailsApplicationId(null)}
+      />
     </PageShell>
   );
 };

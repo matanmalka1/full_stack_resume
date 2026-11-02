@@ -77,7 +77,7 @@ describe("ReadyPage", () => {
     renderReady();
 
     fireEvent.click(await screen.findByRole("button", { name: "רישום ההגשה" }));
-    fireEvent.click(screen.getByRole("button", { name: "אישור ורישום ההגשה" }));
+    fireEvent.click(screen.getByRole("button", { name: "רישום הגשה" }));
 
     /* The flow's end is announced at the top of the step, ahead of the file it sent. */
     const done = (await screen.findByText("ההגשה נרשמה")).closest("output");
@@ -122,10 +122,10 @@ describe("ReadyPage", () => {
     fireEvent.click(await within(aside).findByText("אפשרויות נוספות"));
     fireEvent.click(await screen.findByRole("button", { name: "רישום הגשה נוספת" }));
     expect(await screen.findByText("קורות החיים האלה כבר נרשמו כמוגשים")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "אישור ורישום ההגשה" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "רישום הגשה" })).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText("אני מבקש לרשום הגשה נוספת של אותם קורות חיים"));
-    expect(screen.getByRole("button", { name: "אישור ורישום ההגשה" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "רישום הגשה" })).toBeEnabled();
   });
 
   it("sends a document that changed since rendering back to the editor, offering nothing to send", async () => {

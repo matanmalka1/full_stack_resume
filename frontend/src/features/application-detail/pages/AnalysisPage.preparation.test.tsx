@@ -8,7 +8,7 @@ import { applicationDetailQueryKey } from "@/api/applications";
 import { operationQueryKey, operationQueryOptions } from "@/api/operations";
 import { settingsQueryKey } from "@/api/settings";
 import { json } from "@/test/fixtures";
-import { ApplicationPage } from "./ApplicationPage";
+import { AnalysisPage } from "./AnalysisPage";
 
 const ANALYSES_PATH = "/api/v1/applications/app-1/analyses";
 const HASH = "a".repeat(64);
@@ -132,8 +132,8 @@ const HistoryControls = () => {
   const navigate = useNavigate();
   return (
     <>
-      <button onClick={() => navigate("/applications/app-2")}>Another application</button>
-      <button onClick={() => navigate("/applications/app-1")}>Analysis</button>
+      <button onClick={() => navigate("/applications/app-2/analysis")}>Another application</button>
+      <button onClick={() => navigate("/applications/app-1/analysis")}>Analysis</button>
       <button onClick={() => navigate(-1)}>Back</button>
       <button onClick={() => navigate(1)}>Forward</button>
     </>
@@ -154,10 +154,10 @@ const renderPage = (settings: Settings = aiSettings, routeState?: unknown) => {
 
   const rendered = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[{ pathname: "/applications/app-1", state: routeState }]}>
+      <MemoryRouter initialEntries={[{ pathname: "/applications/app-1/analysis", state: routeState }]}>
         <HistoryControls />
         <Routes>
-          <Route element={<ApplicationPage />} path="/applications/:applicationId" />
+          <Route element={<AnalysisPage />} path="/applications/:applicationId/analysis" />
           <Route element={<p>Draft editor route</p>} path="/applications/:applicationId/draft" />
         </Routes>
       </MemoryRouter>
@@ -178,7 +178,7 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-describe("ApplicationPage at the preparation route", () => {
+describe("AnalysisPage at the preparation route", () => {
   it("uses the Operation as the only status after creation queued the analysis", async () => {
     const succeeded = queued({
       status: "succeeded",

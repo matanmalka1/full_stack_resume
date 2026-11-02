@@ -175,8 +175,13 @@ name a test or a screen reader finds:
   in a card, and a bar with the way back and cancel. A run that ended without a result
   is a page in its report sheet - warning mark, the catalogue's title, a "מה קרה" card
   and the steps with the failed one marked.
-- The application screen opens on the recruitment stage card and the dark next-action
-  card at every width; the draft step opens with the job-fit card. On phones a draft's
+- The Application hub (`/applications/:id`) opens on the recruitment stage card, then
+  the dark next-action card, the five-step CV checklist and the folded posting; its one
+  command and the PDF are pinned at the bottom, and its record menu (⋮) is an action
+  sheet. From the large breakpoint the commands move to the header, the checklist
+  becomes a row of tiles, and the reminder, the record's facts and the PDF stand in a
+  300px side column. The analysis step has its own address (`/analysis`); the draft
+  step opens with the job-fit card. On phones a draft's
   sections are cards under a pinned segmented strip of anchors - every section stays
   mounted - and a claim's edit and remove are labelled pills.
 - Every touch target is at least 44px.
