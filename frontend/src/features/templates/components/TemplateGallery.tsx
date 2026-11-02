@@ -1,4 +1,5 @@
 import { Check, Columns2 } from "lucide-react";
+import { useState } from "react";
 
 import {
   type PreviewTemplate,
@@ -8,11 +9,10 @@ import {
   type TemplateOption,
 } from "@/api/templates";
 import { cx } from "@/ui/cx";
+import { DocumentSketch } from "@/ui/DocumentSketch";
+import { PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/ui/documentPage";
 
-/* The rendered page is a fixed A4 of 794x1123 CSS pixels; a thumbnail is that page
-   scaled down, never a reflowed small copy, so it shows the layout the PDF will have. */
-const PAGE_WIDTH_PX = 794;
-const PAGE_HEIGHT_PX = 1123;
+/* A thumbnail is the page scaled down, never a reflowed small copy. */
 const THUMBNAIL_SCALE = 0.2;
 
 interface TemplateGalleryProps {
@@ -37,6 +37,10 @@ export const TemplateGallery = ({
   previewSrc,
   value,
 }: TemplateGalleryProps) => {
+  /* The thumbnails that have painted once. Until then each shows the sketch of a page;
+     a later src replaces a page already on screen, as the editor's frame does. */
+  const [painted, setPainted] = useState<ReadonlySet<PreviewTemplate>>(() => new Set());
+
   const cards: {
     columns: number;
     description: string;
@@ -80,12 +84,14 @@ export const TemplateGallery = ({
                 aria-hidden="true"
                 className="pointer-events-none absolute top-0 left-0 origin-top-left border-0"
                 loading="lazy"
+                onLoad={() => setPainted((previous) => new Set(previous).add(card.preview))}
                 sandbox=""
                 src={previewSrc(card.preview)}
                 style={{ height: PAGE_HEIGHT_PX, transform: `scale(${THUMBNAIL_SCALE})`, width: PAGE_WIDTH_PX }}
                 tabIndex={-1}
                 title={`תצוגה מקדימה: ${card.label}`}
               />
+              {painted.has(card.preview) ? null : <DocumentSketch scale={THUMBNAIL_SCALE} />}
             </div>
             <span className="flex items-center gap-1.5 text-support font-semibold text-cv-text">
               {selected ? <Check aria-hidden="true" className="size-icon-sm shrink-0 text-cv-accent" /> : null}
