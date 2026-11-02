@@ -67,17 +67,23 @@ claims in `content` (empty while `content IS NULL`).
 (status included), sorted by ID; a missing fact is entered as missing. Computed on read.
 
 ```text
-basis = sha256(document_hash + ":" + facts_hash)
+content_hash = document_hash without template      hash(analysis_id, content)
+basis        = sha256(content_hash + ":" + facts_hash)
+render_basis = basis                                when template IS NULL
+             = sha256(basis + ":" + template)       otherwise
 ```
 
-The basis is computed on read. Three stamps are stored:
+The template is not part of the basis: the content check and approval do not read it.
+It is part of `render_basis`, because the files are drawn in it. Both are computed on
+read. Three stamps are stored:
 
 - `checked_basis`: the basis `content_report` was produced for;
 - `approved_basis`: the basis that was approved;
-- `rendered_basis`: the basis whose files `html_path`/`pdf_path` hold.
+- `rendered_basis`: the `render_basis` whose files `html_path`/`pdf_path` hold.
 
-A NULL stamp never equals the basis. Any change to the document or a dependent fact
-changes the basis; no command clears stamps.
+A NULL stamp never equals the basis. Any change to the content, the analysis pin, or a
+dependent fact changes the basis; a template change changes only `render_basis`; no
+command clears stamps.
 
 Pinning:
 
@@ -100,7 +106,7 @@ First match wins, over one consistent read (§9):
 
 1. No CVDocument -> `needs_analysis`.
 2. `content IS NULL` -> `ready_to_draft`.
-3. `approved_basis == basis AND rendered_basis == basis` -> `ready`.
+3. `approved_basis == basis AND rendered_basis == render_basis` -> `ready`.
 4. `approved_basis == basis` -> `approved`.
 5. Otherwise -> `draft_in_progress`.
 
@@ -121,8 +127,10 @@ An outdated report is still returned for display; it authorizes nothing.
 
 ## 6. Why nothing goes stale
 
-- A content edit, re-pin, or template change changes `document_hash`, outdating every
+- A content edit or re-pin changes `document_hash` and the basis, outdating every
   stamp.
+- A template change changes `document_hash` and `render_basis` only: the content check
+  and approval stay, and Ready is outdated until the document is rendered again.
 - A change to a dependent fact changes `facts_hash`, outdating every stamp. An
   unrelated fact does not.
 - A newer analysis or edited job text is the `DOCUMENT_ON_OLDER_ANALYSIS` warning.
@@ -544,8 +552,9 @@ it belongs elsewhere or is already pinned). Sets `analysis_id`, fresh `built_wit
 
 Synchronous. Chooses the template the document renders with: one of the catalog's
 (`cv_engine/domain/templates.py`) or `null` for the track's own. Allowed in every state,
-as an edit is; the hash moves, so an approved or Ready document returns to draft and is
-approved and rendered again. Choosing the template it has changes nothing. Content,
+as an edit is; the hash moves, so a command holding the old hash is refused. The basis
+does not move: an approved document stays approved and a Ready one returns to approved,
+to be rendered again in the new template. Choosing the template it has changes nothing. Content,
 stamps, and files are kept. A new document starts with the user's `default_template`
 (product-spec §15), copied when the first analysis creates it.
 
@@ -617,8 +626,8 @@ page count, PDF/ATS text (coverage, and each date range extracted as one run), l
 direction, and filename metadata.
 
 Activation locks the document and requires an unchanged hash and
-`approved_basis == basis`; then it swaps the file paths, stamps `rendered_basis`, and
-clears `last_render_error`. Only render activation writes `rendered_basis`.
+`approved_basis == basis`; then it swaps the file paths, stamps `rendered_basis` with
+the `render_basis`, and clears `last_render_error`. Only render activation writes `rendered_basis`.
 
 A failure records `last_render_error` (reason plus hash) while the hash is unchanged,
 never touches the active files, and leaves the document approved. Superseded files are

@@ -15,7 +15,7 @@ from typing import Literal
 from ....domain.contracts.document import DocumentSubmission
 from ....domain.contracts.records import AuditRecord
 from ....domain.contracts.recruitment import ApplicationStatus
-from ....domain.document import DocumentState, document_state
+from ....domain.document import DocumentState, document_state, render_basis
 from ....domain.recruitment import terminal_outcome_after
 from ....util import new_id
 from ...actor import Actor
@@ -119,7 +119,7 @@ class SubmissionService:
                 raise StateConflict("the document no longer exists")
             require_hash(locked, command.expected_document_hash)
             if not (
-                locked.rendered_basis == submitted_basis
+                locked.rendered_basis == render_basis(locked, submitted_basis)
                 and locked.approved_basis == submitted_basis
                 and locked.html_path == document.html_path
                 and locked.pdf_path == document.pdf_path

@@ -135,10 +135,12 @@ and tracking all work without a provider.
    questions and their answers, and finished Operations are immutable, and job text is
    locked once submitted. Database triggers enforce this.
 5. Editing an approved or Ready document is always allowed and returns it to draft.
-6. Approval and Ready are derived on read by comparing `approved_basis` and
-   `rendered_basis` with the current `basis` (state-and-use-cases.md §3–§4).
+6. Approval and Ready are derived on read by comparing `approved_basis` with the current
+   `basis` and `rendered_basis` with the current `render_basis` (state-and-use-cases.md
+   §3–§4).
 7. The basis covers the document content, its analysis pin, and the current state of
-   every fact it uses. Changing any of them outdates every stamp.
+   every fact it uses. Changing any of them outdates every stamp. The render basis adds
+   the template, so changing the template outdates only Ready.
 8. Approval requires a passing content check of the exact current basis.
 9. Unsupported, pending, unlinked, or unreviewed claims can be saved but block approval.
 10. Wording is supported only by a deterministic proof or a passing review (§10.1).
@@ -393,8 +395,9 @@ Each document renders in a template: the track's own (`development_ltr`, `sales_
 vivid-single, deedy, modern-deedy; attribution in `rendering/templates/catalog/NOTICE.md`).
 Each renders in both directions. A two-column template places list sections (every
 line an `item`: education, skills, tools, languages) in its side column, and its
-reading order is checked per column. The template is part of the document hash
-(state-and-use-cases.md §3), so changing it outdates approval and Ready. The editor's
+reading order is checked per column. The template is part of the document hash but
+not of the basis (state-and-use-cases.md §3): changing it keeps the content check and
+approval and outdates Ready, and the Web editor then renders the PDF again by itself. The editor's
 picker shows the user's own CV in each template; Settings choose the default by name.
 
 Rendering is an Operation, available while the document is approved. It revalidates,
@@ -426,11 +429,11 @@ date ("היום", free text) is shown as written, never partly converted. This i
 presentation only, like keyword emphasis: facts, claims, and the Markdown export keep
 the user's wording, and both checks look for the displayed form. English is unchanged.
 
-A document is **Ready** when `approved_basis` and `rendered_basis` both equal the current
-basis.
+A document is **Ready** when `approved_basis` equals the current basis and
+`rendered_basis` the current render basis (the basis in the document's template).
 
-In the Web editor, rendering starts automatically after the user approves. No chained
-flow bypasses a blocker.
+In the Web editor, rendering starts automatically after the user approves, and after a
+template change of an approved document. No chained flow bypasses a blocker.
 
 The Ready screen shows the file's facts, PDF download, and provenance (the decision
 explanation and the chosen facts), and offers editing and submission. The content

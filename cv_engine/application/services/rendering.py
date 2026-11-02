@@ -3,7 +3,8 @@
 A render validates the content, writes HTML and PDF to a unique per-attempt path,
 and checks the output - all outside database scopes. Activation locks the document
 row and requires `approved_basis == basis` and `document_hash == expected`; only
-then are the files swapped in and `rendered_basis` stamped. Render activation is
+then are the files swapped in and `rendered_basis` stamped with the basis in the
+document's template. Render activation is
 the only writer of `rendered_basis`. A failure records `last_render_error` only
 while the hash still matches, never touches the active files, and its own files
 are deleted best-effort. No render output is registered as an Artifact.
@@ -16,7 +17,7 @@ from typing import Any
 
 from ...domain.contracts.knowledge import Profile
 from ...domain.contracts.validation import ValidationReport
-from ...domain.document import DocumentState, document_state
+from ...domain.document import DocumentState, document_state, render_basis
 from ...domain.knowledge import Knowledge
 from ...domain.render_validation import page_limit
 from ...domain.templates import SampleLanguage, preview_template, template_spec
@@ -201,9 +202,10 @@ class RenderingService:
         )
         document = source.document
         require_hash(document, command.expected_document_hash)
-        rendered_basis = current_basis(document, knowledge)
-        if document.approved_basis != rendered_basis:
+        approved_basis = current_basis(document, knowledge)
+        if document.approved_basis != approved_basis:
             raise StateConflict("the document's approval no longer holds at activation")
+        rendered_basis = render_basis(document, approved_basis)
         updated, superseded = self._documents.activate_render(
             tx,
             command.application_id,
