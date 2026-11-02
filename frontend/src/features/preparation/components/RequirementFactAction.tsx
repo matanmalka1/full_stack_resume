@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import type { Requirement } from "@/api/analyses";
 import { FactCreationDialog, emptyFactForm } from "@/features/facts";
 import { Button } from "@/ui/Button";
-import { SuccessNotice } from "@/ui/SuccessNotice";
+import { showToast } from "@/ui/toast";
 
 /* A requirement the analysis found no fact for, and the way to record real experience
    for it: the ordinary fact creation dialog, which writes a pending fact. No AI writes
@@ -24,27 +24,18 @@ export const RequirementFactAction = ({
 }) => {
   const id = useId();
   const [open, setOpen] = useState(false);
-  const [created, setCreated] = useState(false);
 
   return (
     <div className="flex flex-col items-start gap-2">
       <Button
         aria-label={`הוסף עובדה לדרישה: ${requirement.text}`}
-        onClick={() => {
-          setCreated(false);
-          setOpen(true);
-        }}
+        onClick={() => setOpen(true)}
         size="compact"
         variant="secondary"
       >
         <Plus aria-hidden="true" className="size-icon-md shrink-0" />
         הוסף עובדה
       </Button>
-      {created ? (
-        <SuccessNotice onDismiss={() => setCreated(false)} title="העובדה נשמרה כממתינה">
-          כדי שתיחשב לדרישה יש לאשר אותה במאגר העובדות ולהריץ את הניתוח מחדש.
-        </SuccessNotice>
-      ) : null}
       {/* Mounted only while open: a closed dialog's intro would put the requirement's text in
           the page a second time, beside the row that already names it. */}
       {open ? (
@@ -64,7 +55,12 @@ export const RequirementFactAction = ({
             </div>
           }
           onClose={() => setOpen(false)}
-          onCreated={() => setCreated(true)}
+          onCreated={() =>
+            showToast({
+              body: "כדי שתיחשב לדרישה יש לאשר אותה במאגר העובדות ולהריץ את הניתוח מחדש.",
+              title: "העובדה נשמרה כממתינה",
+            })
+          }
           open={open}
           reason={`created for job requirement ${requirement.requirementId}`}
           submitLabel="יצירת עובדה ממתינה"

@@ -690,12 +690,23 @@ dialog::backdrop {
   }
 }
 
-/* The one moment the whole flow ends on: a submission recorded. The mark grows in and its
-   tick draws, together about 300ms - long enough to register as "done", short enough to
-   never stand between the reader and what comes next. Under `prefers-reduced-motion` the
-   mark is simply there: the blanket rule above only shortens durations and would leave
-   the tick's delay in place, so these two opt out entirely. */
-@keyframes cv-success-mark {
+/* A toast arrives from the screen's end edge - the side it sits on - and its mark grows
+   in while the tick draws, together about 300ms. Its timer bar drains from full to empty
+   over the toast's lifetime; the duration and pause come from the component, which owns
+   the clock. Under `prefers-reduced-motion` the toast and its mark are simply there and
+   the bar is hidden: the blanket rule above would otherwise drain it in an instant. */
+@keyframes cv-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cv-toast-mark {
   from {
     opacity: 0;
     transform: scale(0.6);
@@ -706,7 +717,7 @@ dialog::backdrop {
   }
 }
 
-@keyframes cv-success-check {
+@keyframes cv-toast-check {
   from {
     stroke-dashoffset: 24;
   }
@@ -715,14 +726,35 @@ dialog::backdrop {
   }
 }
 
-.cv-success-mark {
-  animation: cv-success-mark 200ms ease-out both;
+@keyframes cv-toast-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
 }
 
-.cv-success-mark path {
+.cv-toast-in {
+  animation: cv-toast-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.cv-toast-mark {
+  animation: cv-toast-mark 200ms ease-out 60ms both;
+}
+
+.cv-toast-mark path {
   stroke-dasharray: 24;
   stroke-dashoffset: 0;
-  animation: cv-success-check 220ms ease-out 80ms both;
+  animation: cv-toast-check 220ms ease-out 160ms both;
+}
+
+.cv-toast-timer {
+  opacity: 0.35;
+  transform-origin: left;
+  animation-name: cv-toast-timer;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
 }
 
 /* A card the reader has just come back to from the flow that changed it: a ring that
@@ -744,13 +776,18 @@ dialog::backdrop {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cv-success-mark,
-  .cv-success-mark path,
+  .cv-toast-in,
+  .cv-toast-mark,
+  .cv-toast-mark path,
   .cv-returned {
     animation: none !important;
   }
 
   .cv-returned {
     box-shadow: 0 0 0 3px var(--color-cv-accent);
+  }
+
+  .cv-toast-timer {
+    display: none;
   }
 }

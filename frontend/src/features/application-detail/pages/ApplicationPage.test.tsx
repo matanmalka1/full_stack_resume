@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { HASH, detail, json } from "@/test/fixtures";
+import { Toaster } from "@/ui/Toaster";
 import { formatDate, formatDateTime } from "@/utils/formatDateTime";
 import { ApplicationPage } from "./ApplicationPage";
 
@@ -58,6 +59,7 @@ const renderHub = (
           <Route element={<p>The board</p>} path="/" />
         </Routes>
       </MemoryRouter>
+      <Toaster />
     </QueryClientProvider>,
   );
   return fetchMock;

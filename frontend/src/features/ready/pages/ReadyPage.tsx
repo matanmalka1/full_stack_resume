@@ -26,7 +26,7 @@ import { LiveRegion } from "@/ui/LiveRegion";
 import { PageHeading } from "@/ui/PageHeading";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
-import { SuccessNotice } from "@/ui/SuccessNotice";
+import { showToast } from "@/ui/toast";
 import { useIsPhone } from "@/ui/useIsPhone";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { DecisionDocument } from "../components/DecisionDocument";
@@ -76,7 +76,6 @@ export const ReadyPage = () => {
   const isPhone = useIsPhone();
   const [submissionOpen, setSubmissionOpen] = useState(false);
   const [submissionRecorded, setSubmissionRecorded] = useState(false);
-  const [submissionNoticeOpen, setSubmissionNoticeOpen] = useState(false);
   const [downloadStarted, setDownloadStarted] = useState(false);
   const [decisionOpen, setDecisionOpen] = useState(false);
   const [factsOpen, setFactsOpen] = useState(false);
@@ -251,18 +250,6 @@ export const ReadyPage = () => {
             <>
               <PreparationAlerts detail={detail} screen="ready" />
 
-              {/* The end of the flow, at the top of the step where the eye lands after the
-                  dialog closes. */}
-              {submissionNoticeOpen ? (
-                <SuccessNotice
-                  emphasis="milestone"
-                  onDismiss={() => setSubmissionNoticeOpen(false)}
-                  title="ההגשה נרשמה"
-                >
-                  התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.
-                </SuccessNotice>
-              ) : null}
-
               {ready ? null : (
                 /* Reached from a link after the document changed. Nothing here is lost: the
                    editor holds the document as it is now, and approving and rendering it
@@ -406,7 +393,10 @@ export const ReadyPage = () => {
           onClose={() => setSubmissionOpen(false)}
           onRecorded={() => {
             setSubmissionRecorded(true);
-            setSubmissionNoticeOpen(true);
+            showToast({
+              body: "התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.",
+              title: "ההגשה נרשמה",
+            });
           }}
           open={submissionOpen}
           previousSubmittedAt={submittedAt}

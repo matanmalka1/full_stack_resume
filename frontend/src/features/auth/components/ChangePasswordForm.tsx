@@ -1,5 +1,4 @@
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
 
 import { changePassword } from "@/api/auth";
 import type { ChangePasswordRequest } from "@/api/contracts";
@@ -9,7 +8,7 @@ import { Button } from "@/ui/Button";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { Input } from "@/ui/Input";
-import { SuccessNotice } from "@/ui/SuccessNotice";
+import { showToast } from "@/ui/toast";
 
 interface ChangePasswordFields extends ChangePasswordRequest {
   repeat_password: string;
@@ -17,7 +16,6 @@ interface ChangePasswordFields extends ChangePasswordRequest {
 
 /* Changing the password ends every other session; this one continues on a new cookie. */
 export const ChangePasswordForm = () => {
-  const [changed, setChanged] = useState(false);
   /* The new password is typed twice: a typo here would lock the reader out of every
      session at once. The repeat stays in the form; only the request's fields are sent. */
   const {
@@ -30,10 +28,9 @@ export const ChangePasswordForm = () => {
   });
   const change = useMutation({
     mutationFn: changePassword,
-    onMutate: () => setChanged(false),
     onSuccess: () => {
       reset();
-      setChanged(true);
+      showToast({ body: "כל ההתחברויות האחרות הסתיימו.", title: "הסיסמה שונתה" });
     },
   });
 
@@ -64,11 +61,6 @@ export const ChangePasswordForm = () => {
         )}
       </Field>
       {change.error === null ? null : <ErrorCallout error={change.error} title="הסיסמה לא שונתה" />}
-      {changed ? (
-        <SuccessNotice onDismiss={() => setChanged(false)} title="הסיסמה שונתה">
-          <p>כל ההתחברויות האחרות הסתיימו.</p>
-        </SuccessNotice>
-      ) : null}
       <ActionBar
         primary={
           <Button pending={change.isPending} pendingLabel="משנה…" type="submit">

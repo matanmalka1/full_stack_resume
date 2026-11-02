@@ -89,13 +89,8 @@ describe("ReadyPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "רישום הגשה" }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "רישום הגשה" }));
 
-    /* The flow's end is announced at the top of the step, ahead of the file it sent. */
-    const done = (await screen.findByText("ההגשה נרשמה")).closest("output");
-    expect(done).not.toBeNull();
-    expect(
-      done!.compareDocumentPosition(screen.getByRole("link", { name: "חזרה לעריכת הטיוטה" })) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    /* The flow's end is announced like every other success: a toast in the live region. */
+    expect((await screen.findByText("ההגשה נרשמה")).closest("output")).toHaveAttribute("aria-live", "polite");
     expect(screen.getByRole("link", { name: "סיום וחזרה ללוח" })).toHaveAttribute("href", "/");
     const request = fetchMock.mock.calls.find(
       (call) => call[1]?.method === "POST" && String(call[0]).endsWith("/submissions"),

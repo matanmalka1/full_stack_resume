@@ -18,7 +18,7 @@ import { initialOf } from "@/ui/InitialTile";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
-import { SuccessNotice } from "@/ui/SuccessNotice";
+import { showToast } from "@/ui/toast";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { useApplicationRecordMutations } from "../api/mutations";
 import { ApplicationActionsMenu } from "../components/ApplicationActionsMenu";
@@ -92,8 +92,6 @@ export const ApplicationPage = () => {
   const query = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = query.data;
   const [dialog, setDialog] = useState<HubDialog | null>(null);
-  const [closedNotice, setClosedNotice] = useState(false);
-  const [postingNotice, setPostingNotice] = useState(false);
   const { closeMutation, deleteMutation } = useApplicationRecordMutations(applicationId, {
     onDeleted: () => void navigate(boardPath(), { state: boardReturnState(applicationId) }),
   });
@@ -200,16 +198,6 @@ export const ApplicationPage = () => {
       </div>
 
       <div className="mt-4 flex flex-col gap-4 lg:mt-5.5">
-        {postingNotice ? (
-          <SuccessNotice onDismiss={() => setPostingNotice(false)} title="נוסח המשרה עודכן">
-            הניתוח הקודם נעשה על הנוסח הקודם ואינו פעיל יותר, ולכן יש להריץ ניתוח מחדש.
-          </SuccessNotice>
-        ) : null}
-        {closedNotice ? (
-          <SuccessNotice onDismiss={() => setClosedNotice(false)} title="המועמדות נסגרה">
-            היא ירדה מלוח המועמדויות הפעילות, ושום דבר בה לא נמחק.
-          </SuccessNotice>
-        ) : null}
         {closeMutation.error === null ? null : (
           <ErrorCallout error={closeMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נסגרה" />
         )}
@@ -298,7 +286,10 @@ export const ApplicationPage = () => {
           onClose={() => setDialog(null)}
           onSaved={() => {
             setDialog(null);
-            setPostingNotice(true);
+            showToast({
+              body: "הניתוח הקודם נעשה על הנוסח הקודם ואינו פעיל יותר, ולכן יש להריץ ניתוח מחדש.",
+              title: "נוסח המשרה עודכן",
+            });
           }}
         />
       ) : null}
@@ -308,7 +299,8 @@ export const ApplicationPage = () => {
         onConfirm={() =>
           closeMutation.mutate(undefined, {
             onSettled: () => setDialog(null),
-            onSuccess: () => setClosedNotice(true),
+            onSuccess: () =>
+              showToast({ body: "היא ירדה מלוח המועמדויות הפעילות, ושום דבר בה לא נמחק.", title: "המועמדות נסגרה" }),
           })
         }
         pending={closeMutation.isPending}

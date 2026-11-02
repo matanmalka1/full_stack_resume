@@ -13,7 +13,7 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { cx } from "@/ui/cx";
 import { SegmentedControl } from "@/ui/SegmentedControl";
-import { SuccessNotice } from "@/ui/SuccessNotice";
+import { showToast } from "@/ui/toast";
 import { SettingsConflict } from "./SettingsConflict";
 import {
   SettingsGroup,
@@ -84,6 +84,9 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
       setBaseline(result);
       reset(editableSettings(result.settings));
       queryClient.setQueryData(settingsQueryKey, result);
+      /* Settings have no other on-screen trace of a save - the save row only goes away -
+         so this one command confirms. */
+      showToast({ title: "ההגדרות נשמרו" });
     },
   });
   const refresh = useMutation({
@@ -234,9 +237,6 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
           </div>
         ) : null}
       </form>
-      {/* Settings have no other on-screen trace of a save - the save row only goes away -
-          so this one command confirms. The next edit makes it old news. */}
-      {save.isSuccess && !isDirty ? <SuccessNotice onDismiss={() => save.reset()} title="ההגדרות נשמרו" /> : null}
       {conflict !== null && (
         <Callout title="ההגדרות השתנו מאז שפתחת את הטופס" tone="warning">
           <p>העריכות שלך נשמרו בטופס. יש לטעון את הגרסה העדכנית ולהשוות לפני שמירה נוספת.</p>

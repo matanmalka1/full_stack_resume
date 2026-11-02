@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiRequest, onSessionLost } from "@/api/client";
 import { json } from "@/test/fixtures";
 import { ChangePasswordForm, SessionGate, SignOutButton, safeNextPath } from ".";
+import { Toaster } from "@/ui/Toaster";
 import { LoginPage } from "./pages/LoginPage";
 
 const me = { id: "user-1", email: "candidate@example.com", created_at: "2026-10-11T12:00:00+00:00" };
@@ -186,6 +187,7 @@ describe("changing the password", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <ChangePasswordForm />
+        <Toaster />
       </QueryClientProvider>,
     );
 
