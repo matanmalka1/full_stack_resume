@@ -7,6 +7,7 @@ import { Dialog } from "@/ui/Dialog";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { IconButton } from "@/ui/IconButton";
 import { ListCard, ListRow } from "@/ui/ListCard";
+import { Tooltip } from "@/ui/Tooltip";
 import { useDeleteFact } from "../api/mutations";
 
 /* The fact's ⋮ menu, which holds its one rare command: deletion. Deletion is one-way -
@@ -28,9 +29,11 @@ export const FactDeletionControl = ({ fact, onDeleted }: { fact: Fact; onDeleted
 
   return (
     <>
-      <IconButton aria-label="אפשרויות נוספות" onClick={() => setStep("menu")} variant="quiet">
-        <MoreVertical aria-hidden="true" className="size-icon-md" />
-      </IconButton>
+      <Tooltip label="אפשרויות נוספות">
+        <IconButton aria-label="אפשרויות נוספות" onClick={() => setStep("menu")} variant="quiet">
+          <MoreVertical aria-hidden="true" className="size-icon-md" />
+        </IconButton>
+      </Tooltip>
       <Dialog
         headingId="fact-actions-heading"
         onClose={() => setStep((current) => (current === "menu" ? "closed" : current))}
