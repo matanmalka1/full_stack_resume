@@ -4,6 +4,7 @@ import type { ApplicationDetail, ProfileName } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { QueryState } from "@/ui/QueryState";
+import { cardClasses } from "@/ui/surface";
 import { useAskGapQuestions, useGapQuestions, useRefreshOnSettled } from "../../../api/gapQuestions";
 import {
   askingOperationId,
@@ -20,7 +21,9 @@ import { GapQuestionCard } from "./GapQuestionCard";
    again - so the step says both before the reader starts.
 
    Rendered only while the projection offers the action: the questions are about the
-   newest analysis, and an analysis with nothing unmet has nothing to ask. */
+   newest analysis, and an analysis with nothing unmet has nothing to ask. It stands under
+   the requirements table, in the step's main column at every width: the questions are
+   about the rows just above them. */
 export const GapQuestionsSection = ({
   detail,
   profile,
@@ -47,12 +50,12 @@ export const GapQuestionsSection = ({
       : null;
 
   return (
-    <section aria-labelledby="gap-questions-heading" className="flex flex-col gap-4">
+    <section aria-labelledby="gap-questions-heading" className="flex flex-col gap-3.5">
       <div className="flex flex-col gap-1">
-        <h3 className="text-body font-semibold text-cv-text" id="gap-questions-heading">
+        <h2 className="text-heading-card font-extrabold text-cv-text" id="gap-questions-heading">
           השלמת פערים בעובדות
-        </h3>
-        <p className="text-support leading-6 text-cv-text-muted">
+        </h2>
+        <p className="text-label leading-relaxed text-cv-text-muted">
           שאלה אחת לכל דרישה שלא כוסתה. מכל תשובה תנוסח עובדה ממתינה מתוך מה שכתבת בלבד. היא תיחשב רק אחרי שתאושר,
           והכיסוי של הדרישות יתעדכן רק אחרי הרצת הניתוח מחדש.
         </p>
@@ -66,9 +69,9 @@ export const GapQuestionsSection = ({
         onRetry={() => void query.refetch()}
       >
         {set === undefined ? null : set.questions.length === 0 ? (
-          <div className="flex flex-col items-start gap-2">
+          <div className={cardClasses("flex flex-col items-start gap-3 p-4 max-lg:p-3.5")}>
             <Button
-              className="max-lg:min-h-11 max-lg:w-full"
+              className="max-lg:w-full"
               disabled={!gapQuestionsAskable(detail) || asking}
               onClick={() => ask.mutate()}
               pending={ask.isPending || asking}
@@ -88,12 +91,12 @@ export const GapQuestionsSection = ({
           </div>
         ) : (
           <>
-            <p className="text-support text-cv-text-muted">
+            <p className="text-support font-bold text-cv-text-muted">
               {openQuestionCount(set) === 0
                 ? "כל השאלות נענו או דולגו."
                 : `${openQuestionCount(set)} מתוך ${set.questions.length} שאלות ממתינות לתשובה.`}
             </p>
-            <ol className="flex flex-col gap-3">
+            <ol className="flex flex-col gap-3.5">
               {set.questions.map((question) => (
                 <li key={question.id}>
                   <GapQuestionCard

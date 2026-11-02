@@ -11,6 +11,7 @@ import { useAnalyzeCommand } from "../../api/mutations";
 import { fitDescriptions, fitLabels } from "../../model/analysisLabels";
 import { requirementGroups } from "../../model/requirementGroups";
 import { AnalysisNotes } from "./AnalysisNotes";
+import { GapQuestionsSection } from "./gaps/GapQuestionsSection";
 import { RequirementsTable, limitText } from "./RequirementsTable";
 
 /* The verdict, as the step's one dark block: the fit is what the reader opened the
@@ -71,11 +72,12 @@ const Reanalyze = ({
 };
 
 /* The analysis step's body once there is an analysis: the verdict, the requirements it
-   was read from by importance, and why coverage stops where it does.
+   was read from by importance, why coverage stops where it does, and the questions about
+   the requirements nothing covers (§9.1).
 
-   A wide screen puts the requirements table beside a column holding the verdict and the
-   explanations for the rows on view; a phone stacks the verdict over the rows, each
-   folding its own explanation. */
+   A wide screen puts the requirements table, and the gap questions under it, beside a
+   column holding the verdict and the explanations for the rows on view; a phone stacks
+   the verdict over the rows, each folding its own explanation, then the questions. */
 export const AnalysisOverview = ({
   detail,
   onQueued,
@@ -106,8 +108,16 @@ export const AnalysisOverview = ({
     active === undefined ? (
       <p className={cardClasses("p-4 text-label text-cv-text-muted")}>הניתוח לא חילץ דרישות מנוסח המשרה.</p>
     ) : (
-      <RequirementsTable active={active} gapReasons={gapReasons} groups={groups} onChoose={setChosen} phone={phone} />
+      <RequirementsTable
+        active={active}
+        gapReasons={gapReasons}
+        groups={groups}
+        onChoose={setChosen}
+        phone={phone}
+        profile={detail.application.profile ?? null}
+      />
     );
+  const gapQuestions = <GapQuestionsSection detail={detail} profile={classification.profile} />;
   const notes = (
     <AnalysisNotes
       issues={classification.issues}
@@ -121,6 +131,7 @@ export const AnalysisOverview = ({
       <div className="flex flex-col gap-3.5">
         <FitVerdict classification={classification} />
         {table}
+        {gapQuestions}
         {notes}
         <Reanalyze detail={detail} onQueued={onQueued} operationLive={operationLive} />
       </div>
@@ -129,7 +140,10 @@ export const AnalysisOverview = ({
 
   return (
     <div className="flex items-start gap-5">
-      <div className="min-w-0 flex-1">{table}</div>
+      <div className="flex min-w-0 flex-1 flex-col gap-5">
+        {table}
+        {gapQuestions}
+      </div>
       <aside className="flex w-75 shrink-0 flex-col gap-3.5" aria-label="סיכום הניתוח">
         <FitVerdict classification={classification} />
         {limits.length === 0 ? null : (

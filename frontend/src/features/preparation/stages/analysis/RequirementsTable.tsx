@@ -5,6 +5,7 @@ import type { Requirement, RequirementCoverage, RequirementImportance, Shortfall
 import { FilterChip } from "@/ui/FilterChip";
 import { cardClasses } from "@/ui/surface";
 import { cx } from "@/ui/cx";
+import { RequirementFactAction } from "../../components/RequirementFactAction";
 import { coverageLabels } from "../../model/analysisLabels";
 import type { RequirementGroup } from "../../model/requirementGroups";
 
@@ -86,7 +87,22 @@ export const limitText = (requirement: Requirement, gapReason: string | undefine
       gapReason ??
       null);
 
-const PhoneRow = ({ gapReason, requirement }: { gapReason: string | undefined; requirement: Requirement }) => {
+/* A requirement no fact supports offers to record one, in the row that names it: the
+   ordinary fact form, writing a pending fact (§17). The Profile picks its default file. */
+const factActionFor = (requirement: Requirement, profile: string | null) =>
+  requirement.supportingFactIds.length === 0 ? (
+    <RequirementFactAction profile={profile} requirement={requirement} />
+  ) : null;
+
+const PhoneRow = ({
+  gapReason,
+  profile,
+  requirement,
+}: {
+  gapReason: string | undefined;
+  profile: string | null;
+  requirement: Requirement;
+}) => {
   const [open, setOpen] = useState(false);
   const evidence = evidenceText(requirement);
   const limit = limitText(requirement, gapReason);
@@ -113,6 +129,7 @@ const PhoneRow = ({ gapReason, requirement }: { gapReason: string | undefined; r
           </p>
         </details>
       )}
+      {factActionFor(requirement, profile)}
     </li>
   );
 };
@@ -129,12 +146,14 @@ export const RequirementsTable = ({
   groups,
   onChoose,
   phone,
+  profile,
 }: {
   active: RequirementGroup;
   gapReasons: ReadonlyMap<string, string>;
   groups: readonly RequirementGroup[];
   onChoose: (importance: RequirementImportance) => void;
   phone: boolean;
+  profile: string | null;
 }) => {
   // oxlint-disable-next-line unicorn/no-array-sort
   const rows = [...active.requirements].sort(
@@ -162,6 +181,7 @@ export const RequirementsTable = ({
             <PhoneRow
               gapReason={gapReasons.get(requirement.requirementId)}
               key={requirement.requirementId}
+              profile={profile}
               requirement={requirement}
             />
           ))}
@@ -200,7 +220,9 @@ export const RequirementsTable = ({
                     <td className={cx("px-4.5 py-3.5", material ? "font-bold text-cv-text" : "text-cv-text-muted")}>
                       {gapText(requirement)}
                     </td>
-                    <td className="px-4.5 py-3.5 text-cv-text-muted">{evidenceText(requirement) ?? "—"}</td>
+                    <td className="px-4.5 py-3.5 text-cv-text-muted">
+                      {evidenceText(requirement) ?? factActionFor(requirement, profile)}
+                    </td>
                   </tr>
                 );
               })}

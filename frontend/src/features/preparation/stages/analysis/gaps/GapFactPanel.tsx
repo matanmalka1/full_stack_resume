@@ -50,12 +50,13 @@ export const GapFactPanel = ({
   const pending = fact.status === "pending";
 
   return (
-    <div className="flex flex-col gap-3 rounded-control border border-cv-border bg-cv-surface-muted p-3">
+    /* A region of the question's card, set off by a hairline rather than a second card. */
+    <div className="flex flex-col gap-3 border-t border-cv-hairline pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-support font-semibold text-cv-text">העובדה שנוסחה מהתשובה</p>
+        <p className="text-support font-bold text-cv-text-muted">העובדה שנוסחה מהתשובה</p>
         <StatusBadge tone={fact.status === "canonical" ? "success" : "neutral"}>{statusWords[fact.status]}</StatusBadge>
       </div>
-      <p className="text-body leading-7 text-cv-text" dir="auto">
+      <p className="text-body leading-relaxed font-bold text-cv-text" dir="auto">
         {gapFactRendering(fact, language)}
       </p>
 
@@ -65,7 +66,7 @@ export const GapFactPanel = ({
             העובדה נשמרה כממתינה. כדי שתיחשב לדרישה יש לאשר אותה ולהריץ את הניתוח מחדש.
           </p>
           <div>
-            <Button className="max-lg:min-h-11" onClick={() => setEditing(true)} variant="secondary">
+            <Button onClick={() => setEditing(true)} size="compact" variant="secondary">
               עריכה
             </Button>
           </div>
@@ -74,10 +75,10 @@ export const GapFactPanel = ({
           </Checkbox>
           <div className="flex flex-wrap gap-2 max-lg:flex-col">
             <Button
-              className="max-lg:min-h-11"
               disabled={!attested || confirmAndUse.isPending}
               onClick={() => confirm.mutate()}
               pending={confirm.isPending}
+              size="compact"
               variant={useTarget === null ? "primary" : "secondary"}
             >
               אישור העובדה
@@ -149,7 +150,7 @@ const ConfirmAndUse = ({
   if (sections.length === 0 || section === null) return null;
 
   return (
-    <div className="cv-fields-compact flex flex-col gap-2 border-t border-cv-border pt-3">
+    <div className="cv-fields-compact flex flex-col gap-2 border-t border-cv-hairline pt-3">
       <Field label="סעיף בקורות החיים">
         {(control) => (
           <Select {...control} onChange={(event) => setChosen(event.target.value)} value={section}>
@@ -163,10 +164,11 @@ const ConfirmAndUse = ({
       </Field>
       <div>
         <Button
-          className="max-lg:min-h-11 max-lg:w-full"
+          className="max-lg:w-full"
           disabled={!attested || blocked}
           onClick={() => onUse(section)}
           pending={pending}
+          size="compact"
         >
           אישור ושימוש בטיוטה
         </Button>

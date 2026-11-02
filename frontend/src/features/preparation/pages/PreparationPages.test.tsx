@@ -107,6 +107,49 @@ describe("AnalysisPage", () => {
     expect(screen.getByRole("link", { name: "חזרה לפרטי המועמדות" })).toHaveAttribute("href", "/applications/app-1");
   });
 
+  it("offers a fact for a requirement nothing supports, with the requirement as a hint only", async () => {
+    stub({ "/api/v1/applications/app-1": () => json(analyzed()) });
+    renderRoute("/applications/app-1/analysis", "/applications/:applicationId/analysis", <AnalysisPage />);
+
+    const table = await screen.findByRole("table", { name: "דרישות חובה" });
+    /* A supported requirement names its evidence instead. */
+    expect(within(table).queryByRole("button", { name: "הוסף עובדה לדרישה: Python" })).not.toBeInTheDocument();
+    fireEvent.click(within(table).getByRole("button", { name: "הוסף עובדה לדרישה: Team lead" }));
+
+    const dialog = screen.getByRole("dialog", { name: "הוספת עובדה לדרישה" });
+    expect(within(dialog).getByText("Team lead")).toBeInTheDocument();
+    /* The posting's sentence is not seeded as the fact's own wording. */
+    expect(within(dialog).getByLabelText(/משמעות/)).toHaveValue("");
+  });
+
+  it("asks gap questions under the requirements when the projection offers them", async () => {
+    stub({
+      "/api/v1/applications/app-1": () =>
+        json(analyzed({ available_actions: ["create_draft", "analyze", "ask_gap_questions"] })),
+      "/api/v1/applications/app-1/gap-questions": () =>
+        json({
+          application_id: "app-1",
+          job_analysis_id: "analysis-1",
+          operation_id: null,
+          language: "he",
+          asked_at: null,
+          questions: [],
+        }),
+    });
+    renderRoute("/applications/app-1/analysis", "/applications/:applicationId/analysis", <AnalysisPage />);
+
+    expect(await screen.findByRole("heading", { level: 2, name: "השלמת פערים בעובדות" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "שאלות על פערים" })).toBeEnabled();
+  });
+
+  it("draws no gap questions when the projection does not offer them", async () => {
+    stub({ "/api/v1/applications/app-1": () => json(analyzed()) });
+    renderRoute("/applications/app-1/analysis", "/applications/:applicationId/analysis", <AnalysisPage />);
+
+    expect(await screen.findByRole("heading", { name: "התאמה בינונית" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "השלמת פערים בעובדות" })).not.toBeInTheDocument();
+  });
+
   it("offers the analysis itself before there is one", async () => {
     stub({
       "/api/v1/applications/app-1": () =>
