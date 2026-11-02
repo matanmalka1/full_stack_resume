@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
 import { cx } from "./cx";
+import { Tooltip } from "./Tooltip";
 
 interface ViewSwitchOption<TValue extends string> {
   /* `label` always names icon options for assistive tech. Callers may also expose the
@@ -48,8 +49,9 @@ export const ViewSwitch = <TValue extends string>({
       {options.map((option) => {
         const Icon = option.icon;
         const active = option.value === value;
+        const iconOnly = Icon !== undefined && !showLabels;
 
-        return (
+        const button = (
           <button
             aria-label={Icon === undefined ? undefined : option.label}
             aria-pressed={active}
@@ -61,10 +63,10 @@ export const ViewSwitch = <TValue extends string>({
                 : "font-medium text-cv-text-muted hover:text-cv-text",
               stretch &&
                 "max-lg:inline-flex max-lg:flex-1 max-lg:items-center max-lg:justify-center max-lg:gap-1.5 max-lg:px-3",
+              iconOnly && stretch && "max-lg:w-full",
             )}
             key={option.value}
             onClick={() => onChange(option.value)}
-            title={Icon === undefined || showLabels ? undefined : option.label}
             type="button"
           >
             {Icon === undefined ? null : <Icon aria-hidden="true" className="size-icon-md" />}
@@ -76,6 +78,15 @@ export const ViewSwitch = <TValue extends string>({
               </span>
             ) : null}
           </button>
+        );
+
+        /* An icon-only option names itself in the shared tooltip, not a native title=. */
+        return iconOnly ? (
+          <Tooltip className={cx(stretch && "max-lg:flex-1")} key={option.value} label={option.label}>
+            {button}
+          </Tooltip>
+        ) : (
+          button
         );
       })}
     </div>
