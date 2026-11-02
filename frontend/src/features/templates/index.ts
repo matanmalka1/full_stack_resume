@@ -1,1 +1,1 @@
-export { TemplateGallery } from "./components/TemplateGallery";
+export { TemplatePickerDialog } from "./components/TemplatePickerDialog";

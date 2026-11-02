@@ -211,11 +211,27 @@ test.describe("accessibility", () => {
     await scan(page, [DRAFT_PREVIEW]);
   });
 
-  test("the Settings screen has no automatically detectable violations", async ({ page }) => {
+  test("the Settings screen and its template dialog have no automatically detectable violations", async ({
+    api,
+    page,
+  }) => {
     await page.goto("/settings");
     await expect(page.getByRole("radio", { name: "לפי המכשיר" })).toBeChecked();
 
     await scan(page);
+
+    /* The dialog frames the sample CV in every template; the frames are presentation
+       only, so a blank page answers them. */
+    for (const template of ["track", "latex", "deedy"]) {
+      api.stub(`GET /api/v1/templates/${template}/sample?language=he`, (route) =>
+        route.fulfill({ contentType: "text/html", body: "<!doctype html><title>sample</title>" }),
+      );
+    }
+    await page.getByRole("button", { name: /^תבנית עיצוב/ }).click();
+    const dialog = page.getByRole("dialog", { name: "בחירת תבנית" });
+    await expect(dialog).toHaveCSS("opacity", "1");
+
+    await scan(page, ['iframe[title^="תצוגה מקדימה:"]']);
   });
 
   test("the Not Found screen has no automatically detectable violations", async ({ page }) => {

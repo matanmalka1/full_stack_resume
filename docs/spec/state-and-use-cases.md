@@ -580,9 +580,8 @@ the document's template. No approval needed, nothing stored. 412 while `content 
 template without choosing it, for the template picker.
 
 `GET /templates/{template}/sample?language=en|he` renders a fictional sample CV
-(`rendering/samples/template-sample.json`) in one template, a template shown before
-any CV exists. It reads no user's data. No screen frames it at present: Settings choose
-the default template by name.
+(`rendering/samples/template-sample.json`) in one template, so Settings can show a
+template before any CV exists. It reads no user's data.
 
 ## 15. Check and approval commands
 
