@@ -20,7 +20,7 @@ export const lastSubmittedAt = (detail: ApplicationDetail): string | null =>
       null,
     );
 
-export type PreparationRowKey = "analysis" | "create" | "draft" | "approve" | "ready";
+type PreparationRowKey = "analysis" | "create" | "draft" | "approve" | "ready";
 export type PreparationRowState = "done" | "current" | "upcoming";
 
 /* The five things preparing a CV comes down to, in the order they happen. They are finer
@@ -44,7 +44,7 @@ const doneCount: Record<PreparationState, number> = {
   ready: 5,
 };
 
-export interface PreparationRow {
+interface PreparationRow {
   /* Where the row's work is done, when there is something there to open. */
   href: string | null;
   key: PreparationRowKey;

@@ -13,7 +13,7 @@ import { fitText } from "./ApplicationFacts";
 
 /* What the sheet reads, in the fields the board's list item and the hub's projection
    both carry - so either screen opens the same sheet over its own record. */
-export interface ApplicationDetailsSummary {
+interface ApplicationDetailsSummary {
   closed: boolean;
   company: string;
   fit_level?: string | null;

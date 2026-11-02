@@ -4,7 +4,7 @@ import { type ClassValue, cx } from "./cx";
 
 /* How a chip's count draws. "plain" is a bold number beside the label; "badge" is the
    same number in a filled disc, for the one slice that waits on the reader. */
-export type FilterChipCount = "plain" | "badge";
+type FilterChipCount = "plain" | "badge";
 
 /* The pill a quick filter draws, as class data so a router Link that changes the URL's
    filter can carry it as well as the toggle button below. Pressed, it fills with the

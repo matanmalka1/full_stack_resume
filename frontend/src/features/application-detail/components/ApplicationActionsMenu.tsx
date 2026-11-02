@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cx } from "@/ui/cx";
 
-export interface ApplicationActionHandlers {
+interface ApplicationActionHandlers {
   onClose: () => void;
   onDelete: () => void;
   onDetails: () => void;

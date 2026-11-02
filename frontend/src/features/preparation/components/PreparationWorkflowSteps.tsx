@@ -24,7 +24,7 @@ import {
    `none` to reset what the previous screen left behind. */
 /* What a step adds to its compact header on a phone. Every part is optional: a step that
    passes nothing gets the role as its title, the company under it and the stage bar. */
-export interface PhoneHeader {
+interface PhoneHeader {
   /* One trailing control - an overflow menu, the draft's preview toggle. Rendered below
      the large breakpoint only, so it must not repeat a control the step already shows on
      a phone. Give it a 44px target and an accessible name; it is usually icon-only. */
