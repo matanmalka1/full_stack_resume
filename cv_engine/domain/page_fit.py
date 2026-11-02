@@ -19,6 +19,10 @@ with no heading above them) that hold a removable line, the block furthest above
 floor; on a tie, the one later in the document - an older role, a later section.
 Within that block its last removable line goes, since a section's lines are laid out
 in the Profile's pool order and the last is the one the Profile ranks lowest.
+
+A line linked to a fact the posting demands (`demanded_fact_ids`: the evidence for its
+mandatory requirements) goes only once no other line may: the Profile's ranking is
+general, and the posting is the better judge of what this CV must keep.
 """
 
 from __future__ import annotations
@@ -92,8 +96,21 @@ def _never_dropped(claim: ClaimLine, pinned: frozenset[str], facts: FactStore) -
     )
 
 
-def next_trim(draft: DraftDocument, profile: Profile, facts: FactStore) -> str | None:
+def next_trim(
+    draft: DraftDocument,
+    profile: Profile,
+    facts: FactStore,
+    demanded_fact_ids: frozenset[str] = frozenset(),
+) -> str | None:
     """The claim to drop next to shorten `draft`, or None when nothing may go."""
+    spared = _next_trim(draft, profile, facts, demanded_fact_ids)
+    return spared if spared is not None else _next_trim(draft, profile, facts, frozenset())
+
+
+def _next_trim(
+    draft: DraftDocument, profile: Profile, facts: FactStore, spare: frozenset[str]
+) -> str | None:
+    """`next_trim` with every line linked to a fact in `spare` held back."""
     specs = {
         (spec.name_he if draft.language == "he" else spec.name_en): spec
         for spec in profile.sections
@@ -108,7 +125,11 @@ def next_trim(draft: DraftDocument, profile: Profile, facts: FactStore) -> str |
         headed = any(block.heading is not None for block in blocks)
         for block_index, block in enumerate(blocks):
             surplus = len(block.lines) - _floor(block, spec, headed, facts)
-            removable = [line for line in block.lines if not _never_dropped(line, pinned, facts)]
+            removable = [
+                line
+                for line in block.lines
+                if not _never_dropped(line, pinned, facts) and not spare.intersection(line.fact_ids)
+            ]
             if surplus <= 0 or not removable:
                 continue
             candidate = (surplus, (section_index, block_index), removable[-1].claim_id)
