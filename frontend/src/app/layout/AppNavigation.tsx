@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, Settings } from "lucide-react";
+import { BookOpen, FileText, LayoutDashboard, Settings } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import { cx } from "@/ui/cx";
@@ -17,6 +17,7 @@ const areas = () => [
     to: boardPath(),
     within: (pathname: string) => pathname.startsWith("/applications/"),
   },
+  { icon: FileText, key: routePaths.resumes, label: "כל קורות החיים", short: "קו״ח", to: routePaths.resumes, within: null },
   { icon: BookOpen, key: routePaths.facts, label: "מאגר העובדות", short: "עובדות", to: routePaths.facts, within: null },
   { icon: Settings, key: routePaths.settings, label: "הגדרות", short: "הגדרות", to: routePaths.settings, within: null },
 ];

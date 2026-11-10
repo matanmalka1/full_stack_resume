@@ -137,6 +137,13 @@ export const routes: RouteObject[] = [
           },
 
           {
+            path: "resumes",
+            lazy: screen(
+              () => import("@/features/resumes/pages/ResumesPage"),
+              (module) => module.ResumesPage,
+            ),
+          },
+          {
             path: "facts",
             lazy: screen(
               () => import("@/features/facts/pages/FactsPage"),

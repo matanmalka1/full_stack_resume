@@ -16,6 +16,8 @@ export const routePaths = {
     next === undefined || next === "/" ? "/login" : `/login?next=${encodeURIComponent(next)}`,
   newApplication: "/applications/new",
   facts: "/facts",
+  /* Every Ready CV, with a preview of the one chosen. */
+  resumes: "/resumes",
   settings: "/settings",
   /* One address for the screen that prepares one Application's CV. It once carried a
      second name, `preparation`, resolving to `/applications/:id/preparation` - the same
@@ -40,7 +42,7 @@ export const routePaths = {
      its way, and the other actions the projection offers. */
   verification: (applicationId: string): string => `${application(applicationId)}/verification`,
   draft: (applicationId: string): string => `${application(applicationId)}/draft`,
-  /* The ready step: the Application's rendered document, its file and its submission.
+  /* The ready step: the Application's rendered document, and its file.
      Keyed by the Application, like the editor, because there is one document and a Ready
      state is a state of it rather than a record of its own. */
   ready: (applicationId: string): string => `${application(applicationId)}/ready`,
