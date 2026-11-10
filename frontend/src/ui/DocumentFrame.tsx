@@ -111,27 +111,16 @@ export const DocumentFrame = ({ busy = false, className, onLoad, src, title }: D
           </Button>
         </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            aria-pressed={zoomMode === "manual" && manualZoom === 100}
-            className={cx(zoomMode === "manual" && manualZoom === 100 && "bg-cv-accent-soft")}
-            onClick={() => selectManualZoom(100)}
-            size="compact"
-            variant="ghost"
-          >
-            100%
-          </Button>
-          <Button
-            aria-pressed={zoomMode === "fit"}
-            className={cx(zoomMode === "fit" && "bg-cv-accent-soft")}
-            onClick={() => setZoomMode("fit")}
-            size="compact"
-            variant="ghost"
-          >
-            <MoveHorizontal aria-hidden="true" className="size-icon-md" />
-            התאמה לרוחב
-          </Button>
-        </div>
+        <Button
+          aria-pressed={zoomMode === "fit"}
+          className={cx(zoomMode === "fit" && "bg-cv-accent-soft")}
+          onClick={() => setZoomMode("fit")}
+          size="compact"
+          variant="ghost"
+        >
+          <MoveHorizontal aria-hidden="true" className="size-icon-md" />
+          התאמה לרוחב
+        </Button>
       </div>
 
       <section

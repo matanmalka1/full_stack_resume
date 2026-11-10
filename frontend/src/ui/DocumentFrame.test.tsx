@@ -48,11 +48,12 @@ describe("DocumentFrame", () => {
     expect(container.querySelector(".cv-skeleton")).toBeNull();
   });
 
-  it("offers fixed, incremental, and keyboard-accessible scrolling controls", () => {
+  it("offers incremental and keyboard-accessible scrolling controls", () => {
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
     render(<DocumentFrame src="/preview" title="מסמך לבדיקה" />);
+    expect(screen.queryByRole("button", { name: "100%" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "100%" }));
+    reportWidth(1000);
     fireEvent.click(screen.getByRole("button", { name: "הגדלת המסמך" }));
     expect(screen.getByText("110%")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "התאמה לרוחב" })).toHaveAttribute("aria-pressed", "false");
