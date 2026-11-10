@@ -75,6 +75,20 @@ describe("ResumesPage", () => {
     );
   });
 
+  it("narrows the list by employer or role and previews the first match", async () => {
+    renderPage([readyItem("app-1", "Acme"), readyItem("app-2", "Binat")]);
+
+    const field = await screen.findByRole("searchbox", { name: "חיפוש קורות חיים" });
+    fireEvent.change(field, { target: { value: "binat" } });
+
+    expect(screen.queryByRole("button", { name: /Acme/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Binat/ })).toBeInTheDocument();
+    expect(screen.getByTitle("קורות החיים: Binat · Backend Engineer")).toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: "nothing" } });
+    expect(screen.getByText("לא נמצאו קורות חיים שתואמים לחיפוש.")).toBeInTheDocument();
+  });
+
   it("says so when no CV is Ready yet", async () => {
     renderPage([]);
 

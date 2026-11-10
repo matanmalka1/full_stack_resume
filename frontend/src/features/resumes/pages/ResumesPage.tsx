@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Download, FileText } from "lucide-react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { applicationListQueryOptions } from "@/api/applications";
@@ -9,6 +10,7 @@ import { routePaths } from "@/navigation/routePaths";
 import { buttonClasses } from "@/ui/Button";
 import { DocumentFrame } from "@/ui/DocumentFrame";
 import { EmptyState } from "@/ui/EmptyState";
+import { SearchInput } from "@/ui/Input";
 import { ListCard, ListRow } from "@/ui/ListCard";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { PageShell } from "@/ui/PageShell";
@@ -31,6 +33,13 @@ const resumesLoading = (
 
 const resumeLabel = (item: ApplicationListItem): string => `${item.company} · ${item.target_role}`;
 
+/* A CV is found by its employer or its role. The whole Ready list is already here, so the
+   field narrows it in place rather than asking the server again on every keystroke. */
+const matchesQuery = (item: ApplicationListItem, query: string): boolean => {
+  const needle = query.trim().toLocaleLowerCase();
+  return needle === "" || `${item.company} ${item.target_role}`.toLocaleLowerCase().includes(needle);
+};
+
 /* The library of finished CVs: a list beside a preview of the chosen one. The preview is
    the document's current content composed on request, so it shows the same page the PDF
    carries. The chosen CV is in the address (`?application=`), so a link opens it. */
@@ -38,7 +47,9 @@ export const ResumesPage = () => {
   const isPhone = useIsPhone();
   const [searchParams, setSearchParams] = useSearchParams();
   const listQuery = useQuery(applicationListQueryOptions(readyQuery));
-  const items = (listQuery.data?.items ?? []).filter((item) => item.document_hash != null);
+  const [query, setQuery] = useState("");
+  const readyItems = (listQuery.data?.items ?? []).filter((item) => item.document_hash != null);
+  const items = readyItems.filter((item) => matchesQuery(item, query));
   const requestedId = searchParams.get("application");
   const selected = items.find((item) => item.id === requestedId) ?? (isPhone ? undefined : items[0]);
 
@@ -50,17 +61,37 @@ export const ResumesPage = () => {
   };
 
   const list = (
-    <ListCard className={isPhone ? "w-full" : "w-80 shrink-0 self-start"} label="קורות חיים מוכנים">
-      {items.map((item) => (
-        <ListRow
-          className={item.id === selected?.id ? "bg-cv-nav-active-bg font-bold" : undefined}
-          icon={FileText}
-          key={item.id}
-          label={resumeLabel(item)}
-          onClick={() => select(item.id)}
-        />
-      ))}
-    </ListCard>
+    <div className={isPhone ? "flex w-full flex-col gap-3" : "flex w-80 shrink-0 flex-col gap-3 self-start"}>
+      <label className="sr-only" htmlFor="resume-search">
+        חיפוש קורות חיים
+      </label>
+      <SearchInput
+        id="resume-search"
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="חיפוש לפי חברה או תפקיד"
+        value={query}
+      />
+      {items.length === 0 ? (
+        <p className="text-body text-cv-text-muted">לא נמצאו קורות חיים שתואמים לחיפוש.</p>
+      ) : (
+        <ListCard label="קורות חיים מוכנים">
+          {items.map((item) => (
+            <ListRow
+              className={item.id === selected?.id ? "bg-cv-nav-active-bg font-bold" : undefined}
+              icon={FileText}
+              key={item.id}
+              label={
+                <span className="flex flex-col py-2 whitespace-normal">
+                  <span>{item.company}</span>
+                  <span className="text-label font-normal text-cv-text-muted">{item.target_role}</span>
+                </span>
+              }
+              onClick={() => select(item.id)}
+            />
+          ))}
+        </ListCard>
+      )}
+    </div>
   );
 
   const preview =
@@ -101,7 +132,7 @@ export const ResumesPage = () => {
         loadingState={resumesLoading}
         onRetry={() => void listQuery.refetch()}
       >
-        {items.length === 0 ? (
+        {readyItems.length === 0 ? (
           <EmptyState>
             <p className="text-body text-cv-text-muted">עדיין אין קורות חיים מוכנים.</p>
           </EmptyState>

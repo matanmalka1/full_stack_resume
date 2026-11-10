@@ -493,7 +493,7 @@ Application Detail shows preparation progress and the document's PDF, with notes
 record's delete one command away. Blockers are shown on the preparation step they block.
 
 All CVs (`/resumes`) lists every Ready document beside a preview of the chosen one, with
-its PDF download. The preview is composed from the stored content on request
+its PDF download. A search field narrows the list by employer or role. The preview is composed from the stored content on request
 (`/document/preview`), so it needs no stored file.
 
 Applications can be soft-deleted; there is no hard delete.
