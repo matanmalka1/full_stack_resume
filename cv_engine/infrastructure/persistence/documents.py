@@ -1,6 +1,6 @@
-"""The one mutable CV document per Application, and the Submissions that freeze it.
+"""The one mutable CV document per Application.
 
-state-and-use-cases.md §3, §14–§16 and §18. The store keeps what is stored and checks
+state-and-use-cases.md §3 and §14–§16. The store keeps what is stored and checks
 only what it can check alone: `expected_document_hash` against the row it locked. It
 never computes the basis and never decides a state; the application layer does both
 from the document and the Knowledge it loads.
@@ -22,13 +22,13 @@ from sqlalchemy.exc import IntegrityError
 from ...application.errors import DOCUMENT_CHANGED, LineageBroken, StateConflict, UnknownRecord
 from ...application.ports.documents import DocumentBody, RenderedFiles
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
-from ...domain.contracts.document import BuiltWith, CVDocument, DocumentSubmission
+from ...domain.contracts.document import BuiltWith, CVDocument
 from ...domain.contracts.drafts import DraftDocument
 from ...domain.contracts.validation import ValidationReport
 from ...domain.document import document_hash
 from ...util import new_id
 from .connection import SqlAlchemyTransactionManager
-from .tables import cv_documents, job_analyses, submissions
+from .tables import cv_documents, job_analyses
 
 
 def _document_record(row: Any) -> CVDocument:
@@ -341,64 +341,3 @@ class SqlAlchemyDocumentStore:
             return False
         _write(connection, row["id"], {"last_render_error": error, "updated_at": updated_at})
         return True
-
-
-def _submission_record(row: Any) -> DocumentSubmission:
-    record = dict(row)
-    return DocumentSubmission(
-        id=record["id"],
-        application_id=record["application_id"],
-        submission_type=record["submission_type"],
-        job_text_hash=record["job_text_hash"],
-        document_hash=record["document_hash"],
-        content=(
-            None if record["content"] is None else DraftDocument.model_validate(record["content"])
-        ),
-        html_path=record["html_path"],
-        html_sha256=record["html_sha256"],
-        pdf_path=record["pdf_path"],
-        pdf_sha256=record["pdf_sha256"],
-        submitted_at=record["submitted_at"],
-        metadata=record["metadata_json"] or {},
-    )
-
-
-class SqlAlchemyDocumentSubmissionStore:
-    def __init__(self, transactions: SqlAlchemyTransactionManager):
-        self._transactions = transactions
-
-    def insert_submission(self, tx: WriteTransaction, submission: DocumentSubmission) -> None:
-        connection = self._transactions.connection_for(tx, access="write")
-        connection.execute(
-            insert(submissions).values(
-                id=submission.id,
-                application_id=submission.application_id,
-                submission_type=submission.submission_type,
-                job_text_hash=submission.job_text_hash,
-                document_hash=submission.document_hash,
-                content=(
-                    None
-                    if submission.content is None
-                    else submission.content.model_dump(mode="json")
-                ),
-                html_path=submission.html_path,
-                html_sha256=submission.html_sha256,
-                pdf_path=submission.pdf_path,
-                pdf_sha256=submission.pdf_sha256,
-                submitted_at=submission.submitted_at,
-                metadata_json=submission.metadata,
-            )
-        )
-
-    def submissions(self, tx: ReadTransaction, application_id: str) -> list[DocumentSubmission]:
-        rows = (
-            self._transactions.connection_for(tx)
-            .execute(
-                select(submissions)
-                .where(submissions.c.application_id == application_id)
-                .order_by(submissions.c.submitted_at, submissions.c.seq)
-            )
-            .mappings()
-            .all()
-        )
-        return [_submission_record(row) for row in rows]

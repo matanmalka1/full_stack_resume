@@ -1,7 +1,6 @@
 """§16 `export_decision_markdown`: human-readable provenance of the current document.
 
-There is no revision history (§20): the history of what was sent is the list of
-Submissions. This export describes the document as it stands - its analysis, the
+There is no revision history (§20). This export describes the document as it stands - its analysis, the
 facts its content uses, and its stored content report - and writes nothing.
 """
 

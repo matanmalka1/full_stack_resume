@@ -61,9 +61,6 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser(
         "reconcile", help="verify immutable evidence and every user's fact lifecycle"
     )
-    commands.add_parser(
-        "inspect-orphans", help="list old immutable payloads with no database reference"
-    )
     return parser
 
 
@@ -143,16 +140,10 @@ def main(
                 f"of {exported.email} to {target}",
                 file=out,
             )
-        elif arguments.command == "reconcile":
+        else:
             report = services.maintenance.reconcile()
             print(json.dumps(report.model_dump(mode="json"), indent=2, sort_keys=True), file=out)
             return 0 if report.passed else 2
-        else:
-            inventory = services.maintenance.inspect_orphans()
-            print(
-                json.dumps({"candidates": inventory.candidates}, indent=2, sort_keys=True),
-                file=out,
-            )
     except ApplicationError as error:
         print(f"error: {error}", file=err)
         return 1

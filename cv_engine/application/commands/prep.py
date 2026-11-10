@@ -50,11 +50,7 @@ JobTextHash = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class UpdateJobTextCommand(BoundaryDTO):
-    """Replace the job text the client last read (`expected_job_text_hash`).
-
-    Refused once the Application has a Submission: what was sent stays tied to the
-    posting it was sent for.
-    """
+    """Replace the job text the client last read (`expected_job_text_hash`)."""
 
     application_id: str
     job_text: str
@@ -370,6 +366,16 @@ class UpdatedApplicationNotes(BoundaryDTO):
     application_id: str
     notes: str
     updated_at: str
+
+
+class DeleteApplicationCommand(BoundaryDTO):
+    application_id: str
+    actor_type: Literal["user", "system"] = "user"
+    client: WriteClient
+
+
+class DeletedApplication(BoundaryDTO):
+    application_id: str
 
 
 class DecisionMarkdownExport(BoundaryDTO):

@@ -7,6 +7,8 @@ from ....domain.contracts.records import AuditRecord
 from ....util import new_id, normalized_text, sha256_text, utc_now
 from ...actor import Actor
 from ...commands import (
+    DeleteApplicationCommand,
+    DeletedApplication,
     DuplicateCheckCommand,
     DuplicateCheckResult,
     DuplicateMatch,
@@ -25,13 +27,10 @@ from ...errors import (
     ApplicationIntakeInvalid,
     DuplicateAcknowledgementRequired,
     PreconditionFailed,
+    StateConflict,
     UnknownRecord,
 )
-from ...ports.application_intake import (
-    AuditLogWriter,
-    InitialRecruitmentEventWriter,
-    IntakeApplicationStore,
-)
+from ...ports.application_intake import AuditLogWriter, IntakeApplicationStore
 from ...ports.transactions import TransactionManager
 
 JOB_TEXT_MAX_BYTES = 1024 * 1024
@@ -50,19 +49,17 @@ _MATCH_ORDER: tuple[DuplicateMatchReason, ...] = (
 
 
 class ApplicationService:
-    """Creating an application and editing its job text."""
+    """Creating an application, editing its job text and notes, and deleting it."""
 
     def __init__(
         self,
         *,
         transactions: TransactionManager,
         applications: IntakeApplicationStore,
-        recruitment: InitialRecruitmentEventWriter,
         audit: AuditLogWriter,
     ):
         self._transactions = transactions
         self._applications = applications
-        self._recruitment = recruitment
         self._audit = audit
 
     def duplicate_check(self, actor: Actor, command: DuplicateCheckCommand) -> DuplicateCheckResult:
@@ -143,13 +140,6 @@ class ApplicationService:
                     source_url=command.source_url,
                     created_at=now,
                 )
-                self._recruitment.insert_initial_saved_event(
-                    tx,
-                    application_id=application_id,
-                    actor_type=command.actor_type,
-                    client=command.client,
-                    occurred_at=now,
-                )
         except ValueError as exc:
             raise PreconditionFailed(str(exc)) from exc
         return IngestedApplication(
@@ -160,7 +150,7 @@ class ApplicationService:
         )
 
     def update_job_text(self, actor: Actor, command: UpdateJobTextCommand) -> UpdatedJobText:
-        """Replace the job text in place; refused once a Submission locked it.
+        """Replace the job text in place.
 
         An unchanged text and URL is not a write. Analyses of the earlier text stay
         as they are; they are simply no longer of the Application's current text.
@@ -254,6 +244,37 @@ class ApplicationService:
             notes=updated["notes"],
             updated_at=updated["updated_at"],
         )
+
+    def delete_application(
+        self, actor: Actor, command: DeleteApplicationCommand
+    ) -> DeletedApplication:
+        """Soft delete: the Application leaves the list and duplicate detection, and its
+        records stay reachable by ID. Deleting twice is a conflict."""
+        now = utc_now()
+        with self._transactions.write() as tx:
+            try:
+                current = self._applications.get_application(
+                    tx, command.application_id, actor.user_id
+                )
+            except UnknownRecord as exc:
+                raise UnknownRecord(f"unknown application: {command.application_id}") from exc
+            if current.get("deleted_at") is not None:
+                raise StateConflict(f"application is deleted: {command.application_id}")
+            self._applications.set_deleted(tx, command.application_id, actor.user_id, now)
+            self._audit.insert_audit(
+                tx,
+                AuditRecord(
+                    id=new_id(),
+                    application_id=command.application_id,
+                    action="delete_application",
+                    entity_type="application",
+                    entity_id=command.application_id,
+                    actor_type=command.actor_type,
+                    client=command.client,
+                    occurred_at=now,
+                ),
+            )
+        return DeletedApplication(application_id=command.application_id)
 
 
 def _duplicate_warnings(matches: list[DuplicateMatch]) -> list[str]:

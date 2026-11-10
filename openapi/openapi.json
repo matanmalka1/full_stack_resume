@@ -67,16 +67,6 @@
         "title": "AIModelOptionResponse",
         "type": "object"
       },
-      "ActivityFilter": {
-        "description": "Which side of the recruitment axis the caller is asking about.\n\nOPEN is the default the list screen uses: a finished process stays stored and\nreachable, but it is not what a board of live work is asking about.",
-        "enum": [
-          "open",
-          "closed",
-          "all"
-        ],
-        "title": "ActivityFilter",
-        "type": "string"
-      },
       "AnalysisDecisionsResponse": {
         "additionalProperties": false,
         "description": "The new analysis created by the decision.\n\n`job_analysis_id` names the analysis the client should work from now, the new\none every decision creates. The decision never re-pins the document;\n`document_hash` is its token now.",
@@ -158,25 +148,6 @@
                 "type": "null"
               }
             ]
-          },
-          "allowed_recruitment_transitions": {
-            "items": {
-              "enum": [
-                "saved",
-                "recruiter_screen",
-                "interview",
-                "assignment",
-                "final_stage",
-                "offer",
-                "accepted",
-                "rejected",
-                "withdrawn",
-                "closed"
-              ],
-              "type": "string"
-            },
-            "title": "Allowed Recruitment Transitions",
-            "type": "array"
           },
           "application": {
             "$ref": "#/components/schemas/ApplicationResponse"
@@ -306,34 +277,12 @@
             ],
             "title": "Recommended Action"
           },
-          "recruitment_status": {
-            "title": "Recruitment Status",
-            "type": "string"
-          },
-          "recruitment_timeline": {
-            "items": {
-              "$ref": "#/components/schemas/RecruitmentTimelineItemResponse"
-            },
-            "title": "Recruitment Timeline",
-            "type": "array"
-          },
           "review_reasons": {
             "items": {
               "$ref": "#/components/schemas/ReasonResponse"
             },
             "title": "Review Reasons",
             "type": "array"
-          },
-          "terminal_outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Terminal Outcome"
           },
           "warnings": {
             "items": {
@@ -344,7 +293,6 @@
           }
         },
         "required": [
-          "recruitment_status",
           "preparation_state",
           "content_check",
           "review_reasons",
@@ -353,9 +301,7 @@
           "available_actions",
           "blocked_actions",
           "application",
-          "job_posting",
-          "allowed_recruitment_transitions",
-          "recruitment_timeline"
+          "job_posting"
         ],
         "title": "ApplicationDetailResponse",
         "type": "object"
@@ -407,10 +353,6 @@
           },
           "created_at": {
             "title": "Created At",
-            "type": "string"
-          },
-          "current_status": {
-            "title": "Current Status",
             "type": "string"
           },
           "deleted_at": {
@@ -494,10 +436,6 @@
             "title": "Id",
             "type": "string"
           },
-          "is_closed": {
-            "title": "Is Closed",
-            "type": "boolean"
-          },
           "job_text_hash": {
             "title": "Job Text Hash",
             "type": "string"
@@ -546,28 +484,6 @@
               }
             ]
           },
-          "next_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action"
-          },
-          "next_action_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action Date"
-          },
           "normalized_role": {
             "anyOf": [
               {
@@ -608,10 +524,6 @@
             ],
             "title": "Recommended Action"
           },
-          "recruitment_status": {
-            "title": "Recruitment Status",
-            "type": "string"
-          },
           "review_reasons": {
             "items": {
               "$ref": "#/components/schemas/ReasonResponse"
@@ -633,17 +545,6 @@
           "target_role": {
             "title": "Target Role",
             "type": "string"
-          },
-          "terminal_outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Terminal Outcome"
           },
           "track": {
             "anyOf": [
@@ -669,7 +570,6 @@
           }
         },
         "required": [
-          "recruitment_status",
           "preparation_state",
           "content_check",
           "review_reasons",
@@ -680,11 +580,9 @@
           "id",
           "company",
           "target_role",
-          "current_status",
           "notes",
           "created_at",
-          "updated_at",
-          "is_closed"
+          "updated_at"
         ],
         "title": "ApplicationListItemResponse",
         "type": "object"
@@ -728,29 +626,6 @@
             "title": "Preset Counts",
             "type": "object"
           },
-          "recruitment_status_counts": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "default": {},
-            "propertyNames": {
-              "enum": [
-                "saved",
-                "applied",
-                "recruiter_screen",
-                "interview",
-                "assignment",
-                "final_stage",
-                "offer",
-                "accepted",
-                "rejected",
-                "withdrawn",
-                "closed"
-              ]
-            },
-            "title": "Recruitment Status Counts",
-            "type": "object"
-          },
           "stage_counts": {
             "additionalProperties": {
               "type": "integer"
@@ -775,76 +650,11 @@
         "title": "ApplicationListResponse",
         "type": "object"
       },
-      "ApplicationMutationResponse": {
-        "additionalProperties": false,
-        "description": "One Application's tracked state after a write, and the event that moved it.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "current_status": {
-            "title": "Current Status",
-            "type": "string"
-          },
-          "event_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Id"
-          },
-          "next_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action"
-          },
-          "next_action_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action Date"
-          },
-          "terminal_outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Terminal Outcome"
-          }
-        },
-        "required": [
-          "application_id",
-          "current_status"
-        ],
-        "title": "ApplicationMutationResponse",
-        "type": "object"
-      },
       "ApplicationPreset": {
         "description": "The board's named questions, as filters the application layer answers.\n\nEach one is a predicate over the §9 projection, which is why it lives here\nrather than in a client: `preparation_state` and the reason lists are computed\nby that projection and are not stored columns, so a client deriving these would\nbe forming a second opinion about where an Application stands.\n\nThey are shorthands, not a second vocabulary. Every preset is expressible in\nthe fields this layer already projects, and each narrows the same list the\nother filters narrow rather than replacing it.",
         "enum": [
           "needs_attention",
-          "ready_to_send",
-          "active_interviews"
+          "ready_to_send"
         ],
         "title": "ApplicationPreset",
         "type": "string"
@@ -858,10 +668,6 @@
           },
           "created_at": {
             "title": "Created At",
-            "type": "string"
-          },
-          "current_status": {
-            "title": "Current Status",
             "type": "string"
           },
           "deleted_at": {
@@ -923,28 +729,6 @@
             ],
             "title": "Language"
           },
-          "next_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action"
-          },
-          "next_action_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action Date"
-          },
           "normalized_role": {
             "anyOf": [
               {
@@ -986,17 +770,6 @@
             "title": "Target Role",
             "type": "string"
           },
-          "terminal_outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Terminal Outcome"
-          },
           "track": {
             "anyOf": [
               {
@@ -1017,7 +790,6 @@
           "id",
           "company",
           "target_role",
-          "current_status",
           "notes",
           "created_at",
           "updated_at"
@@ -1161,27 +933,12 @@
             ],
             "title": "Recommended Action"
           },
-          "recruitment_status": {
-            "title": "Recruitment Status",
-            "type": "string"
-          },
           "review_reasons": {
             "items": {
               "$ref": "#/components/schemas/ReasonResponse"
             },
             "title": "Review Reasons",
             "type": "array"
-          },
-          "terminal_outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Terminal Outcome"
           },
           "warnings": {
             "items": {
@@ -1192,7 +949,6 @@
           }
         },
         "required": [
-          "recruitment_status",
           "preparation_state",
           "content_check",
           "review_reasons",
@@ -1203,23 +959,6 @@
         ],
         "title": "ApplicationStateResponse",
         "type": "object"
-      },
-      "ApplicationStatus": {
-        "enum": [
-          "saved",
-          "applied",
-          "recruiter_screen",
-          "interview",
-          "assignment",
-          "final_stage",
-          "offer",
-          "accepted",
-          "rejected",
-          "withdrawn",
-          "closed"
-        ],
-        "title": "ApplicationStatus",
-        "type": "string"
       },
       "ApplyAnalysisDecisionsRequest": {
         "additionalProperties": false,
@@ -1691,69 +1430,6 @@
         "title": "ClaimReviewSource",
         "type": "object"
       },
-      "CloseApplicationResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "current_status": {
-            "title": "Current Status",
-            "type": "string"
-          },
-          "event_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Id"
-          },
-          "next_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action"
-          },
-          "next_action_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action Date"
-          },
-          "terminal_outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Terminal Outcome"
-          }
-        },
-        "required": [
-          "application_id",
-          "current_status"
-        ],
-        "title": "CloseApplicationResponse",
-        "type": "object"
-      },
       "ConfirmAndUseFactRequest": {
         "additionalProperties": false,
         "description": "Confirm one fact and attach it to a Profile section as one recoverable command.",
@@ -1845,57 +1521,6 @@
         ],
         "title": "ContentCheck",
         "type": "string"
-      },
-      "CorrectStatusRequest": {
-        "additionalProperties": false,
-        "description": "A reasoned correction appended to the trail.\n\nThe corrected event is never deleted or altered, so both the event being\ncorrected and the reason are required: a correction that named neither\nwould be indistinguishable from an ordinary transition.",
-        "properties": {
-          "corrects_event_id": {
-            "minLength": 1,
-            "title": "Corrects Event Id",
-            "type": "string"
-          },
-          "occurred_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Occurred At"
-          },
-          "reason": {
-            "minLength": 1,
-            "title": "Reason",
-            "type": "string"
-          },
-          "target_status": {
-            "enum": [
-              "saved",
-              "applied",
-              "recruiter_screen",
-              "interview",
-              "assignment",
-              "final_stage",
-              "offer",
-              "accepted",
-              "rejected",
-              "withdrawn",
-              "closed"
-            ],
-            "title": "Target Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target_status",
-          "corrects_event_id",
-          "reason"
-        ],
-        "title": "CorrectStatusRequest",
-        "type": "object"
       },
       "CreateAnalysisRequest": {
         "additionalProperties": false,
@@ -2092,64 +1717,14 @@
       },
       "DeleteApplicationResponse": {
         "additionalProperties": false,
-        "description": "`current_status`/`terminal_outcome` are unchanged by deletion; they are\ncarried here only because they are part of the same mutation-result shape\nevery other tracking command returns.",
         "properties": {
           "application_id": {
             "title": "Application Id",
             "type": "string"
-          },
-          "current_status": {
-            "title": "Current Status",
-            "type": "string"
-          },
-          "event_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Id"
-          },
-          "next_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action"
-          },
-          "next_action_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action Date"
-          },
-          "terminal_outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Terminal Outcome"
           }
         },
         "required": [
-          "application_id",
-          "current_status"
+          "application_id"
         ],
         "title": "DeleteApplicationResponse",
         "type": "object"
@@ -2836,28 +2411,6 @@
         ],
         "title": "Emphasis",
         "type": "string"
-      },
-      "ExternalSubmissionRequest": {
-        "additionalProperties": false,
-        "description": "A submission made outside the system, recorded without inventing evidence.\n\nIt carries no document content or files: nothing here sent them.",
-        "properties": {
-          "metadata": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Metadata",
-            "type": "object"
-          },
-          "submitted_at": {
-            "minLength": 1,
-            "title": "Submitted At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "submitted_at"
-        ],
-        "title": "ExternalSubmissionRequest",
-        "type": "object"
       },
       "FactAttachmentProfileTargetResponse": {
         "additionalProperties": false,
@@ -3742,7 +3295,7 @@
       },
       "JobPostingResponse": {
         "additionalProperties": false,
-        "description": "The Application's job text. `locked` once the Application has a Submission.",
+        "description": "The Application's job text.",
         "properties": {
           "job_text": {
             "title": "Job Text",
@@ -3755,10 +3308,6 @@
           "job_text_updated_at": {
             "title": "Job Text Updated At",
             "type": "string"
-          },
-          "locked": {
-            "title": "Locked",
-            "type": "boolean"
           },
           "source_url": {
             "anyOf": [
@@ -3775,8 +3324,7 @@
         "required": [
           "job_text",
           "job_text_hash",
-          "job_text_updated_at",
-          "locked"
+          "job_text_updated_at"
         ],
         "title": "JobPostingResponse",
         "type": "object"
@@ -3848,40 +3396,6 @@
           "language"
         ],
         "title": "MissingFactRenderingReason",
-        "type": "object"
-      },
-      "NextActionRequest": {
-        "additionalProperties": false,
-        "description": "Set or clear the one active next action, stated in whole.\n\nBoth fields are required and both are nullable. Clearing is a real request\n- sending `null` for each is how a client says the action is done - and\nrequiring them is what keeps that distinguishable from an omitted field\nmeaning \"leave it alone\".",
-        "properties": {
-          "next_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action"
-          },
-          "next_action_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action Date"
-          }
-        },
-        "required": [
-          "next_action",
-          "next_action_date"
-        ],
-        "title": "NextActionRequest",
         "type": "object"
       },
       "OperationAction": {
@@ -4456,185 +3970,6 @@
         "title": "ReasonResponse",
         "type": "object"
       },
-      "RecruitmentTimelineItemResponse": {
-        "additionalProperties": false,
-        "description": "One status, correction, next-action, or submission item in time order.",
-        "properties": {
-          "actor_type": {
-            "anyOf": [
-              {
-                "enum": [
-                  "user",
-                  "system"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actor Type"
-          },
-          "client": {
-            "anyOf": [
-              {
-                "enum": [
-                  "web",
-                  "worker"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client"
-          },
-          "corrects_event_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Corrects Event Id"
-          },
-          "document_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Document Hash"
-          },
-          "from_status": {
-            "anyOf": [
-              {
-                "enum": [
-                  "saved",
-                  "applied",
-                  "recruiter_screen",
-                  "interview",
-                  "assignment",
-                  "final_stage",
-                  "offer",
-                  "accepted",
-                  "rejected",
-                  "withdrawn",
-                  "closed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "From Status"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "item_type": {
-            "enum": [
-              "status_transition",
-              "status_correction",
-              "next_action",
-              "submission"
-            ],
-            "title": "Item Type",
-            "type": "string"
-          },
-          "metadata": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Metadata",
-            "type": "object"
-          },
-          "next_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action"
-          },
-          "next_action_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action Date"
-          },
-          "occurred_at": {
-            "title": "Occurred At",
-            "type": "string"
-          },
-          "reason": {
-            "default": "",
-            "title": "Reason",
-            "type": "string"
-          },
-          "submission_type": {
-            "anyOf": [
-              {
-                "enum": [
-                  "internal",
-                  "external"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submission Type"
-          },
-          "to_status": {
-            "anyOf": [
-              {
-                "enum": [
-                  "saved",
-                  "applied",
-                  "recruiter_screen",
-                  "interview",
-                  "assignment",
-                  "final_stage",
-                  "offer",
-                  "accepted",
-                  "rejected",
-                  "withdrawn",
-                  "closed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "To Status"
-          }
-        },
-        "required": [
-          "id",
-          "item_type",
-          "occurred_at"
-        ],
-        "title": "RecruitmentTimelineItemResponse",
-        "type": "object"
-      },
       "RegenerateDocumentClaimRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4967,122 +4302,6 @@
         "title": "SettingsResponse",
         "type": "object"
       },
-      "SubmissionResponse": {
-        "additionalProperties": false,
-        "description": "A recorded submission, with any warning the caller should see.\n\n`warnings` carries `DOCUMENT_ON_OLDER_ANALYSIS` when the job text or the\nanalysis has moved on from the document's (§18). It is reported, not raised.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "current_status": {
-            "title": "Current Status",
-            "type": "string"
-          },
-          "document_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Document Hash"
-          },
-          "event_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Id"
-          },
-          "next_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action"
-          },
-          "next_action_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Action Date"
-          },
-          "submission_id": {
-            "title": "Submission Id",
-            "type": "string"
-          },
-          "terminal_outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Terminal Outcome"
-          },
-          "warnings": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          }
-        },
-        "required": [
-          "application_id",
-          "current_status",
-          "submission_id"
-        ],
-        "title": "SubmissionResponse",
-        "type": "object"
-      },
-      "SubmitApplicationRequest": {
-        "additionalProperties": false,
-        "description": "Record that the Ready document the client was showing was sent (§18).\n\n`expected_document_hash` is explicit. A submission against whatever the document\nholds now could record having sent something the user never saw, which is the\none claim in this system that cannot be re-derived afterwards.",
-        "properties": {
-          "expected_document_hash": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Expected Document Hash",
-            "type": "string"
-          },
-          "metadata": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Metadata",
-            "type": "object"
-          },
-          "submitted_at": {
-            "minLength": 1,
-            "title": "Submitted At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "expected_document_hash",
-          "submitted_at"
-        ],
-        "title": "SubmitApplicationRequest",
-        "type": "object"
-      },
       "TemplateOptionResponse": {
         "additionalProperties": false,
         "properties": {
@@ -5132,49 +4351,6 @@
         ],
         "title": "Track",
         "type": "string"
-      },
-      "TransitionStatusRequest": {
-        "additionalProperties": false,
-        "description": "An allowed forward transition. `reason` is optional for a normal move.",
-        "properties": {
-          "occurred_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Occurred At"
-          },
-          "reason": {
-            "default": "",
-            "title": "Reason",
-            "type": "string"
-          },
-          "target_status": {
-            "enum": [
-              "saved",
-              "recruiter_screen",
-              "interview",
-              "assignment",
-              "final_stage",
-              "offer",
-              "accepted",
-              "rejected",
-              "withdrawn",
-              "closed"
-            ],
-            "title": "Target Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target_status"
-        ],
-        "title": "TransitionStatusRequest",
-        "type": "object"
       },
       "TrimmedClaim": {
         "additionalProperties": false,
@@ -5302,7 +4478,7 @@
       },
       "UpdateJobTextRequest": {
         "additionalProperties": false,
-        "description": "Replace the job text the client last read; refused once a Submission locked it.",
+        "description": "Replace the job text the client last read.",
         "properties": {
           "expected_job_text_hash": {
             "pattern": "^[0-9a-f]{64}$",
@@ -5620,18 +4796,9 @@
     },
     "/api/v1/applications": {
       "get": {
-        "description": "One page of the list, narrowed by the query the application layer answers.\n\nThe router maps HTTP to that query and back and decides nothing about it:\nthe closed sets arrive as their application-layer enums, so an unknown value\nis a 422 from the boundary rather than a filter that silently matches\nnothing. `stage` repeats for more than one stage. The paging bounds are\nrestated here so an out-of-range page is refused at the boundary with a 422\nnaming the parameter, rather than reaching the query and failing as a\nvalidation error the client cannot attribute.\n\n`stage` and `recruitment_status` are the two independent axes and repeat for\nmore than one value; `preset` is one named question the application layer\nanswers, and it narrows alongside them rather than replacing them.",
+        "description": "One page of the list, narrowed by the query the application layer answers.\n\nThe router maps HTTP to that query and back and decides nothing about it:\nthe closed sets arrive as their application-layer enums, so an unknown value\nis a 422 from the boundary rather than a filter that silently matches\nnothing. `stage` repeats for more than one stage. The paging bounds are\nrestated here so an out-of-range page is refused at the boundary with a 422\nnaming the parameter, rather than reaching the query and failing as a\nvalidation error the client cannot attribute.\n\n`preset` is one named question the application layer answers, and it narrows\nalongside `stage` rather than replacing it.",
         "operationId": "list_applications_api_v1_applications_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "activity",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/ActivityFilter",
-              "default": "all"
-            }
-          },
           {
             "in": "query",
             "name": "stage",
@@ -5649,25 +4816,6 @@
                 }
               ],
               "title": "Stage"
-            }
-          },
-          {
-            "in": "query",
-            "name": "recruitment_status",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "items": {
-                    "$ref": "#/components/schemas/ApplicationStatus"
-                  },
-                  "type": "array"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Recruitment Status"
             }
           },
           {
@@ -6006,61 +5154,9 @@
         ]
       }
     },
-    "/api/v1/applications/{application_id}/close": {
-      "post": {
-        "operationId": "close_application_api_v1_applications__application_id__close_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CloseApplicationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Close an application without deleting its history",
-        "tags": [
-          "applications"
-        ]
-      }
-    },
     "/api/v1/applications/{application_id}/delete": {
       "post": {
-        "description": "No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).\n\nCallable from any current status, including `closed`. Every immutable\nJobAnalysis, Artifact, Submission, and Operation the application produced is\nuntouched;\nonly default list/Dashboard projections and duplicate detection stop\nsurfacing it. The detail endpoint still returns it by ID.",
+        "description": "No hard delete and no `undelete` (state-and-use-cases.md §12).\n\nEvery immutable JobAnalysis and Operation the application produced is untouched;\nonly the list and duplicate detection stop surfacing it. The detail endpoint\nstill returns it by ID.",
         "operationId": "delete_application_api_v1_applications__application_id__delete_post",
         "parameters": [
           {
@@ -7107,69 +6203,6 @@
         ]
       }
     },
-    "/api/v1/applications/{application_id}/external-submissions": {
-      "post": {
-        "description": "`201`: recorded without inventing content or files that never passed through here.",
-        "operationId": "record_external_submission_api_v1_applications__application_id__external_submissions_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExternalSubmissionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubmissionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Record a submission made outside the system",
-        "tags": [
-          "tracking"
-        ]
-      }
-    },
     "/api/v1/applications/{application_id}/gap-questions": {
       "get": {
         "operationId": "read_gap_questions_api_v1_applications__application_id__gap_questions_get",
@@ -7509,72 +6542,9 @@
             "description": "The request did not match the API contract."
           }
         },
-        "summary": "Replace the job text; refused once the application has a submission",
+        "summary": "Replace the job text",
         "tags": [
           "applications"
-        ]
-      }
-    },
-    "/api/v1/applications/{application_id}/next-action": {
-      "patch": {
-        "description": "States what the one active next action now is, in whole.\n\nSending both fields empty clears it: the request carries the complete value\nrather than a partial edit, and the schema requires both fields so an\nomitted one cannot be read as \"leave it alone\". `PATCH` rather than `PUT`\nbecause `PUT` is outside this API's allowed methods, and widening transport\npolicy for one route's verb would be the wrong trade.",
-        "operationId": "set_next_action_api_v1_applications__application_id__next_action_patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NextActionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplicationMutationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Set or clear the one active next action",
-        "tags": [
-          "tracking"
         ]
       }
     },
@@ -7637,195 +6607,6 @@
         "summary": "Update safe mutable notes for an application",
         "tags": [
           "applications"
-        ]
-      }
-    },
-    "/api/v1/applications/{application_id}/status": {
-      "post": {
-        "description": "`200`: asking for the status an Application already holds is not an error.\n\nThe application layer returns the current state unchanged rather than\nappending a second identical event, so a client that retries a transition\nit already made does not write a duplicate into the trail.",
-        "operationId": "transition_status_api_v1_applications__application_id__status_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TransitionStatusRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplicationMutationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Transition recruitment status with an immutable history",
-        "tags": [
-          "tracking"
-        ]
-      }
-    },
-    "/api/v1/applications/{application_id}/status-corrections": {
-      "post": {
-        "description": "`201`: a correction appends an event; it never edits the one it corrects.",
-        "operationId": "correct_status_api_v1_applications__application_id__status_corrections_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CorrectStatusRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplicationMutationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Append a reasoned correction to recruitment history",
-        "tags": [
-          "tracking"
-        ]
-      }
-    },
-    "/api/v1/applications/{application_id}/submissions": {
-      "post": {
-        "description": "`201`: an immutable Submission of the content and rendered files (§18).\n\nRefused with `412` unless the document is Ready when the request is answered and\nstill carries `expected_document_hash`, rather than recording a claim that\nsomething the user never saw was sent.",
-        "operationId": "submit_application_api_v1_applications__application_id__submissions_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubmitApplicationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubmissionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "No valid session (`AUTHENTICATION_REQUIRED`)."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Record that the Ready document was sent",
-        "tags": [
-          "tracking"
         ]
       }
     },

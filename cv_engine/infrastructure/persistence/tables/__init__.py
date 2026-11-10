@@ -1,6 +1,6 @@
 """SQLAlchemy Core definitions for the PostgreSQL persistence schema.
 
-Split by domain (prep / tracking / knowledge / shared) as siblings under one
+Split by domain (prep / knowledge / gap questions / accounts / shared) as siblings under one
 `MetaData`. Re-exported here so importers name one place, matching how
 `application/ports/` was already split from a single module.
 """
@@ -26,7 +26,6 @@ from .shared import (
     operations,
     user_settings,
 )
-from .tracking import recruitment_events, submissions
 
 TABLES = tuple(metadata.tables.values())
 
@@ -37,8 +36,6 @@ __all__ = [
     "applications",
     "job_analyses",
     "cv_documents",
-    "recruitment_events",
-    "submissions",
     "ai_calls",
     "audit_records",
     "operations",

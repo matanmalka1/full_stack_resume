@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import case, exists, select
+from sqlalchemy import case, select
 
 from ...application.errors import UnknownRecord
 from ...application.operations import (
@@ -21,8 +21,6 @@ from .tables import (
     audit_records,
     job_analyses,
     operations,
-    recruitment_events,
-    submissions,
 )
 
 
@@ -62,13 +60,6 @@ class SqlAlchemyApplicationProjectionReader:
         )
         return [dict(row) for row in rows]
 
-    def has_submission(self, tx: ReadTransaction, application_id: str) -> bool:
-        return bool(
-            self._connection(tx)
-            .execute(select(exists().where(submissions.c.application_id == application_id)))
-            .scalar_one()
-        )
-
     def analyses(self, tx: ReadTransaction, application_id: str) -> list[dict[str, Any]]:
         rows = (
             self._connection(tx)
@@ -99,34 +90,6 @@ class SqlAlchemyApplicationProjectionReader:
         if row is None:
             raise UnknownRecord(f"no job analysis {analysis_id}")
         return _analysis_record(row)
-
-    def recruitment_events(self, tx: ReadTransaction, application_id: str):
-        cols = tuple(c for c in recruitment_events.c if c.name != "seq")
-        rows = (
-            self._connection(tx)
-            .execute(
-                select(*cols)
-                .where(recruitment_events.c.application_id == application_id)
-                .order_by(recruitment_events.c.occurred_at, recruitment_events.c.seq)
-            )
-            .mappings()
-            .all()
-        )
-        return [json_text_record(row, "payload_json") for row in rows]
-
-    def submissions(self, tx: ReadTransaction, application_id: str):
-        cols = tuple(c for c in submissions.c if c.name != "seq")
-        rows = (
-            self._connection(tx)
-            .execute(
-                select(*cols)
-                .where(submissions.c.application_id == application_id)
-                .order_by(submissions.c.submitted_at, submissions.c.seq)
-            )
-            .mappings()
-            .all()
-        )
-        return [json_text_record(row, "metadata_json") for row in rows]
 
     def audit_records(self, tx: ReadTransaction, application_id: str):
         cols = tuple(c for c in audit_records.c if c.name != "seq")

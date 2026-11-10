@@ -1,6 +1,6 @@
-"""Ports for the one mutable CV document, its rendered files, and its Submissions.
+"""Ports for the one mutable CV document and its rendered files.
 
-state-and-use-cases.md §3, §14–§16 and §18. The store keeps what is stored and checks
+state-and-use-cases.md §3 and §14–§16. The store keeps what is stored and checks
 only what it can check alone: `expected_document_hash` against the row it locked. It
 never computes the basis — that needs the Knowledge, which the application layer loads
 and compares under the same lock — and it never decides a state.
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from ...domain.contracts.document import BuiltWith, CVDocument, DocumentSubmission
+from ...domain.contracts.document import BuiltWith, CVDocument
 from ...domain.contracts.drafts import DraftDocument
 from ...domain.contracts.validation import ValidationReport
 from .transactions import ReadTransaction, WriteTransaction
@@ -41,14 +41,6 @@ class RenderedFiles:
 
     html: str
     pdf: str
-
-
-@dataclass(frozen=True)
-class SubmittedFiles:
-    html_path: str
-    html_sha256: str
-    pdf_path: str
-    pdf_sha256: str
 
 
 class DocumentStore(Protocol):
@@ -173,7 +165,7 @@ class DocumentStore(Protocol):
 
 
 class DocumentFileStore(Protocol):
-    """The document's mutable rendered files and the immutable copies a Submission owns."""
+    """The document's mutable rendered files."""
 
     def render_targets(self, application_id: str, attempt_id: str) -> tuple[Path, Path]:
         """Unique per-attempt HTML and PDF paths for one render."""
@@ -188,15 +180,3 @@ class DocumentFileStore(Protocol):
     def open_rendered_pdf(self, reference: str) -> ArtifactStream:
         """Contained read of a document's current PDF; a missing file is an error."""
         ...
-
-    def copy_for_submission(
-        self, application_id: str, submission_id: str, files: RenderedFiles
-    ) -> SubmittedFiles:
-        """Copy into the Submission's immutable layout and hash what was copied."""
-        ...
-
-
-class DocumentSubmissionStore(Protocol):
-    def insert_submission(self, tx: WriteTransaction, submission: DocumentSubmission) -> None: ...
-
-    def submissions(self, tx: ReadTransaction, application_id: str) -> list[DocumentSubmission]: ...

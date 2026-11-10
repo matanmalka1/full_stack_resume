@@ -6,7 +6,7 @@ from. This module interprets it once: the basis feeds the states, the states and
 review reasons feed the actions, and nothing here writes.
 
 `document_review_reasons` is also what the synchronous commands call before they
-approve, render or submit, so a blocker the projection shows is the same blocker the
+approve or render, so a blocker the projection shows is the same blocker the
 command refuses with.
 """
 
@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date
 from typing import Any
 
 from ..domain.analysis.document_coverage import requirements_missing_from_document
@@ -48,7 +47,6 @@ PREPARATION_ACTIONS = (
     "check",
     "approve",
     "render",
-    "submit",
     "download_pdf",
 )
 
@@ -82,8 +80,6 @@ DOCUMENT_OPERATION_TYPES = frozenset(
     }
 )
 
-_TERMINAL_RECRUITMENT = frozenset({"accepted", "rejected", "withdrawn", "closed"})
-
 
 @dataclass(frozen=True)
 class ProjectionContext:
@@ -94,7 +90,6 @@ class ProjectionContext:
     analyses: tuple[dict[str, Any], ...]
     document: CVDocument | None
     knowledge: Knowledge
-    today: date
     active_operation: OperationView | None = None
     latest_operation: OperationView | None = None
     matching_context_operation_active: bool = False
@@ -263,16 +258,6 @@ def derive_warnings(context: ProjectionContext) -> list[WarningView]:
                     entity_references={"replacement_fact_id": superseded[0]},
                 )
             )
-    next_date = context.application.get("next_action_date")
-    if next_date and context.application.get("current_status") not in _TERMINAL_RECRUITMENT:
-        try:
-            overdue = date.fromisoformat(next_date) < context.today
-        except ValueError:
-            overdue = False
-        if overdue:
-            warnings.append(
-                WarningView(code="NEXT_ACTION_OVERDUE", message="The next action is overdue.")
-            )
     return warnings
 
 
@@ -326,7 +311,7 @@ def derive_actions(
         if preparation is PreparationState.APPROVED:
             allowed.add("render")
         if preparation is PreparationState.READY:
-            allowed |= {"submit", "download_pdf"}
+            allowed.add("download_pdf")
         for reason in review:
             allowed.update(
                 action
@@ -356,7 +341,7 @@ def derive_actions(
         # Drafting reads the job text the analysis read, and an edit replaced it.
         block(["create_draft"], "JOB_TEXT_CHANGED")
     for reason in review:
-        block(["approve", "render", "submit"], reason.code)
+        block(["approve", "render"], reason.code)
     if check is ContentCheck.FAILED:
         block(["approve"], "VALIDATION_FAILED")
 
@@ -377,7 +362,8 @@ def derive_actions(
         recommended = "check"
     else:
         recommended = next(
-            (action for action in ("approve", "render", "submit") if action in available), None
+            (action for action in ("approve", "render", "download_pdf") if action in available),
+            None,
         )
     if recommended not in available:
         recommended = None
@@ -393,8 +379,6 @@ def project_application_state(context: ProjectionContext) -> ApplicationStateVie
     available, blocked, recommended = derive_actions(context, review, preparation, check)
     latest = context.analyses[-1] if context.analyses else None
     return ApplicationStateView(
-        recruitment_status=context.application["current_status"],
-        terminal_outcome=context.application.get("terminal_outcome"),
         preparation_state=preparation,
         content_check=check,
         review_reasons=review,

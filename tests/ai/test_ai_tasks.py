@@ -1568,7 +1568,6 @@ def test_analysis_activation_shares_one_token_and_has_no_external_io(
         _active_transaction,
         transaction_is_active,
     )
-    from cv_engine.infrastructure.object_store import LocalObjectStore
     from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
     from cv_engine.infrastructure.persistence.operation_execution import (
         SqlAlchemyOperationExecutionStore,
@@ -1582,17 +1581,6 @@ def test_analysis_activation_shares_one_token_and_has_no_external_io(
         return network(*args, **kwargs)
 
     monkeypatch.setattr(urllib.request, "urlopen", guarded_network)
-    for method in ("get", "put", "stat", "exists"):
-        original = getattr(LocalObjectStore, method)
-
-        def guard(original):
-            def call(*args, **kwargs):
-                assert not transaction_is_active(), "object-store I/O inside activation"
-                return original(*args, **kwargs)
-
-            return call
-
-        monkeypatch.setattr(LocalObjectStore, method, guard(original))
     tokens = []
 
     def tracked(original):

@@ -27,8 +27,6 @@ from ..application.services.operations import (
     OperationLifecycleService,
     OperationSubmissionService,
 )
-from ..application.services.recruitment.lifecycle import RecruitmentService
-from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
 from ..application.services.settings import SettingsService
 
@@ -69,8 +67,6 @@ class ApiServices:
     draft_history: DraftHistoryService
     draft_review: DraftReviewService
     rendering: RenderingService
-    recruitment: RecruitmentService
-    submission: SubmissionService
     knowledge: FactLifecycleService
     knowledge_queries: KnowledgeQueryService
     operation_submissions: OperationSubmissionService

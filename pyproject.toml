@@ -22,12 +22,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Object storage for immutable payloads. Optional because the local store is
-# the default and the deterministic workflow must reach Ready with nothing
-# configured - a required cloud SDK would make the offline path depend on it.
-s3 = [
-  "boto3>=1.35,<2",
-]
 test = [
   # Starlette's TestClient is the only reason an HTTP client is here at all; no
   # The ASGI server the API process runs under.

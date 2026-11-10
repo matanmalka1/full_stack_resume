@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...domain.contracts.recruitment import ApplicationStatus
 from ...domain.document import PreparationState
 from .views_shared import (
-    ActivityFilter,
     ApplicationListItemView,
     ApplicationListQuery,
     ApplicationListView,
@@ -15,68 +13,32 @@ from .views_shared import (
     ApplicationSort,
 )
 
-_INTERVIEW_STATUSES = frozenset(
-    {
-        ApplicationStatus.RECRUITER_SCREEN,
-        ApplicationStatus.INTERVIEW,
-        ApplicationStatus.ASSIGNMENT,
-        ApplicationStatus.FINAL_STAGE,
-        ApplicationStatus.OFFER,
-    }
-)
-
-CLOSED_RECRUITMENT_STATUSES = frozenset(
-    {
-        ApplicationStatus.REJECTED,
-        ApplicationStatus.WITHDRAWN,
-        ApplicationStatus.CLOSED,
-    }
-)
-
-
-def application_is_closed(
-    terminal_outcome: str | None, recruitment_status: str | ApplicationStatus
-) -> bool:
-    """Project whether recruitment is closed from the authoritative application rule."""
-    return terminal_outcome is not None or recruitment_status in CLOSED_RECRUITMENT_STATUSES
-
 
 def _matches_preset(item: ApplicationListItemView, preset: ApplicationPreset | None) -> bool:
     if preset is None:
         return True
     if preset is ApplicationPreset.NEEDS_ATTENTION:
-        return bool(item.review_reasons or item.warnings)
+        # A warning disables nothing (§8); only a reason waits on a decision.
+        return bool(item.review_reasons)
     if preset is ApplicationPreset.READY_TO_SEND:
         return item.preparation_state is PreparationState.READY
-    if preset is ApplicationPreset.ACTIVE_INTERVIEWS:
-        return item.recruitment_status in _INTERVIEW_STATUSES
     raise ValueError(f"unsupported Application preset: {preset}")
 
 
 def _matches_search(item: ApplicationListItemView, search: str) -> bool:
-    """Search identity plus the two lifecycle codes exposed by the projection."""
+    """Search identity plus the preparation state code exposed by the projection."""
     needle = search.strip().casefold()
     if not needle:
         return True
     return (
         needle
-        in "\n".join(
-            (item.company, item.target_role, item.preparation_state.value, item.recruitment_status)
-        ).casefold()
+        in "\n".join((item.company, item.target_role, item.preparation_state.value)).casefold()
     )
 
 
-def _matches_activity(item: ApplicationListItemView, activity: ActivityFilter) -> bool:
-    if activity is ActivityFilter.ALL:
-        return True
-    return item.is_closed is (activity is ActivityFilter.CLOSED)
-
-
 def _matches_common(item: ApplicationListItemView, query: ApplicationListQuery) -> bool:
-    return (
-        _matches_activity(item, query.activity)
-        and (not query.stages or item.preparation_state in query.stages)
-        and _matches_search(item, query.search)
+    return (not query.stages or item.preparation_state in query.stages) and _matches_search(
+        item, query.search
     )
 
 
@@ -117,13 +79,7 @@ def narrow_application_list(
     A facet respects every other axis but ignores its own selection. This matches
     the former independent count queries while requiring only this one projection.
     """
-    common = [item for item in items if _matches_common(item, query)]
-    preset_base = [
-        item
-        for item in common
-        if not query.recruitment_statuses or item.recruitment_status in query.recruitment_statuses
-    ]
-    recruitment_base = [item for item in common if _matches_preset(item, query.preset)]
+    preset_base = [item for item in items if _matches_common(item, query)]
     matched = sorted(
         (item for item in preset_base if _matches_preset(item, query.preset)),
         key=_sort_key(query.sort),
@@ -142,11 +98,6 @@ def narrow_application_list(
     for preset in ApplicationPreset:
         preset_counts[preset.value] = sum(_matches_preset(item, preset) for item in preset_base)
 
-    recruitment_status_counts: dict[ApplicationStatus, int] = {}
-    for item in recruitment_base:
-        status = ApplicationStatus(item.recruitment_status)
-        recruitment_status_counts[status] = recruitment_status_counts.get(status, 0) + 1
-
     return ApplicationListView(
         items=window,
         matched=len(matched),
@@ -155,5 +106,4 @@ def narrow_application_list(
         offset=query.offset,
         stage_counts=stage_counts,
         preset_counts=preset_counts,
-        recruitment_status_counts=recruitment_status_counts,
     )

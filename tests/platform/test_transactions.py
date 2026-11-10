@@ -5,10 +5,9 @@ from sqlalchemy import func, insert, select
 
 from cv_engine.application.ports import AnalysisContext
 from cv_engine.application.transactions import (
-    assert_external_io_allowed,
     transaction_is_active,
 )
-from cv_engine.infrastructure.payloads import PayloadStore
+from cv_engine.infrastructure.document_files import DocumentFiles
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.tables import applications, users
 from cv_engine.util import new_id, utc_now
@@ -20,7 +19,6 @@ def _application(application_id: str, user_id: str) -> dict[str, str]:
         "user_id": user_id,
         "company": "Transaction Co",
         "target_role": "Engineer",
-        "current_status": "saved",
         "notes": "",
         "job_text": "Transaction posting",
         "job_text_hash": "0" * 64,
@@ -108,19 +106,14 @@ def test_scopes_cannot_nest_across_managers_or_be_reused(database_engine) -> Non
             pass
 
 
-def _payloads_refuse(transactions, scope, app_paths, **_fixtures) -> None:
-    payloads = PayloadStore(app_paths)
+def _document_files_refuse(transactions, scope, app_paths, **_fixtures) -> None:
+    files = DocumentFiles(app_paths)
     with getattr(transactions, scope)():
-        with pytest.raises(RuntimeError, match="immutable payload write"):
-            payloads.commit_submission_file(
-                "application", "submission", suffix=".pdf", payload=b"%PDF-1.4"
-            )
-        with pytest.raises(RuntimeError, match="payload inventory is forbidden"):
-            payloads.payload_inventory()
-        with pytest.raises(RuntimeError, match="object-store write"):
-            assert_external_io_allowed("object-store write")
-    assert not payloads.submission_path("application", "submission", suffix=".pdf").exists()
-    assert_external_io_allowed("object-store write")
+        with pytest.raises(RuntimeError, match="document render target preparation"):
+            files.render_targets("application", "attempt")
+        with pytest.raises(RuntimeError, match="document PDF read"):
+            files.open_rendered_pdf("artifacts/documents/application/attempt/resume.pdf")
+    assert not (app_paths.artifacts_root / "documents" / "application" / "attempt").exists()
 
 
 def _provider_refuses(transactions, scope, task_contracts, fake_openai, **_fixtures) -> None:
@@ -139,8 +132,8 @@ def _provider_refuses(transactions, scope, task_contracts, fake_openai, **_fixtu
 @pytest.mark.parametrize(
     "boundary",
     # Knowledge is not here: it is the user's rows, written inside the scope itself.
-    [_payloads_refuse, _provider_refuses],
-    ids=["payloads", "provider"],
+    [_document_files_refuse, _provider_refuses],
+    ids=["document_files", "provider"],
 )
 def test_outbound_io_is_refused_inside_either_scope(
     database_engine, app_paths, task_contracts, fake_openai, boundary, scope

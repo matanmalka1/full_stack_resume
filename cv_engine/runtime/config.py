@@ -130,18 +130,6 @@ SETTINGS: dict[str, Setting] = {
         # The HTTPS origin a deployed instance is reached on behind a TLS proxy,
         # e.g. `https://cv.example.com`. Unset locally. Exactly one origin.
         Setting("api_public_origin", "CV_PUBLIC_ORIGIN", default=None, cast=https_origin),
-        # Immutable payload storage. "local" is the default and keeps every
-        # payload below the application root; "s3" stores them in a bucket,
-        # which is what a deployed installation uses. Nothing else about the
-        # workflow changes - the payload references Submissions record are
-        # identical either way.
-        Setting("object_store", "CV_OBJECT_STORE", default="local"),
-        Setting("s3_bucket", "CV_S3_BUCKET", default=None),
-        Setting("s3_prefix", "CV_S3_PREFIX", default=None),
-        # Set for R2 or MinIO; unset for AWS S3, where boto3 derives the
-        # endpoint from the region.
-        Setting("s3_endpoint_url", "CV_S3_ENDPOINT_URL", default=None),
-        Setting("s3_region", "CV_S3_REGION", default=None),
         # How long a session lives from sign-in; no idle timeout, no refresh
         # (architecture §18.4).
         # A session of zero days would sign every user out as they sign in.

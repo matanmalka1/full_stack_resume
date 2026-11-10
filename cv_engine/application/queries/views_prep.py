@@ -12,13 +12,12 @@ from ..commands import BoundaryDTO
 
 
 class JobPostingView(BoundaryDTO):
-    """The Application's job text, editable until the Application has a Submission."""
+    """The Application's job text, an ordinary editable field."""
 
     job_text: str
     source_url: str | None = None
     job_text_hash: str
     job_text_updated_at: str
-    locked: bool
 
 
 class GapView(BoundaryDTO):

@@ -1,6 +1,6 @@
 """The CV document's commands, driven through the application services and PostgreSQL.
 
-state-and-use-cases.md §3–§9 and §13–§18; test-and-acceptance-plan §5.1, §5.3, §5.5,
+state-and-use-cases.md §3–§9 and §13–§16; test-and-acceptance-plan §5.1, §5.3, §5.5,
 §5.6 and §14. Each scenario asserts the projection a client would read after every
 step, because the projection - not the stored stamps - is what the document's state is.
 """
@@ -19,7 +19,6 @@ from helpers import (
     seed_draft,
     seed_existing_analysis,
     stored_document,
-    stored_submissions,
 )
 from sqlalchemy import select, update
 
@@ -30,7 +29,6 @@ from cv_engine.application.commands import (
     ClaimAddition,
     IngestedApplication,
     RenderCommand,
-    SubmissionCommand,
     UpdateDocumentCommand,
 )
 from cv_engine.application.errors import (
@@ -41,7 +39,6 @@ from cv_engine.domain.contracts.analysis import Requirement
 from cv_engine.domain.document import ContentCheck, PreparationState
 from cv_engine.infrastructure.persistence.tables import facts
 from cv_engine.runtime.composition import Services
-from cv_engine.util import sha256_file, utc_now
 
 
 def _detail(services: Services, application_id: str):
@@ -68,18 +65,6 @@ def _render(services: Services, application_id: str, document_hash: str):
     )
 
 
-def _submit(services: Services, application_id: str, document_hash: str):
-    return services.submission.submit_application(
-        actor_of(services),
-        SubmissionCommand(
-            application_id=application_id,
-            expected_document_hash=document_hash,
-            submitted_at=utc_now(),
-            client="web",
-        ),
-    )
-
-
 def _ready(services: Services, company: str) -> tuple[str, str]:
     ingested, _analysis = seed_document(services, company)
     application_id = ingested.application_id
@@ -89,15 +74,14 @@ def _ready(services: Services, company: str) -> tuple[str, str]:
     return application_id, document_hash
 
 
-def test_document_journey_from_analysis_to_submission(
+def test_document_journey_from_analysis_to_ready(
     services: Services, deterministic_renderer, database_engine
 ) -> None:
     """§5.1 and §14: analysis creates the document; each step moves exactly one stamp.
 
     The first analysis creates the document pinned to it with no content. Draft, check, approve and render then reach Ready;
-    re-approving a current approval changes nothing; submitting copies what was sent
-    with a checksum per file, transitions to `applied` once, and leaves the document
-    exactly as it was.
+    re-approving a current approval changes nothing; the recruiter PDF is the rendered
+    one, and delivering it leaves the document exactly as it was.
     """
     ingested, analysis = seed_document(services, "Journey Co")
     application_id = ingested.application_id
@@ -154,43 +138,17 @@ def test_document_journey_from_analysis_to_submission(
     assert pdf.is_file() and (services.paths.root / document.html_path).is_file()
     detail = _detail(services, application_id)
     assert detail.preparation_state is PreparationState.READY
-    assert detail.recommended_action == "submit"
+    assert detail.recommended_action == "download_pdf"
     assert "download_pdf" in detail.available_actions
     delivery = services.rendering.export_recruiter_pdf(actor_of(services), application_id)
     assert delivery.document_hash == document_hash and delivery.size == pdf.stat().st_size
 
-    first = _submit(services, application_id, document_hash)
-    assert first.current_status == "applied" and first.event_id is not None
-    assert first.document_hash == document_hash and first.warnings == []
-    second = _submit(services, application_id, document_hash)
-    assert second.current_status == "applied" and second.event_id is None
-
-    sent = stored_submissions(services, application_id)
-    assert [item.submission_type for item in sent] == ["internal", "internal"]
-    for submission in sent:
-        assert submission.document_hash == document_hash
-        assert submission.content == document.content
-        assert submission.job_text_hash == ingested.job_text_hash
-        assert submission.pdf_path is not None and submission.pdf_sha256 is not None
-        assert submission.html_path is not None and submission.html_sha256 is not None
-        assert submission.pdf_sha256 == sha256_file(pdf)
-        assert services.payloads.verify_payload(submission.pdf_path, submission.pdf_sha256) == "ok"
-        assert (
-            services.payloads.verify_payload(submission.html_path, submission.html_sha256) == "ok"
-        )
-    assert len({submission.pdf_path for submission in sent}) == 2
     assert stored_document(services, application_id) == document
     assert _detail(services, application_id).preparation_state is PreparationState.READY
 
     reconciled = services.maintenance.reconcile()
     assert reconciled.problems == []
-    # Each immutable Submission file; AI calls are counted apart.
-    # Mutable document render attempts are not part of this inventory.
     counts = persisted_counts(database_engine)
-    submission_files = sum(
-        path is not None for item in sent for path in (item.html_path, item.pdf_path)
-    )
-    assert reconciled.payloads_checked == submission_files
     assert reconciled.ai_calls_checked == counts["ai_calls"]
 
 
@@ -334,10 +292,9 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
 ) -> None:
     """§5.5: a later analysis never touches the document; only the explicit re-pin does.
 
-    The Ready document stays Ready and submittable with `DOCUMENT_ON_OLDER_ANALYSIS`.
+    The Ready document stays Ready with `DOCUMENT_ON_OLDER_ANALYSIS`.
     `build_from_analysis` then replaces the analysis, drops the content
-    and every stamp, and deletes the old rendered files, while the Submission keeps
-    its own copies.
+    and every stamp, and deletes the old rendered files.
     """
     application_id, document_hash = _ready(services, "Newer Co")
     ready = stored_document(services, application_id)
@@ -357,9 +314,6 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     assert detail.document_analysis_id == ready.analysis_id
     assert "DOCUMENT_ON_OLDER_ANALYSIS" in {warning.code for warning in detail.warnings}
     assert "build_from_analysis" in detail.available_actions
-
-    submitted = _submit(services, application_id, document_hash)
-    assert submitted.warnings == ["DOCUMENT_ON_OLDER_ANALYSIS"]
 
     rebuilt = services.draft_editing.build_from_analysis(
         actor_of(services),
@@ -386,11 +340,6 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     detail = _detail(services, application_id)
     assert detail.preparation_state is PreparationState.READY_TO_DRAFT
     assert "DOCUMENT_ON_OLDER_ANALYSIS" not in {warning.code for warning in detail.warnings}
-
-    (sent,) = stored_submissions(services, application_id)
-    assert sent.content == ready.content
-    assert sent.pdf_path is not None and sent.pdf_sha256 is not None
-    assert services.payloads.verify_payload(sent.pdf_path, sent.pdf_sha256) == "ok"
 
 
 def test_a_dropped_mandatory_requirement_warns_and_blocks_nothing(
@@ -465,7 +414,7 @@ def test_a_dropped_mandatory_requirement_warns_and_blocks_nothing(
     assert rendered.validation.passed
     detail = _detail(services, application_id)
     assert detail.preparation_state is PreparationState.READY
-    assert "submit" in detail.available_actions
+    assert "download_pdf" in detail.available_actions
     assert "REQUIREMENT_NOT_IN_DOCUMENT" in {w.code for w in detail.warnings}
 
     # A newer analysis moves the document onto DOCUMENT_ON_OLDER_ANALYSIS instead.

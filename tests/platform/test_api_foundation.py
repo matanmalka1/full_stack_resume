@@ -9,11 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import sys
 from dataclasses import replace
-from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
 
@@ -22,7 +20,6 @@ from api_harness import sign_in
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
-from helpers import actor_of
 
 from cv_engine.admin.cli import main as admin
 from cv_engine.api import FrontendBuildError
@@ -41,7 +38,6 @@ from cv_engine.application.errors import (
     UnknownRecord,
     ValidationBlocked,
 )
-from cv_engine.application.maintenance import ORPHAN_MIN_AGE
 from cv_engine.infrastructure.runtime_logging import (
     ConciseExceptionFilter,
     StructuredRuntimeLogger,
@@ -150,64 +146,22 @@ def test_logs_summarise_requests_keep_tracebacks_in_file_and_redact_secrets(
     assert record.exc_info is None
 
 
-def test_orphan_inventory_is_operator_only_and_never_deletes(api, services) -> None:
-    """Inventory excludes fresh writes; the removed reclaim route cannot delete evidence.
-
-    Ingest stores the job text in the database and writes no payload, and a
-    file outside the managed layouts is not a payload, so neither is a candidate.
-    """
-    from cv_engine.application.commands import IngestCommand
-
-    ingested = services.applications.ingest(
-        actor_of(services),
-        IngestCommand(
-            company="Inventory Co", target_role="Engineer", job_text="Stored posting", client="web"
-        ),
-    )
-    orphan = services.payloads.commit_submission_file(
-        "unregistered", "submission", suffix=".pdf", payload=b"pending payload"
-    )
-    response = api.get(f"{API_PREFIX}/maintenance/orphans")
-    assert response.status_code == 404, response.text
-    response = api.post(
-        f"{API_PREFIX}/maintenance/reconciliations", headers={"Origin": ALLOWED_ORIGIN}
-    )
-    assert response.status_code == 404, response.text
+def test_maintenance_is_operator_only(api, services) -> None:
+    """Reconciliation runs from the operator CLI; the HTTP API exposes no maintenance."""
+    for method, path in (
+        ("get", "/maintenance/orphans"),
+        ("post", "/maintenance/reconciliations"),
+        ("post", "/maintenance/orphans/reclaim"),
+    ):
+        response = api.request(
+            method.upper(), f"{API_PREFIX}{path}", headers={"Origin": ALLOWED_ORIGIN}
+        )
+        assert response.status_code == 404, response.text
     reconciliation = StringIO()
     assert admin(["reconcile"], services=services, out=reconciliation) == 0
-    assert json.loads(reconciliation.getvalue())["passed"] is True
-    output = StringIO()
-    assert admin(["inspect-orphans"], services=services, out=output) == 0
-    assert json.loads(output.getvalue()) == {"candidates": []}
-
-    services.paths.artifacts_root.joinpath("working", "projection").mkdir(parents=True)
-    projection = services.paths.artifacts_root / "working" / "projection" / "resume.md"
-    projection.write_text("derived")
-    stamp = (datetime.now(UTC) - ORPHAN_MIN_AGE * 2).timestamp()
-    for reference in services.payloads.payload_inventory():
-        os.utime(services.paths.root / reference, (stamp, stamp))
-    os.utime(projection, (stamp, stamp))
-    fresh = services.payloads.commit_submission_file(
-        "fresh", "submission", suffix=".pdf", payload=b"in-flight payload"
-    )
-    before = services.payloads.payload_inventory()
-    output = StringIO()
-    assert admin(["inspect-orphans"], services=services, out=output) == 0
-    assert json.loads(output.getvalue()) == {"candidates": [orphan.reference]}
-    assert services.payloads.payload_inventory() == before
-    assert services.payloads.verify_payload(orphan.reference, orphan.sha256) == "ok"
-    assert ingested.job_text_hash
-
-    response = api.post(
-        f"{API_PREFIX}/maintenance/orphans/reclaim",
-        headers={"Origin": ALLOWED_ORIGIN},
-    )
-    assert response.status_code == 404, response.text
-    assert services.maintenance.inspect_orphans().candidates == [orphan.reference]
-    assert services.payloads.payload_inventory() == before
-    assert services.payloads.verify_payload(orphan.reference, orphan.sha256) == "ok"
-    assert services.payloads.verify_payload(fresh.reference, fresh.sha256) == "ok"
-    assert projection.read_text() == "derived"
+    report = json.loads(reconciliation.getvalue())
+    assert report["passed"] is True
+    assert "payloads_checked" not in report
 
 
 # --- refusals ---------------------------------------------------------------

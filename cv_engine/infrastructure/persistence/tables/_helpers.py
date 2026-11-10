@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
-from sqlalchemy import BigInteger, Column, Date, DateTime, Sequence, TypeDecorator
+from sqlalchemy import BigInteger, Column, DateTime, Sequence, TypeDecorator
 
 
 def _timestamp_bind(value: str | datetime | None, _dialect):
@@ -14,18 +14,6 @@ def _timestamp_bind(value: str | datetime | None, _dialect):
 
 
 def _timestamp_result(value: str | datetime | None, _dialect):
-    if value is None or isinstance(value, str):
-        return value
-    return value.isoformat()
-
-
-def _date_bind(value: str | date | None, _dialect):
-    if value is None or isinstance(value, date):
-        return value
-    return date.fromisoformat(value)
-
-
-def _date_result(value: str | date | None, _dialect):
     if value is None or isinstance(value, str):
         return value
     return value.isoformat()
@@ -41,16 +29,6 @@ IsoTimestamp = type(
         "cache_ok": True,
         "process_bind_param": staticmethod(_timestamp_bind),
         "process_result_value": staticmethod(_timestamp_result),
-    },
-)
-IsoDate = type(
-    "IsoDate",
-    (TypeDecorator,),
-    {
-        "impl": Date,
-        "cache_ok": True,
-        "process_bind_param": staticmethod(_date_bind),
-        "process_result_value": staticmethod(_date_result),
     },
 )
 

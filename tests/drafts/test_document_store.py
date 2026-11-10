@@ -125,7 +125,7 @@ def test_first_analysis_and_document_commit_together_or_not_at_all(
 
 
 def test_application_commands_refuse_stale_hash_before_work(ready_application):
-    """§14–§18: the client token is checked even when the current document is Ready."""
+    """§14–§16: the client token is checked even when the current document is Ready."""
     from cv_engine.application.commands import (
         ApplyAnalysisDecisionsCommand,
         ApproveDocumentCommand,
@@ -135,7 +135,6 @@ def test_application_commands_refuse_stale_hash_before_work(ready_application):
         RegenerateClaimCommand,
         RegenerateSectionCommand,
         RenderCommand,
-        SubmissionCommand,
         UpdateDocumentCommand,
     )
 
@@ -203,15 +202,6 @@ def test_application_commands_refuse_stale_hash_before_work(ready_application):
         lambda: services.rendering.render(
             actor_of(services),
             RenderCommand(application_id=application_id, expected_document_hash=MOVED),
-        ),
-        lambda: services.submission.submit_application(
-            actor_of(services),
-            SubmissionCommand(
-                application_id=application_id,
-                expected_document_hash=MOVED,
-                submitted_at=utc_now(),
-                client="web",
-            ),
         ),
     ]
     for command in commands:

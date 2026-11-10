@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
-
-from ....domain.contracts.recruitment import ApplicationStatus
 from ....domain.document import basis, content_check, preparation_state
-from ....domain.recruitment import user_transition_targets
 from ...actor import Actor
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
@@ -14,22 +10,19 @@ from ...errors import (
 )
 from ...ports.analysis_plans import AnalysisKnowledgeSource
 from ...ports.application_projections import ApplicationProjectionReader
-from ...ports.documents import DocumentStore, DocumentSubmissionStore
+from ...ports.documents import DocumentStore
 from ...ports.transactions import ReadTransaction, TransactionManager
 from ...queries import (
     ApplicationDetailView,
     ApplicationListQuery,
     ApplicationListView,
     DocumentView,
-    SubmissionsView,
     analysis_view,
     application_list_item_view,
     application_view,
     document_view,
     job_posting_view,
     narrow_application_list,
-    recruitment_timeline_view,
-    submission_view,
 )
 from ...state import ProjectionContext, project_application_state
 from ..documents import load_knowledge
@@ -49,13 +42,11 @@ class ApplicationQueryService:
         transactions: TransactionManager,
         projections: ApplicationProjectionReader,
         documents: DocumentStore,
-        submissions: DocumentSubmissionStore,
         knowledge: AnalysisKnowledgeSource,
     ):
         self._transactions = transactions
         self._projections = projections
         self._documents = documents
-        self._submissions = submissions
         self._knowledge = knowledge
 
     def load_knowledge(self, actor: Actor):
@@ -70,7 +61,6 @@ class ApplicationQueryService:
             analyses=tuple(analyses),
             document=self._documents.document(transaction, application_id),
             knowledge=knowledge,
-            today=date.today(),
             active_operation=self._projections.active_operation(transaction, application_id),
             latest_operation=self._projections.latest_operation(transaction, application_id),
             matching_context_operation_active=(
@@ -112,19 +102,11 @@ class ApplicationQueryService:
                     transaction, application_id, actor.user_id
                 )
                 context, analyses = self._state_inputs(transaction, application_record, knowledge)
-                posting = job_posting_view(
-                    application_record,
-                    locked=self._projections.has_submission(transaction, application_id),
-                )
+                posting = job_posting_view(application_record)
                 application = application_view(
                     application_record, analyses[-1]["analysis"] if analyses else None
                 )
                 latest = analysis_view(analyses[-1], knowledge.facts) if analyses else None
-                timeline = recruitment_timeline_view(
-                    self._projections.recruitment_events(transaction, application_id),
-                    self._projections.submissions(transaction, application_id),
-                    self._projections.audit_records(transaction, application_id),
-                )
             state = project_application_state(context)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
@@ -135,10 +117,6 @@ class ApplicationQueryService:
             application=application,
             job_posting=posting,
             latest_analysis=latest,
-            allowed_recruitment_transitions=list(
-                user_transition_targets(ApplicationStatus(application.current_status))
-            ),
-            recruitment_timeline=timeline,
         )
 
     def document(self, actor: Actor, application_id: str) -> DocumentView:
@@ -160,10 +138,3 @@ class ApplicationQueryService:
             preparation_state=preparation_state(document, current),
             content_check=content_check(document, current),
         )
-
-    def submissions(self, actor: Actor, application_id: str) -> SubmissionsView:
-        """§20: every Submission with the content it sent and each file's checksum."""
-        with self._transactions.read() as tx:
-            self._projections.application(tx, application_id, actor.user_id)
-            records = self._submissions.submissions(tx, application_id)
-        return SubmissionsView(items=[submission_view(record) for record in records])

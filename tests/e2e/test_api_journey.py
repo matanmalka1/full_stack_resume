@@ -41,7 +41,6 @@ from helpers import (
 from cv_engine.api.app import API_PREFIX
 from cv_engine.domain.analysis.projection import gaps
 from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
-from cv_engine.util import utc_now
 
 
 def _post(harness, path: str, body: dict | None = None, **headers):
@@ -239,7 +238,6 @@ def test_the_full_api_journey_reaches_ready_offline(
     # --- Ready ----------------------------------------------------------
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "ready"
-    assert detail["preparation_state"] == "ready"
     assert detail["document_hash"] == token
 
     # --- Download the Ready PDF (§16) -----------------------------------
@@ -248,15 +246,6 @@ def test_the_full_api_journey_reaches_ready_offline(
     assert export.content.startswith(b"%PDF")
     assert "CV.pdf" in export.headers["content-disposition"]
     assert export.headers["ETag"] == f'"{token}"'
-
-    # --- Submit (§18) ---------------------------------------------------
-    submitted = _post(
-        ai_api_worker,
-        f"/applications/{application_id}/submissions",
-        {"expected_document_hash": token, "submitted_at": utc_now()},
-    )
-    assert submitted.status_code == 201, submitted.text
-    assert submitted.json()["document_hash"] == token
 
     # --- The way back ---------------------------------------------------
     # Ready is derived, not a frozen revision: an edit returns the document to the

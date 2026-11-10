@@ -836,8 +836,6 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "DraftAuthoringService",
         "DraftEditingService",
         "RenderingService",
-        "RecruitmentService",
-        "SubmissionService",
         "MaintenanceService",
         "ApplicationQueryService",
         # Each fact mutation is one write scope: read, validate, write, record.

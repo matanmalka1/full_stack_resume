@@ -1,16 +1,11 @@
-"""Tables that are not owned by prep, tracking, or knowledge alone.
+"""Tables that are not owned by prep or knowledge alone.
 
-`applications` is the root entity both mechanisms hold a foreign key into, and
-it carries prep columns (`track`, `profile`, `emphasis`) and
-tracking columns (`current_status`, `next_action`, ...) side by side on
-purpose — see the architecture spec on `applications` as the authoritative
-current-state projection paired with append-only event tables. `ai_calls` is
-the AI call log, one immutable row per provider call attempt of an Operation. `audit_records` is written from both prep and
-tracking services. `operations`/its support tables are generic Operation-runner
-infrastructure read by the combined query projection (`active_operation`/
-`latest_operation` span both domains); every operation type it runs today
-happens to be prep-only, but the port/contract is domain-agnostic. `user_settings`
-belongs to neither domain.
+`applications` is the root entity every child holds a foreign key into. `ai_calls`
+is the AI call log, one immutable row per provider call attempt of an Operation.
+`audit_records` is the append-only trail of Application commands. `operations`/its
+support tables are generic Operation-runner infrastructure read by the query
+projection (`active_operation`/`latest_operation`). `user_settings` belongs to no
+domain.
 """
 
 from __future__ import annotations
@@ -34,23 +29,9 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from ....application.ai_configuration import AI_MODEL_IDS, REASONING_EFFORTS
 from ....application.operations import STORED_OPERATION_PHASES
 from ....domain.templates import TEMPLATE_NAMES
-from ._helpers import IsoDate, IsoTimestamp, sequence_column, sql_values
+from ._helpers import IsoTimestamp, sequence_column, sql_values
 from ._metadata import metadata
 
-RECRUITMENT_STATUSES = (
-    "saved",
-    "applied",
-    "recruiter_screen",
-    "interview",
-    "assignment",
-    "final_stage",
-    "offer",
-    "accepted",
-    "rejected",
-    "withdrawn",
-    "closed",
-)
-TERMINAL_OUTCOMES = ("accepted", "rejected", "withdrawn")
 OPERATION_TYPES = (
     "analyze_job",
     "create_draft",
@@ -102,22 +83,17 @@ applications = Table(
     Column("track", Text),
     Column("profile", Text),
     Column("emphasis", Text),
-    Column("current_status", Text, nullable=False),
-    Column("next_action", Text),
-    Column("next_action_date", IsoDate()),
     Column("notes", Text, nullable=False, server_default=text("''")),
     Column("created_at", IsoTimestamp(), nullable=False),
     Column("updated_at", IsoTimestamp(), nullable=False),
-    Column("terminal_outcome", Text),
-    # Soft-delete disposition (product-spec.md invariant #20), orthogonal to
-    # `current_status`: NULL means active, set means `delete_application` ran.
-    # `applications` is already a mutable-exception table, so a nullable
-    # column here needs no change to the immutability trigger set.
+    # Soft-delete disposition (product-spec.md invariant #20): NULL means active,
+    # set means `delete_application` ran. `applications` is a mutable-exception
+    # table, so a nullable column here needs no change to the immutability trigger
+    # set.
     Column("deleted_at", IsoTimestamp()),
     # The job posting, as an ordinary editable field. `job_text_hash` is the exact
     # text's SHA-256 (what an analysis binds to); `job_normalized_hash` is for
-    # duplicate detection. All four lock once the Application has a Submission
-    # (trigger `lock_submitted_job_text`).
+    # duplicate detection.
     Column("job_text", Text, nullable=False),
     Column("job_text_hash", Text, nullable=False),
     Column("job_normalized_hash", Text, nullable=False),
@@ -128,17 +104,8 @@ applications = Table(
         name="job_text_hash_length",
     ),
     CheckConstraint("language IN ('en', 'he')", name="language"),
-    CheckConstraint(
-        f"current_status IN ({sql_values(RECRUITMENT_STATUSES)})",
-        name="current_status",
-    ),
-    CheckConstraint(
-        f"terminal_outcome IS NULL OR terminal_outcome IN ({sql_values(TERMINAL_OUTCOMES)})",
-        name="terminal_outcome",
-    ),
 )
 Index("idx_applications_user_created", applications.c.user_id, applications.c.created_at)
-Index("idx_applications_user_status", applications.c.user_id, applications.c.current_status)
 Index("idx_applications_user_updated", applications.c.user_id, applications.c.updated_at)
 
 audit_records = Table(

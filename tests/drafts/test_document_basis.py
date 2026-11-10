@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from cv_engine.domain.contracts.document import BuiltWith, CVDocument, DocumentSubmission
+from cv_engine.domain.contracts.document import BuiltWith, CVDocument
 from cv_engine.domain.contracts.drafts import (
     ClaimLine,
     ClaimStyle,
@@ -223,25 +223,3 @@ def test_the_contract_refuses_unpaired_stamps_and_stamps_on_an_empty_document() 
     for content, stamps in refused:
         with pytest.raises(ValidationError):
             _document(content, **stamps)
-
-
-def test_a_submission_carries_what_was_sent_only_when_internal() -> None:
-    sent = {
-        "job_text_hash": _B,
-        "document_hash": _B,
-        "content": _content(),
-        "html_path": "submissions/1.html",
-        "html_sha256": _B,
-        "pdf_path": "submissions/1.pdf",
-        "pdf_sha256": _B,
-    }
-    base = {"id": "s", "application_id": "app", "submitted_at": "t"}
-
-    DocumentSubmission.model_validate({"submission_type": "internal", **base, **sent})
-    DocumentSubmission.model_validate({"submission_type": "external", **base})
-    with pytest.raises(ValidationError, match="records the content"):
-        DocumentSubmission.model_validate(
-            {"submission_type": "internal", **base, **sent, "pdf_sha256": None}
-        )
-    with pytest.raises(ValidationError, match="carries no document"):
-        DocumentSubmission.model_validate({"submission_type": "external", **base, "html_path": "x"})

@@ -22,11 +22,10 @@ from cv_engine.application.commands import (
     AnalyzeCommand,
     IngestCommand,
     RenderCommand,
-    SubmissionCommand,
 )
 from cv_engine.domain.document import PreparationState
 from cv_engine.runtime.composition import Services
-from cv_engine.util import new_id, utc_now
+from cv_engine.util import new_id
 from fixtures.models import WorkflowSetup
 
 
@@ -145,23 +144,5 @@ def ready_application(approved_application, deterministic_renderer):
             pdf=setup.services.paths.root / document.pdf_path,
             ready_report=rendered.validation,
         )
-
-    return build
-
-
-@pytest.fixture
-def submitted_application(ready_application):
-    def build(company="Submitted Co"):
-        setup = ready_application(company)
-        setup.services.submission.submit_application(
-            actor_of(setup.services),
-            SubmissionCommand(
-                application_id=setup.application_id,
-                expected_document_hash=setup.document_hash,
-                submitted_at=utc_now(),
-                client="web",
-            ),
-        )
-        return setup
 
     return build

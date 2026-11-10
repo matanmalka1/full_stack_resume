@@ -7,9 +7,7 @@ import inspect
 from pathlib import Path
 
 PORTS_ROOT = Path(__file__).resolve().parents[2] / "cv_engine" / "application" / "ports"
-CHILD_IDS = frozenset(
-    {"analysis_id", "event_id", "operation_id", "submission_id", "document_id", "output_id"}
-)
+CHILD_IDS = frozenset({"analysis_id", "event_id", "operation_id", "document_id", "output_id"})
 
 # Each entry is deliberately internal: the service already resolved the Application,
 # or it is worker-only and derives the owner from the Operation. A stale exception
@@ -18,12 +16,8 @@ SCOPED_BY_CALLER = frozenset(
     {
         ("ai_calls", "AICallLog", "append"),
         ("analysis_plans", "AnalysisStore", "refuse_matching_context_operation"),
-        ("application_intake", "InitialRecruitmentEventWriter", "insert_initial_saved_event"),
-        ("application_projections", "ApplicationProjectionReader", "has_submission"),
         ("application_projections", "ApplicationProjectionReader", "analyses"),
         ("application_projections", "ApplicationProjectionReader", "analysis"),
-        ("application_projections", "ApplicationProjectionReader", "recruitment_events"),
-        ("application_projections", "ApplicationProjectionReader", "submissions"),
         ("application_projections", "ApplicationProjectionReader", "audit_records"),
         ("application_projections", "ApplicationProjectionReader", "active_operation"),
         ("application_projections", "ApplicationProjectionReader", "latest_operation"),
@@ -43,8 +37,6 @@ SCOPED_BY_CALLER = frozenset(
         ("documents", "DocumentStore", "activate_render"),
         ("documents", "DocumentStore", "record_render_error"),
         ("documents", "DocumentFileStore", "render_targets"),
-        ("documents", "DocumentFileStore", "copy_for_submission"),
-        ("documents", "DocumentSubmissionStore", "submissions"),
         ("knowledge_lifecycle", "KnowledgeLifecycleStore", "get_analysis"),
         ("operation_execution", "OperationExecutionStore", "operation"),
         ("operation_execution", "OperationExecutionStore", "claim_operation"),
@@ -54,9 +46,6 @@ SCOPED_BY_CALLER = frozenset(
         ("operation_execution", "OperationExecutionStore", "record_operation_output"),
         ("operation_execution", "OperationExecutionStore", "complete_operation"),
         ("operation_execution", "OperationExecutionStore", "fail_operation"),
-        ("recruitment", "RecruitmentStore", "event"),
-        ("recruitment", "RecruitmentStore", "insert_event"),
-        ("recruitment", "RecruitmentStore", "insert_next_action"),
     }
 )
 

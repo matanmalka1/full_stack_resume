@@ -78,7 +78,7 @@ class DuplicateAcknowledgementRequired(PreconditionFailed):
 
 
 class ValidationBlocked(PreconditionFailed):
-    """Approval/render/submission was attempted against failing validation."""
+    """Approval/render was attempted against failing validation."""
 
     def __init__(self, message: str, report: Any = None, *, code: str | None = None):
         super().__init__(message, code=code)

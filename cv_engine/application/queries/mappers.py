@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import asdict
 from typing import Any
 
 from ...domain.analysis.projection import fit_level, fit_score
 from ...domain.analysis.projection import gaps as project_gaps
 from ...domain.contracts.analysis import JobAnalysis
-from ...domain.contracts.document import CVDocument, DocumentSubmission
+from ...domain.contracts.document import CVDocument
 from ...domain.contracts.drafts import DraftDocument
 from ...domain.document import ContentCheck, PreparationState, current_approved_at
 from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
-from .narrowing import application_is_closed
 from .views_prep import (
     BuiltWithView,
     ClaimReviewAssertionView,
@@ -28,7 +26,6 @@ from .views_prep import (
     JobPostingView,
 )
 from .views_shared import ApplicationListItemView, ApplicationStateView, ApplicationView
-from .views_tracking import RecruitmentTimelineItemView, SubmissionView
 
 
 def _fit_projection(analysis: JobAnalysis | None) -> dict[str, Any]:
@@ -169,22 +166,6 @@ def document_view(
     )
 
 
-def submission_view(submission: DocumentSubmission) -> SubmissionView:
-    """What was sent, with each file's checksum and never its stored location."""
-    return SubmissionView(
-        id=submission.id,
-        application_id=submission.application_id,
-        submission_type=submission.submission_type,
-        submitted_at=submission.submitted_at,
-        job_text_hash=submission.job_text_hash,
-        document_hash=submission.document_hash,
-        content=submission.content,
-        html_sha256=submission.html_sha256,
-        pdf_sha256=submission.pdf_sha256,
-        metadata=submission.metadata,
-    )
-
-
 def application_list_item_view(
     record: dict[str, Any], state: ApplicationStateView, analysis: JobAnalysis | None = None
 ) -> ApplicationListItemView:
@@ -193,71 +174,16 @@ def application_list_item_view(
             **_application_fields(record),
             **state.model_dump(mode="python"),
             **_fit_projection(analysis),
-            "is_closed": application_is_closed(state.terminal_outcome, state.recruitment_status),
         }
     )
 
 
-def recruitment_timeline_view(
-    events: list[dict[str, Any]],
-    submissions: list[dict[str, Any]],
-    audits: list[dict[str, Any]],
-) -> list[RecruitmentTimelineItemView]:
-    """Merge append-only tracking records into one deterministic presentation trail."""
-    submission_audits = {
-        row["entity_id"]: row for row in audits if row.get("entity_type") == "submission"
-    }
-    items: list[RecruitmentTimelineItemView] = []
-    for row in events:
-        payload = json.loads(row.get("payload_json") or "{}")
-        items.append(
-            RecruitmentTimelineItemView(
-                id=row["id"],
-                item_type=row["event_type"],
-                occurred_at=row["occurred_at"],
-                actor_type=row.get("actor_type"),
-                client=row.get("client"),
-                from_status=row.get("from_status"),
-                to_status=row.get("to_status"),
-                corrects_event_id=row.get("corrects_event_id"),
-                reason=row.get("reason") or "",
-                next_action=payload.get("next_action"),
-                next_action_date=payload.get("next_action_date"),
-            )
-        )
-    for row in submissions:
-        audit = submission_audits.get(row["id"], {})
-        items.append(
-            RecruitmentTimelineItemView(
-                id=row["id"],
-                item_type="submission",
-                occurred_at=row["submitted_at"],
-                actor_type=audit.get("actor_type"),
-                client=audit.get("client"),
-                submission_type=row["submission_type"],
-                document_hash=row.get("document_hash"),
-                metadata=json.loads(row.get("metadata_json") or "{}"),
-            )
-        )
-    priority = {
-        "submission": 0,
-        "status_transition": 1,
-        "status_correction": 2,
-        "next_action": 3,
-    }
-    return sorted(
-        items,
-        key=lambda item: (item.occurred_at, priority.get(item.item_type, 9), item.id),
-    )
-
-
-def job_posting_view(record: dict[str, Any], *, locked: bool) -> JobPostingView:
+def job_posting_view(record: dict[str, Any]) -> JobPostingView:
     return JobPostingView(
         job_text=record["job_text"],
         source_url=record.get("source_url"),
         job_text_hash=record["job_text_hash"],
         job_text_updated_at=record["job_text_updated_at"],
-        locked=locked,
     )
 
 

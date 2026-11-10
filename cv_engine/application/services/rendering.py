@@ -35,7 +35,7 @@ from ..errors import (
     StateConflict,
     ValidationBlocked,
 )
-from ..ports import PayloadVerifier, Renderer
+from ..ports import Renderer
 from ..ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ..ports.documents import DocumentFileStore, DocumentStore, RenderedFiles
 from ..ports.transactions import TransactionManager, WriteTransaction
@@ -84,7 +84,6 @@ class RenderingService:
         files: DocumentFileStore,
         knowledge: AnalysisKnowledgeSource,
         renderer: Renderer,
-        payloads: PayloadVerifier,
     ):
         self._transactions = transactions
         self._documents = documents
@@ -92,7 +91,6 @@ class RenderingService:
         self.files = files
         self._knowledge = knowledge
         self.renderer = renderer
-        self.payloads = payloads
 
     def load_knowledge(self, actor: Actor) -> Knowledge:
         return load_knowledge(self._knowledge, actor)

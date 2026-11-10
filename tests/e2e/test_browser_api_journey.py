@@ -66,9 +66,7 @@ def test_browser_intake_persists_and_requires_duplicate_acknowledgement(live_api
 
 
 @pytest.mark.parametrize("live_api_factory", ["asgi_factory:build_test_ai_app"], indirect=True)
-def test_browser_analysis_through_ready_and_submission(
-    live_api_server, ai_services, fake_openai
-) -> None:
+def test_browser_analysis_through_ready(live_api_server, ai_services, fake_openai) -> None:
     # Only the provider transport is scripted. The API is a separate uvicorn
     # process; the real worker runs here, sharing its PostgreSQL database and
     # temporary artifact root. Rendering uses real Chromium, not a fake PDF.

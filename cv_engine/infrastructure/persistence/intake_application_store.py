@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import exists, insert, select, update
+from sqlalchemy import insert, select, update
 
 from ...application.errors import StateConflict, UnknownRecord
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from .connection import SqlAlchemyTransactionManager
 from .ownership import owned
-from .tables import applications, submissions
+from .tables import applications
 
 
 class SqlAlchemyApplicationStore:
@@ -38,7 +38,6 @@ class SqlAlchemyApplicationStore:
                 user_id=user_id,
                 company=company.strip(),
                 target_role=target_role.strip(),
-                current_status="saved",
                 notes=notes,
                 job_text=job_text,
                 job_text_hash=job_text_hash,
@@ -97,12 +96,7 @@ class SqlAlchemyApplicationStore:
         expected_job_text_hash: str,
         updated_at: str,
     ) -> dict[str, Any]:
-        """Replace the job text the client last read, unless a Submission locked it.
-
-        The row lock orders this against `submit_application`, which locks the same
-        row before it records what was sent; the trigger `lock_submitted_job_text`
-        refuses the same change in the database.
-        """
+        """Replace the job text the client last read; the row lock orders concurrent edits."""
         connection = self._transactions.connection_for(tx, access="write")
         current = (
             connection.execute(
@@ -117,10 +111,6 @@ class SqlAlchemyApplicationStore:
             raise UnknownRecord(application_id)
         if current["job_text_hash"] != expected_job_text_hash:
             raise StateConflict("the job text changed since it was read (expected_job_text_hash)")
-        if connection.execute(
-            select(exists().where(submissions.c.application_id == application_id))
-        ).scalar_one():
-            raise StateConflict("the job text is locked: the application has a submission")
         connection.execute(
             update(applications)
             .where(applications.c.id == application_id)
@@ -139,6 +129,17 @@ class SqlAlchemyApplicationStore:
             .one()
         )
         return dict(row)
+
+    def set_deleted(
+        self, tx: WriteTransaction, application_id: str, user_id: str, deleted_at: str
+    ) -> None:
+        result = self._transactions.connection_for(tx, access="write").execute(
+            update(applications)
+            .where(owned(application_id, user_id), applications.c.deleted_at.is_(None))
+            .values(deleted_at=deleted_at, updated_at=deleted_at)
+        )
+        if result.rowcount != 1:
+            raise StateConflict(f"application is deleted: {application_id}")
 
     def update_application_notes(
         self,

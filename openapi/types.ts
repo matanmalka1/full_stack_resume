@@ -53,9 +53,8 @@ export interface paths {
          *     naming the parameter, rather than reaching the query and failing as a
          *     validation error the client cannot attribute.
          *
-         *     `stage` and `recruitment_status` are the two independent axes and repeat for
-         *     more than one value; `preset` is one named question the application layer
-         *     answers, and it narrows alongside them rather than replacing them.
+         *     `preset` is one named question the application layer answers, and it narrows
+         *     alongside `stage` rather than replacing it.
          */
         get: operations["list_applications_api_v1_applications_get"];
         put?: never;
@@ -132,23 +131,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/applications/{application_id}/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Close an application without deleting its history */
-        post: operations["close_application_api_v1_applications__application_id__close_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/applications/{application_id}/delete": {
         parameters: {
             query?: never;
@@ -160,13 +142,11 @@ export interface paths {
         put?: never;
         /**
          * Soft-delete an application without touching its immutable history
-         * @description No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).
+         * @description No hard delete and no `undelete` (state-and-use-cases.md §12).
          *
-         *     Callable from any current status, including `closed`. Every immutable
-         *     JobAnalysis, Artifact, Submission, and Operation the application produced is
-         *     untouched;
-         *     only default list/Dashboard projections and duplicate detection stop
-         *     surfacing it. The detail endpoint still returns it by ID.
+         *     Every immutable JobAnalysis and Operation the application produced is untouched;
+         *     only the list and duplicate detection stop surfacing it. The detail endpoint
+         *     still returns it by ID.
          */
         post: operations["delete_application_api_v1_applications__application_id__delete_post"];
         delete?: never;
@@ -468,26 +448,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/applications/{application_id}/external-submissions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Record a submission made outside the system
-         * @description `201`: recorded without inventing content or files that never passed through here.
-         */
-        post: operations["record_external_submission_api_v1_applications__application_id__external_submissions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/applications/{application_id}/gap-questions": {
         parameters: {
             query?: never;
@@ -563,34 +523,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Replace the job text; refused once the application has a submission */
+        /** Replace the job text */
         patch: operations["update_job_text_api_v1_applications__application_id__job_text_patch"];
-        trace?: never;
-    };
-    "/api/v1/applications/{application_id}/next-action": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Set or clear the one active next action
-         * @description States what the one active next action now is, in whole.
-         *
-         *     Sending both fields empty clears it: the request carries the complete value
-         *     rather than a partial edit, and the schema requires both fields so an
-         *     omitted one cannot be read as "leave it alone". `PATCH` rather than `PUT`
-         *     because `PUT` is outside this API's allowed methods, and widening transport
-         *     policy for one route's verb would be the wrong trade.
-         */
-        patch: operations["set_next_action_api_v1_applications__application_id__next_action_patch"];
         trace?: never;
     };
     "/api/v1/applications/{application_id}/notes": {
@@ -608,74 +542,6 @@ export interface paths {
         head?: never;
         /** Update safe mutable notes for an application */
         patch: operations["update_application_notes_api_v1_applications__application_id__notes_patch"];
-        trace?: never;
-    };
-    "/api/v1/applications/{application_id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Transition recruitment status with an immutable history
-         * @description `200`: asking for the status an Application already holds is not an error.
-         *
-         *     The application layer returns the current state unchanged rather than
-         *     appending a second identical event, so a client that retries a transition
-         *     it already made does not write a duplicate into the trail.
-         */
-        post: operations["transition_status_api_v1_applications__application_id__status_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/applications/{application_id}/status-corrections": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Append a reasoned correction to recruitment history
-         * @description `201`: a correction appends an event; it never edits the one it corrects.
-         */
-        post: operations["correct_status_api_v1_applications__application_id__status_corrections_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/applications/{application_id}/submissions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Record that the Ready document was sent
-         * @description `201`: an immutable Submission of the content and rendered files (§18).
-         *
-         *     Refused with `412` unless the document is Ready when the request is answered and
-         *     still carries `expected_document_hash`, rather than recording a claim that
-         *     something the user never saw was sent.
-         */
-        post: operations["submit_application_api_v1_applications__application_id__submissions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/auth/change-password": {
@@ -1124,15 +990,6 @@ export interface components {
             recommended: boolean;
         };
         /**
-         * ActivityFilter
-         * @description Which side of the recruitment axis the caller is asking about.
-         *
-         *     OPEN is the default the list screen uses: a finished process stays stored and
-         *     reachable, but it is not what a board of live work is asking about.
-         * @enum {string}
-         */
-        ActivityFilter: "open" | "closed" | "all";
-        /**
          * AnalysisDecisionsResponse
          * @description The new analysis created by the decision.
          *
@@ -1166,8 +1023,6 @@ export interface components {
         /** ApplicationDetailResponse */
         ApplicationDetailResponse: {
             active_operation?: components["schemas"]["OperationResponse"] | null;
-            /** Allowed Recruitment Transitions */
-            allowed_recruitment_transitions: ("saved" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed")[];
             application: components["schemas"]["ApplicationResponse"];
             /** Approved At */
             approved_at?: string | null;
@@ -1196,14 +1051,8 @@ export interface components {
             preparation_state: components["schemas"]["PreparationState"];
             /** Recommended Action */
             recommended_action?: string | null;
-            /** Recruitment Status */
-            recruitment_status: string;
-            /** Recruitment Timeline */
-            recruitment_timeline: components["schemas"]["RecruitmentTimelineItemResponse"][];
             /** Review Reasons */
             review_reasons: components["schemas"]["ReasonResponse"][];
-            /** Terminal Outcome */
-            terminal_outcome?: string | null;
             /** Warnings */
             warnings: components["schemas"]["WarningResponse"][];
         };
@@ -1221,8 +1070,6 @@ export interface components {
             content_check: components["schemas"]["ContentCheck"];
             /** Created At */
             created_at: string;
-            /** Current Status */
-            current_status: string;
             /** Deleted At */
             deleted_at?: string | null;
             /** Document Analysis Id */
@@ -1239,8 +1086,6 @@ export interface components {
             fit_score?: number | null;
             /** Id */
             id: string;
-            /** Is Closed */
-            is_closed: boolean;
             /** Job Text Hash */
             job_text_hash: string;
             /** Language */
@@ -1252,10 +1097,6 @@ export interface components {
             /** Latest Analysis Id */
             latest_analysis_id?: string | null;
             latest_operation?: components["schemas"]["OperationResponse"] | null;
-            /** Next Action */
-            next_action?: string | null;
-            /** Next Action Date */
-            next_action_date?: string | null;
             /** Normalized Role */
             normalized_role?: string | null;
             /** Notes */
@@ -1265,16 +1106,12 @@ export interface components {
             profile?: string | null;
             /** Recommended Action */
             recommended_action?: string | null;
-            /** Recruitment Status */
-            recruitment_status: string;
             /** Review Reasons */
             review_reasons: components["schemas"]["ReasonResponse"][];
             /** Source Url */
             source_url?: string | null;
             /** Target Role */
             target_role: string;
-            /** Terminal Outcome */
-            terminal_outcome?: string | null;
             /** Track */
             track?: string | null;
             /** Updated At */
@@ -1313,13 +1150,6 @@ export interface components {
                 [key: string]: number;
             };
             /**
-             * Recruitment Status Counts
-             * @default {}
-             */
-            recruitment_status_counts: {
-                [key: string]: number;
-            };
-            /**
              * Stage Counts
              * @default {}
              */
@@ -1328,24 +1158,6 @@ export interface components {
             };
             /** Total */
             total: number;
-        };
-        /**
-         * ApplicationMutationResponse
-         * @description One Application's tracked state after a write, and the event that moved it.
-         */
-        ApplicationMutationResponse: {
-            /** Application Id */
-            application_id: string;
-            /** Current Status */
-            current_status: string;
-            /** Event Id */
-            event_id?: string | null;
-            /** Next Action */
-            next_action?: string | null;
-            /** Next Action Date */
-            next_action_date?: string | null;
-            /** Terminal Outcome */
-            terminal_outcome?: string | null;
         };
         /**
          * ApplicationPreset
@@ -1361,15 +1173,13 @@ export interface components {
          *     other filters narrow rather than replacing it.
          * @enum {string}
          */
-        ApplicationPreset: "needs_attention" | "ready_to_send" | "active_interviews";
+        ApplicationPreset: "needs_attention" | "ready_to_send";
         /** ApplicationResponse */
         ApplicationResponse: {
             /** Company */
             company: string;
             /** Created At */
             created_at: string;
-            /** Current Status */
-            current_status: string;
             /** Deleted At */
             deleted_at?: string | null;
             /** Emphasis */
@@ -1382,10 +1192,6 @@ export interface components {
             id: string;
             /** Language */
             language?: string | null;
-            /** Next Action */
-            next_action?: string | null;
-            /** Next Action Date */
-            next_action_date?: string | null;
             /** Normalized Role */
             normalized_role?: string | null;
             /** Notes */
@@ -1396,8 +1202,6 @@ export interface components {
             source_url?: string | null;
             /** Target Role */
             target_role: string;
-            /** Terminal Outcome */
-            terminal_outcome?: string | null;
             /** Track */
             track?: string | null;
             /** Updated At */
@@ -1452,20 +1256,11 @@ export interface components {
             preparation_state: components["schemas"]["PreparationState"];
             /** Recommended Action */
             recommended_action?: string | null;
-            /** Recruitment Status */
-            recruitment_status: string;
             /** Review Reasons */
             review_reasons: components["schemas"]["ReasonResponse"][];
-            /** Terminal Outcome */
-            terminal_outcome?: string | null;
             /** Warnings */
             warnings: components["schemas"]["WarningResponse"][];
         };
-        /**
-         * ApplicationStatus
-         * @enum {string}
-         */
-        ApplicationStatus: "saved" | "applied" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed";
         /**
          * ApplyAnalysisDecisionsRequest
          * @description One review-form submission (§13).
@@ -1654,21 +1449,6 @@ export interface components {
             /** Rendering */
             rendering: string;
         };
-        /** CloseApplicationResponse */
-        CloseApplicationResponse: {
-            /** Application Id */
-            application_id: string;
-            /** Current Status */
-            current_status: string;
-            /** Event Id */
-            event_id?: string | null;
-            /** Next Action */
-            next_action?: string | null;
-            /** Next Action Date */
-            next_action_date?: string | null;
-            /** Terminal Outcome */
-            terminal_outcome?: string | null;
-        };
         /**
          * ConfirmAndUseFactRequest
          * @description Confirm one fact and attach it to a Profile section as one recoverable command.
@@ -1712,27 +1492,6 @@ export interface components {
          * @enum {string}
          */
         ContentCheck: "none" | "outdated" | "failed" | "passed";
-        /**
-         * CorrectStatusRequest
-         * @description A reasoned correction appended to the trail.
-         *
-         *     The corrected event is never deleted or altered, so both the event being
-         *     corrected and the reason are required: a correction that named neither
-         *     would be indistinguishable from an ordinary transition.
-         */
-        CorrectStatusRequest: {
-            /** Corrects Event Id */
-            corrects_event_id: string;
-            /** Occurred At */
-            occurred_at?: string | null;
-            /** Reason */
-            reason: string;
-            /**
-             * Target Status
-             * @enum {string}
-             */
-            target_status: "saved" | "applied" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed";
-        };
         /**
          * CreateAnalysisRequest
          * @description What `POST /applications/{id}/analyses` accepts.
@@ -1802,25 +1561,10 @@ export interface components {
             /** Markdown */
             markdown: string;
         };
-        /**
-         * DeleteApplicationResponse
-         * @description `current_status`/`terminal_outcome` are unchanged by deletion; they are
-         *     carried here only because they are part of the same mutation-result shape
-         *     every other tracking command returns.
-         */
+        /** DeleteApplicationResponse */
         DeleteApplicationResponse: {
             /** Application Id */
             application_id: string;
-            /** Current Status */
-            current_status: string;
-            /** Event Id */
-            event_id?: string | null;
-            /** Next Action */
-            next_action?: string | null;
-            /** Next Action Date */
-            next_action_date?: string | null;
-            /** Terminal Outcome */
-            terminal_outcome?: string | null;
         };
         /**
          * DocumentActionRequest
@@ -2065,23 +1809,6 @@ export interface components {
          * @enum {string}
          */
         Emphasis: "development-balanced" | "development-backend" | "development-ai" | "new-business" | "account-growth" | "leadership" | "tech-consultative-sales" | "balanced-sales";
-        /**
-         * ExternalSubmissionRequest
-         * @description A submission made outside the system, recorded without inventing evidence.
-         *
-         *     It carries no document content or files: nothing here sent them.
-         */
-        ExternalSubmissionRequest: {
-            /**
-             * Metadata
-             * @default {}
-             */
-            metadata: {
-                [key: string]: unknown;
-            };
-            /** Submitted At */
-            submitted_at: string;
-        };
         /** FactAttachmentProfileTargetResponse */
         FactAttachmentProfileTargetResponse: {
             /** Label */
@@ -2449,7 +2176,7 @@ export interface components {
         };
         /**
          * JobPostingResponse
-         * @description The Application's job text. `locked` once the Application has a Submission.
+         * @description The Application's job text.
          */
         JobPostingResponse: {
             /** Job Text */
@@ -2458,8 +2185,6 @@ export interface components {
             job_text_hash: string;
             /** Job Text Updated At */
             job_text_updated_at: string;
-            /** Locked */
-            locked: boolean;
             /** Source Url */
             source_url?: string | null;
         };
@@ -2493,21 +2218,6 @@ export interface components {
             fact_id: string;
             /** Language */
             language: string;
-        };
-        /**
-         * NextActionRequest
-         * @description Set or clear the one active next action, stated in whole.
-         *
-         *     Both fields are required and both are nullable. Clearing is a real request
-         *     - sending `null` for each is how a client says the action is done - and
-         *     requiring them is what keeps that distinguishable from an omitted field
-         *     meaning "leave it alone".
-         */
-        NextActionRequest: {
-            /** Next Action */
-            next_action: string | null;
-            /** Next Action Date */
-            next_action_date: string | null;
         };
         /**
          * OperationAction
@@ -2708,51 +2418,6 @@ export interface components {
             /** Message */
             message: string;
         };
-        /**
-         * RecruitmentTimelineItemResponse
-         * @description One status, correction, next-action, or submission item in time order.
-         */
-        RecruitmentTimelineItemResponse: {
-            /** Actor Type */
-            actor_type?: ("user" | "system") | null;
-            /** Client */
-            client?: ("web" | "worker") | null;
-            /** Corrects Event Id */
-            corrects_event_id?: string | null;
-            /** Document Hash */
-            document_hash?: string | null;
-            /** From Status */
-            from_status?: ("saved" | "applied" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed") | null;
-            /** Id */
-            id: string;
-            /**
-             * Item Type
-             * @enum {string}
-             */
-            item_type: "status_transition" | "status_correction" | "next_action" | "submission";
-            /**
-             * Metadata
-             * @default {}
-             */
-            metadata: {
-                [key: string]: unknown;
-            };
-            /** Next Action */
-            next_action?: string | null;
-            /** Next Action Date */
-            next_action_date?: string | null;
-            /** Occurred At */
-            occurred_at: string;
-            /**
-             * Reason
-             * @default
-             */
-            reason: string;
-            /** Submission Type */
-            submission_type?: ("internal" | "external") | null;
-            /** To Status */
-            to_status?: ("saved" | "applied" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed") | null;
-        };
         /** RegenerateDocumentClaimRequest */
         RegenerateDocumentClaimRequest: {
             /** Claim Id */
@@ -2868,57 +2533,6 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
-        /**
-         * SubmissionResponse
-         * @description A recorded submission, with any warning the caller should see.
-         *
-         *     `warnings` carries `DOCUMENT_ON_OLDER_ANALYSIS` when the job text or the
-         *     analysis has moved on from the document's (§18). It is reported, not raised.
-         */
-        SubmissionResponse: {
-            /** Application Id */
-            application_id: string;
-            /** Current Status */
-            current_status: string;
-            /** Document Hash */
-            document_hash?: string | null;
-            /** Event Id */
-            event_id?: string | null;
-            /** Next Action */
-            next_action?: string | null;
-            /** Next Action Date */
-            next_action_date?: string | null;
-            /** Submission Id */
-            submission_id: string;
-            /** Terminal Outcome */
-            terminal_outcome?: string | null;
-            /**
-             * Warnings
-             * @default []
-             */
-            warnings: string[];
-        };
-        /**
-         * SubmitApplicationRequest
-         * @description Record that the Ready document the client was showing was sent (§18).
-         *
-         *     `expected_document_hash` is explicit. A submission against whatever the document
-         *     holds now could record having sent something the user never saw, which is the
-         *     one claim in this system that cannot be re-derived afterwards.
-         */
-        SubmitApplicationRequest: {
-            /** Expected Document Hash */
-            expected_document_hash: string;
-            /**
-             * Metadata
-             * @default {}
-             */
-            metadata: {
-                [key: string]: unknown;
-            };
-            /** Submitted At */
-            submitted_at: string;
-        };
         /** TemplateOptionResponse */
         TemplateOptionResponse: {
             /** Columns */
@@ -2938,24 +2552,6 @@ export interface components {
          * @enum {string}
          */
         Track: "development" | "sales" | "tech-sales";
-        /**
-         * TransitionStatusRequest
-         * @description An allowed forward transition. `reason` is optional for a normal move.
-         */
-        TransitionStatusRequest: {
-            /** Occurred At */
-            occurred_at?: string | null;
-            /**
-             * Reason
-             * @default
-             */
-            reason: string;
-            /**
-             * Target Status
-             * @enum {string}
-             */
-            target_status: "saved" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed";
-        };
         /**
          * TrimmedClaim
          * @description One line the page-fit step dropped, as it read in the document it left.
@@ -3020,7 +2616,7 @@ export interface components {
         };
         /**
          * UpdateJobTextRequest
-         * @description Replace the job text the client last read; refused once a Submission locked it.
+         * @description Replace the job text the client last read.
          */
         UpdateJobTextRequest: {
             /** Expected Job Text Hash */
@@ -3166,9 +2762,7 @@ export interface operations {
     list_applications_api_v1_applications_get: {
         parameters: {
             query?: {
-                activity?: components["schemas"]["ActivityFilter"];
                 stage?: components["schemas"]["PreparationState"][] | null;
-                recruitment_status?: components["schemas"]["ApplicationStatus"][] | null;
                 preset?: components["schemas"]["ApplicationPreset"] | null;
                 search?: string;
                 sort?: components["schemas"]["ApplicationSort"];
@@ -3359,46 +2953,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
-                };
-            };
-            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    close_application_api_v1_applications__application_id__close_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloseApplicationResponse"];
                 };
             };
             /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
@@ -4114,50 +3668,6 @@ export interface operations {
             };
         };
     };
-    record_external_submission_api_v1_applications__application_id__external_submissions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExternalSubmissionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubmissionResponse"];
-                };
-            };
-            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     read_gap_questions_api_v1_applications__application_id__gap_questions_get: {
         parameters: {
             query?: never;
@@ -4378,50 +3888,6 @@ export interface operations {
             };
         };
     };
-    set_next_action_api_v1_applications__application_id__next_action_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NextActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApplicationMutationResponse"];
-                };
-            };
-            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     update_application_notes_api_v1_applications__application_id__notes_patch: {
         parameters: {
             query?: never;
@@ -4444,138 +3910,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpdateApplicationNotesResponse"];
-                };
-            };
-            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    transition_status_api_v1_applications__application_id__status_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TransitionStatusRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApplicationMutationResponse"];
-                };
-            };
-            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    correct_status_api_v1_applications__application_id__status_corrections_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CorrectStatusRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApplicationMutationResponse"];
-                };
-            };
-            /** @description No valid session (`AUTHENTICATION_REQUIRED`). */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    submit_application_api_v1_applications__application_id__submissions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SubmitApplicationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubmissionResponse"];
                 };
             };
             /** @description No valid session (`AUTHENTICATION_REQUIRED`). */

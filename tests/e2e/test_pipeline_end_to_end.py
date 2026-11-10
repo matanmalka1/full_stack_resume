@@ -15,7 +15,6 @@ from helpers import (
     persisted_counts,
     seed_document,
     stored_document,
-    stored_submissions,
 )
 from sqlalchemy import text
 
@@ -24,11 +23,10 @@ from cv_engine.application.commands import (
     CheckDocumentCommand,
     DraftCommand,
     RenderCommand,
-    SubmissionCommand,
     UpdateDocumentCommand,
 )
 from cv_engine.domain.document import PreparationState
-from cv_engine.util import new_id, utc_now
+from cv_engine.util import new_id
 
 
 def test_pipeline_reaches_ready_and_reconciles(
@@ -83,29 +81,10 @@ def test_pipeline_reaches_ready_and_reconciles(
         services.queries.application_detail(actor_of(services), app_id).preparation_state
         is PreparationState.READY
     )
-    services.submission.submit_application(
-        actor_of(services),
-        SubmissionCommand(
-            application_id=app_id,
-            expected_document_hash=token,
-            submitted_at=utc_now(),
-            client="web",
-        ),
-    )
-    (sent,) = stored_submissions(services, app_id)
-    assert sent.content == stored_document(services, app_id).content
-    assert sent.job_text_hash == ingested.job_text_hash
     report = services.maintenance.reconcile()
     assert report.passed, report.problems
     counts = persisted_counts(database_engine)
-    submission_files = sum(path is not None for path in (sent.html_path, sent.pdf_path))
-    assert report.payloads_checked == submission_files
     assert report.ai_calls_checked == counts["ai_calls"]
-    assert services.maintenance.inspect_orphans().candidates == []
-    assert (
-        services.queries.application_detail(actor_of(services), app_id).application.current_status
-        == "applied"
-    )
 
     # A logged call's response is checked against the hash it was logged under. The
     # log is append-only, so a tamper needs its trigger switched off - what a
@@ -125,18 +104,3 @@ def test_pipeline_reaches_ready_and_reconciles(
     tampered_report = services.maintenance.reconcile()
     assert not tampered_report.passed
     assert f"AI call response hash mismatch: {tampered}" in tampered_report.problems
-
-
-def test_reconcile_reports_tampered_submission_without_repair(submitted_application):
-    setup = submitted_application("Tamper Co")
-    services, app_id = setup
-    (sent,) = stored_submissions(services, app_id)
-    assert sent.pdf_path is not None
-    path = services.paths.root / sent.pdf_path
-    tampered = b"%PDF-1.4\n% not the submitted bytes\n"
-    path.write_bytes(tampered)
-    report = services.maintenance.reconcile()
-    assert not report.passed
-    assert any("hash mismatch" in problem for problem in report.problems)
-    assert path.read_bytes() == tampered
-    assert stored_submissions(services, app_id) == [sent]

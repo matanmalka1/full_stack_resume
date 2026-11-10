@@ -1,11 +1,4 @@
-"""Root-entity and combined prep+tracking read projections.
-
-`ApplicationStateView`/`ApplicationDetailView` stay combined on purpose (spec
-§9): every read of an Application's status needs prep and tracking fields
-together, so splitting them would only force every caller to re-join what one
-query already computed. This module necessarily depends on both
-`views_prep` and `views_tracking` because it is where their projections meet.
-"""
+"""Root-entity read projections: the Application, its §9 state, list and detail."""
 
 from __future__ import annotations
 
@@ -14,12 +7,10 @@ from typing import Any
 
 from pydantic import Field
 
-from ...domain.contracts.recruitment import ApplicationStatus
 from ...domain.document import ContentCheck, PreparationState
 from ..commands import BoundaryDTO
 from ..operations import OperationView
 from .views_prep import JobAnalysisView, JobPostingView
-from .views_tracking import RecruitmentTimelineItemView
 
 
 class ApplicationView(BoundaryDTO):
@@ -40,10 +31,6 @@ class ApplicationView(BoundaryDTO):
     #: none, so the field is gone rather than always null.
     fit_level: str | None = None
     fit_score: float | None = None
-    current_status: str
-    terminal_outcome: str | None = None
-    next_action: str | None = None
-    next_action_date: str | None = None
     notes: str = ""
     created_at: str
     updated_at: str
@@ -71,8 +58,6 @@ class BlockedActionView(BoundaryDTO):
 class ApplicationStateView(BoundaryDTO):
     """The §9 action policy projection, derived from one consistent read."""
 
-    recruitment_status: str
-    terminal_outcome: str | None = None
     preparation_state: PreparationState
     content_check: ContentCheck
     review_reasons: list[ReasonView] = []
@@ -96,14 +81,10 @@ class ApplicationDetailView(ApplicationStateView):
     application: ApplicationView
     job_posting: JobPostingView
     latest_analysis: JobAnalysisView | None = None
-    allowed_recruitment_transitions: list[ApplicationStatus] = []
-    recruitment_timeline: list[RecruitmentTimelineItemView] = []
 
 
 class ApplicationListItemView(ApplicationView, ApplicationStateView):
     """The shared state/action projection plus list-display Application fields."""
-
-    is_closed: bool
 
 
 class ApplicationListView(BoundaryDTO):
@@ -141,19 +122,6 @@ class ApplicationListView(BoundaryDTO):
     """
 
     preset_counts: dict[str, int] = {}
-    recruitment_status_counts: dict[ApplicationStatus, int] = {}
-
-
-class ActivityFilter(StrEnum):
-    """Which side of the recruitment axis the caller is asking about.
-
-    OPEN is the default the list screen uses: a finished process stays stored and
-    reachable, but it is not what a board of live work is asking about.
-    """
-
-    OPEN = "open"
-    CLOSED = "closed"
-    ALL = "all"
 
 
 class ApplicationSort(StrEnum):
@@ -183,10 +151,6 @@ class ApplicationPreset(StrEnum):
     READY_TO_SEND = "ready_to_send"
     """The document is Ready: rendered at its current approved basis."""
 
-    ACTIVE_INTERVIEWS = "active_interviews"
-    """Live conversations with the employer, from first recruiter contact through
-    to an offer. Closed Applications are excluded by the statuses themselves."""
-
 
 class ApplicationListQuery(BoundaryDTO):
     """How a caller narrows and orders the Application list.
@@ -203,21 +167,9 @@ class ApplicationListQuery(BoundaryDTO):
     whole list, most recently updated first.
     """
 
-    activity: ActivityFilter = ActivityFilter.ALL
     """An empty set means every stage, not no stage."""
 
     stages: frozenset[PreparationState] = frozenset()
-
-    """Which recruitment stages the caller is asking about, on the axis beside
-    `stages`. The two are independent - where the CV has got to and where the
-    Application stands with the employer - so they narrow independently and an
-    empty set here means every recruitment stage.
-
-    `ApplicationStatus` rather than `str`: the status is a closed set the domain
-    owns, so a value outside it is refused at the boundary rather than becoming a
-    filter that silently matches nothing."""
-
-    recruitment_statuses: frozenset[ApplicationStatus] = frozenset()
 
     """One named question the board asks often, answered here rather than assembled
     by a client. Each preset is a predicate over fields this layer already projects;

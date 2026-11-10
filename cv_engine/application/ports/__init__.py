@@ -5,7 +5,6 @@ Capabilities follow real consumer, lifecycle, and trust boundaries.
 
 from .application_intake import (
     AuditLogWriter,
-    InitialRecruitmentEventWriter,
     IntakeApplicationStore,
 )
 from .application_projections import ApplicationProjectionReader
@@ -21,8 +20,6 @@ from .outbound import (
     FactFromAnswerContext,
     GapQuestionsContext,
     KnowledgeStore,
-    PayloadInventory,
-    PayloadVerifier,
     RegenerateClaimContext,
     RegenerateSectionContext,
     Renderer,
@@ -31,7 +28,6 @@ from .settings import SettingsRepository, SettingsStore
 from .transactions import ReadTransaction, TransactionManager, WriteTransaction
 from .values import (
     ArtifactStream,
-    PayloadReference,
     TaskContract,
     TaskContracts,
 )
@@ -49,17 +45,13 @@ __all__ = [
     "GapQuestionsContext",
     "KnowledgeLifecycleStore",
     "KnowledgeStore",
-    "InitialRecruitmentEventWriter",
     "IntakeApplicationStore",
     "OperationClientStore",
     "OperationExecutionStore",
-    "PayloadReference",
-    "PayloadVerifier",
     "RegenerateClaimContext",
     "RegenerateSectionContext",
     "Renderer",
     "ReadTransaction",
-    "PayloadInventory",
     "SettingsRepository",
     "SettingsStore",
     "TaskContract",

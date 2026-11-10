@@ -1,13 +1,13 @@
-"""The one mutable CV document per Application, and the Submission that freezes it.
+"""The one mutable CV document per Application.
 
-state-and-use-cases.md §3 and §18. The document stores three stamps of its basis; the
+state-and-use-cases.md §3. The document stores three stamps of its basis; the
 basis itself is computed on read (`cv_engine.domain.document`), so nothing here can say
 whether the document is approved or ready without the Knowledge it depends on.
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -74,42 +74,4 @@ class CVDocument(StrictModel):
             raise ValueError("a document without content carries no stamps")
         if self.last_render_error is not None and "code" not in self.last_render_error:
             raise ValueError("last_render_error must carry a failure code")
-        return self
-
-
-class DocumentSubmission(StrictModel):
-    """An immutable record of a send that already happened (§18).
-
-    Internal submissions copy what was sent; external ones carry none of it.
-    """
-
-    id: str
-    application_id: str
-    submission_type: Literal["internal", "external"]
-    #: The Application's job text when this was sent; it locks from then on.
-    job_text_hash: Sha256 | None = None
-    document_hash: Sha256 | None = None
-    content: DraftDocument | None = None
-    html_path: str | None = None
-    html_sha256: Sha256 | None = None
-    pdf_path: str | None = None
-    pdf_sha256: Sha256 | None = None
-    submitted_at: str
-    metadata: dict[str, Any] = {}
-
-    @model_validator(mode="after")
-    def references_match_type(self) -> DocumentSubmission:
-        references = (
-            self.job_text_hash,
-            self.document_hash,
-            self.content,
-            self.html_path,
-            self.html_sha256,
-            self.pdf_path,
-            self.pdf_sha256,
-        )
-        if self.submission_type == "internal" and any(value is None for value in references):
-            raise ValueError("an internal submission records the content and files it sent")
-        if self.submission_type == "external" and any(value is not None for value in references):
-            raise ValueError("an external submission carries no document content or files")
         return self

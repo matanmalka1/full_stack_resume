@@ -1,6 +1,6 @@
 """Typed command inputs and application-boundary outcomes.
 
-Split by domain (prep / tracking / knowledge / shared) as siblings, matching
+Split by domain (prep / knowledge / gap questions / shared) as siblings, matching
 how `ports/` was already split from a single module. Re-exported here so
 importers name one place, as they did when this was a single 751-line module.
 """
@@ -42,6 +42,8 @@ from .prep import (
     ClaimAddition,
     ClaimPatch,
     DecisionMarkdownExport,
+    DeleteApplicationCommand,
+    DeletedApplication,
     DocumentCheckResult,
     DocumentMutationResult,
     DraftCommand,
@@ -65,17 +67,6 @@ from .prep import (
     UpdateJobTextCommand,
 )
 from .shared import ReconciliationResult
-from .tracking import (
-    ApplicationMutationResult,
-    CloseApplicationCommand,
-    DeleteApplicationCommand,
-    ExternalSubmissionCommand,
-    NextActionCommand,
-    RecruitmentCorrectionCommand,
-    RecruitmentStatusCommand,
-    SubmissionCommand,
-    SubmissionResult,
-)
 
 __all__ = [
     "BoundaryDTO",
@@ -85,8 +76,8 @@ __all__ = [
     "DuplicateCheckCommand",
     "UpdateJobTextCommand",
     "UpdateApplicationNotesCommand",
-    "CloseApplicationCommand",
     "DeleteApplicationCommand",
+    "DeletedApplication",
     "AnalyzeCommand",
     "ApplyAnalysisDecisionsCommand",
     "BuildFromAnalysisCommand",
@@ -103,11 +94,6 @@ __all__ = [
     "ClaimPatch",
     "ClaimAddition",
     "RenderCommand",
-    "RecruitmentStatusCommand",
-    "RecruitmentCorrectionCommand",
-    "SubmissionCommand",
-    "ExternalSubmissionCommand",
-    "NextActionCommand",
     "DuplicateMatch",
     "IngestedApplication",
     "DuplicateCheckResult",
@@ -117,9 +103,7 @@ __all__ = [
     "DraftResult",
     "RegenerationResult",
     "RenderResult",
-    "ApplicationMutationResult",
     "UpdatedApplicationNotes",
-    "SubmissionResult",
     "DecisionMarkdownExport",
     "KnowledgeVersionsResult",
     "FactEventView",

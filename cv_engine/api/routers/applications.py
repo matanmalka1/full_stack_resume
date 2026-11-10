@@ -6,7 +6,6 @@ from fastapi import APIRouter, Query, Response, status
 
 from ...application.commands import (
     AnalyzeCommand,
-    CloseApplicationCommand,
     DeleteApplicationCommand,
     DuplicateCheckCommand,
     IngestCommand,
@@ -14,11 +13,9 @@ from ...application.commands import (
     UpdateJobTextCommand,
 )
 from ...application.queries import (
-    ActivityFilter,
     ApplicationListQuery,
     ApplicationPreset,
     ApplicationSort,
-    RecruitmentStatus,
 )
 from ...util import new_id
 from ..dependencies import Services
@@ -28,7 +25,6 @@ from ..schemas.analyses import CreateAnalysisRequest
 from ..schemas.applications import (
     ApplicationDetailResponse,
     ApplicationListResponse,
-    CloseApplicationResponse,
     CreateApplicationRequest,
     CreateApplicationResponse,
     DeleteApplicationResponse,
@@ -84,9 +80,7 @@ def create_application(
 def list_applications(
     services: Services,
     actor: CurrentActor,
-    activity: ActivityFilter = ActivityFilter.ALL,
     stage: Annotated[list[PreparationState] | None, Query()] = None,
-    recruitment_status: Annotated[list[RecruitmentStatus] | None, Query()] = None,
     preset: ApplicationPreset | None = None,
     search: str = "",
     sort: ApplicationSort = ApplicationSort.UPDATED,
@@ -103,16 +97,13 @@ def list_applications(
     naming the parameter, rather than reaching the query and failing as a
     validation error the client cannot attribute.
 
-    `stage` and `recruitment_status` are the two independent axes and repeat for
-    more than one value; `preset` is one named question the application layer
-    answers, and it narrows alongside them rather than replacing them.
+    `preset` is one named question the application layer answers, and it narrows
+    alongside `stage` rather than replacing it.
     """
     result = services.queries.list_applications(
         actor,
         ApplicationListQuery(
-            activity=activity,
             stages=frozenset(stage or ()),
-            recruitment_statuses=frozenset(recruitment_status or ()),
             preset=preset,
             search=search,
             sort=sort,
@@ -161,7 +152,7 @@ def update_application_notes(
 @router.patch(
     "/{application_id}/job-text",
     response_model=UpdateJobTextResponse,
-    summary="Replace the job text; refused once the application has a submission",
+    summary="Replace the job text",
 )
 def update_job_text(
     application_id: str,
@@ -221,25 +212,6 @@ def create_analysis(
 
 
 @router.post(
-    "/{application_id}/close",
-    response_model=CloseApplicationResponse,
-    summary="Close an application without deleting its history",
-)
-def close_application(
-    application_id: str, services: Services, actor: CurrentActor
-) -> CloseApplicationResponse:
-    result = services.recruitment.close_application(
-        actor,
-        CloseApplicationCommand(
-            application_id=application_id,
-            actor_type="user",
-            client="web",
-        ),
-    )
-    return CloseApplicationResponse.model_validate(result.model_dump(mode="json"))
-
-
-@router.post(
     "/{application_id}/delete",
     response_model=DeleteApplicationResponse,
     summary="Soft-delete an application without touching its immutable history",
@@ -247,15 +219,13 @@ def close_application(
 def delete_application(
     application_id: str, services: Services, actor: CurrentActor
 ) -> DeleteApplicationResponse:
-    """No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).
+    """No hard delete and no `undelete` (state-and-use-cases.md §12).
 
-    Callable from any current status, including `closed`. Every immutable
-    JobAnalysis, Artifact, Submission, and Operation the application produced is
-    untouched;
-    only default list/Dashboard projections and duplicate detection stop
-    surfacing it. The detail endpoint still returns it by ID.
+    Every immutable JobAnalysis and Operation the application produced is untouched;
+    only the list and duplicate detection stop surfacing it. The detail endpoint
+    still returns it by ID.
     """
-    result = services.recruitment.delete_application(
+    result = services.applications.delete_application(
         actor,
         DeleteApplicationCommand(
             application_id=application_id,

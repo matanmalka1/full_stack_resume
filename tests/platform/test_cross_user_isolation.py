@@ -63,9 +63,9 @@ def _record_routes(schema: dict[str, object]) -> set[tuple[str, str]]:
 
 
 def test_every_record_route_hides_foreign_records_and_writes_nothing(
-    submitted_application, project_root, database_engine
+    ready_application, project_root, database_engine
 ) -> None:
-    setup = submitted_application("Owner Secret Company")
+    setup = ready_application("Owner Secret Company")
     services = setup.services
     owner = actor_of(services)
     assert setup.analysis_id is not None
@@ -160,9 +160,6 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
                 f"{API_PREFIX}/applications/{setup.application_id}/analyses",
                 {"job_text_hash": setup.job_text_hash},
             ),
-            ("POST", "/api/v1/applications/{application_id}/close"): ForeignRequest(
-                "POST", f"{API_PREFIX}/applications/{setup.application_id}/close"
-            ),
             ("POST", "/api/v1/applications/{application_id}/delete"): ForeignRequest(
                 "POST", f"{API_PREFIX}/applications/{setup.application_id}/delete"
             ),
@@ -235,11 +232,6 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
             ("POST", "/api/v1/applications/{application_id}/document/render"): ForeignRequest(
                 "POST", f"{API_PREFIX}/applications/{setup.application_id}/document/render", action
             ),
-            ("POST", "/api/v1/applications/{application_id}/external-submissions"): ForeignRequest(
-                "POST",
-                f"{API_PREFIX}/applications/{setup.application_id}/external-submissions",
-                {"submitted_at": utc_now(), "metadata": {}},
-            ),
             ("GET", "/api/v1/applications/{application_id}/gap-questions"): ForeignRequest(
                 "GET", f"{API_PREFIX}/applications/{setup.application_id}/gap-questions"
             ),
@@ -270,30 +262,10 @@ def test_every_record_route_hides_foreign_records_and_writes_nothing(
                 f"{API_PREFIX}/applications/{setup.application_id}/job-text",
                 {"job_text": "foreign edit", "expected_job_text_hash": setup.job_text_hash},
             ),
-            ("PATCH", "/api/v1/applications/{application_id}/next-action"): ForeignRequest(
-                "PATCH",
-                f"{API_PREFIX}/applications/{setup.application_id}/next-action",
-                {"next_action": None, "next_action_date": None},
-            ),
             ("PATCH", "/api/v1/applications/{application_id}/notes"): ForeignRequest(
                 "PATCH",
                 f"{API_PREFIX}/applications/{setup.application_id}/notes",
                 {"notes": "foreign edit", "expected_notes": ""},
-            ),
-            ("POST", "/api/v1/applications/{application_id}/status"): ForeignRequest(
-                "POST",
-                f"{API_PREFIX}/applications/{setup.application_id}/status",
-                {"target_status": "interview", "reason": "test"},
-            ),
-            ("POST", "/api/v1/applications/{application_id}/status-corrections"): ForeignRequest(
-                "POST",
-                f"{API_PREFIX}/applications/{setup.application_id}/status-corrections",
-                {"target_status": "saved", "corrects_event_id": new_id(), "reason": "test"},
-            ),
-            ("POST", "/api/v1/applications/{application_id}/submissions"): ForeignRequest(
-                "POST",
-                f"{API_PREFIX}/applications/{setup.application_id}/submissions",
-                {"expected_document_hash": setup.document_hash, "submitted_at": utc_now()},
             ),
             ("GET", "/api/v1/facts/{fact_id}"): ForeignRequest(
                 "GET", f"{API_PREFIX}/facts/{private_fact.fact_id}"

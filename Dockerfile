@@ -25,12 +25,11 @@ RUN apt-get update \
 
 COPY --from=ghcr.io/astral-sh/uv:0.8.15 /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
-# The s3 extra: a deployed instance keeps its immutable payloads in a bucket.
-RUN uv sync --frozen --no-dev --extra s3 --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project
 RUN playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
 
 COPY . .
-RUN uv sync --frozen --no-dev --extra s3
+RUN uv sync --frozen --no-dev
 COPY --from=frontend /app/frontend/dist frontend/dist
 
 CMD ["scripts/serve.sh"]

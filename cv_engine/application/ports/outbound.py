@@ -8,7 +8,6 @@ composition root.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Generic, Protocol, TypeVar
 
@@ -32,28 +31,6 @@ from ...domain.contracts.validation import ValidationReport
 from ...domain.knowledge import Knowledge
 from ...domain.templates import SampleLanguage
 from .values import TaskContracts
-
-
-class PayloadVerifier(Protocol):
-    def verify_payload(self, reference: str, expected_hash: str) -> str:
-        """Classify one registered payload without transferring it outward.
-
-        Returns `ok`, `missing`, `tampered`, or `unresolvable`. Ready
-        qualification uses this to re-derive itself from stored evidence:
-        resolving a reference to a local path and hashing the file verified the
-        filesystem rather than the configured store, and reported everything
-        missing once storage moved off local disk.
-        """
-        ...
-
-
-class PayloadInventory(PayloadVerifier, Protocol):
-    def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
-        """Read-only observation of managed immutable payload references.
-
-        `modified_before` keeps only payloads stored before that instant.
-        """
-        ...
 
 
 class KnowledgeStore(Protocol):

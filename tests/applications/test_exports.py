@@ -25,7 +25,7 @@ def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> Non
     app_id = ingested.application_id
     output = export_csv(services.queries.list_applications(actor), tmp_path / "applications.csv")
     text = output.read_text(encoding="utf-8")
-    assert "current_status" in text
+    assert text.splitlines()[0].split(",")[-3:] == ["notes", "created_at", "updated_at"]
     assert app_id in text
 
     metadata = _json.loads(
@@ -34,4 +34,4 @@ def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> Non
     assert metadata["export_schema_version"] == EXPORT_SCHEMA_VERSION
     assert metadata["row_count"] == 1
     assert metadata["columns"][0] == "id"
-    assert "current_status" in metadata["columns"]
+    assert "current_status" not in metadata["columns"]

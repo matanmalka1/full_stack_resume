@@ -8,7 +8,6 @@ from ...application.commands.prep import SOURCE_URL_MAX_CHARACTERS
 from ...domain.document import ContentCheck, PreparationState
 from .health import HttpSchema
 from .operations import OperationResponse
-from .tracking import CorrectableStatus, RecruitmentTimelineItemResponse, TransitionableStatus
 
 
 class ApplicationIntake(HttpSchema):
@@ -45,7 +44,7 @@ class CreateApplicationResponse(HttpSchema):
 
 
 class UpdateJobTextRequest(HttpSchema):
-    """Replace the job text the client last read; refused once a Submission locked it."""
+    """Replace the job text the client last read."""
 
     job_text: str = Field(min_length=1)
     source_url: str | None = Field(default=None, max_length=SOURCE_URL_MAX_CHARACTERS)
@@ -81,10 +80,6 @@ class ApplicationResponse(HttpSchema):
     emphasis: str | None = None
     fit_level: str | None = None
     fit_score: float | None = None
-    current_status: str
-    terminal_outcome: str | None = None
-    next_action: str | None = None
-    next_action_date: str | None = None
     notes: str
     created_at: str
     updated_at: str
@@ -126,8 +121,6 @@ class ApplicationStateResponse(HttpSchema):
     presentation rather than a failure.
     """
 
-    recruitment_status: str
-    terminal_outcome: str | None = None
     preparation_state: PreparationState
     content_check: ContentCheck
     review_reasons: list[ReasonResponse]
@@ -147,13 +140,12 @@ class ApplicationStateResponse(HttpSchema):
 
 
 class JobPostingResponse(HttpSchema):
-    """The Application's job text. `locked` once the Application has a Submission."""
+    """The Application's job text."""
 
     job_text: str
     source_url: str | None = None
     job_text_hash: str
     job_text_updated_at: str
-    locked: bool
 
 
 class GapResponse(HttpSchema):
@@ -189,12 +181,10 @@ class ApplicationDetailResponse(ApplicationStateResponse):
     application: ApplicationResponse
     job_posting: JobPostingResponse
     latest_analysis: JobAnalysisResponse | None = None
-    allowed_recruitment_transitions: list[TransitionableStatus]
-    recruitment_timeline: list[RecruitmentTimelineItemResponse]
 
 
 class ApplicationListItemResponse(ApplicationResponse, ApplicationStateResponse):
-    is_closed: bool
+    pass
 
 
 class ApplicationListResponse(HttpSchema):
@@ -222,27 +212,7 @@ class ApplicationListResponse(HttpSchema):
 
     stage_counts: dict[PreparationState, int] = {}
     preset_counts: dict[str, int] = {}
-    recruitment_status_counts: dict[CorrectableStatus, int] = {}
-
-
-class CloseApplicationResponse(HttpSchema):
-    application_id: str
-    current_status: str
-    terminal_outcome: str | None = None
-    next_action: str | None = None
-    next_action_date: str | None = None
-    event_id: str | None = None
 
 
 class DeleteApplicationResponse(HttpSchema):
-    """`current_status`/`terminal_outcome` are unchanged by deletion; they are
-    carried here only because they are part of the same mutation-result shape
-    every other tracking command returns.
-    """
-
     application_id: str
-    current_status: str
-    terminal_outcome: str | None = None
-    next_action: str | None = None
-    next_action_date: str | None = None
-    event_id: str | None = None

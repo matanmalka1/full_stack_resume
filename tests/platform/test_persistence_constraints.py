@@ -15,30 +15,21 @@ from cv_engine.application.commands import IngestCommand
 from cv_engine.application.errors import StateConflict, UnknownRecord
 from cv_engine.application.ports.documents import DocumentBody
 from cv_engine.application.settings import UpdateSettings
-from cv_engine.domain.contracts.document import DocumentSubmission
 from cv_engine.domain.contracts.records import AuditRecord
-from cv_engine.domain.contracts.recruitment import ApplicationStatus
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.analysis_sql import _analysis_record
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
-from cv_engine.infrastructure.persistence.documents import (
-    SqlAlchemyDocumentStore,
-    SqlAlchemyDocumentSubmissionStore,
-)
-from cv_engine.infrastructure.persistence.initial_recruitment_events import (
-    SqlAlchemyInitialRecruitmentEventWriter,
-)
+from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
 from cv_engine.infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
-from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from cv_engine.infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from cv_engine.infrastructure.persistence.tables import (
     applications,
+    audit_records,
     cv_documents,
     job_analyses,
     metadata,
-    submissions,
     user_settings,
     users,
 )
@@ -51,7 +42,7 @@ from cv_engine.util import new_id, normalized_text, sha256_text, utc_now
 # list looks exactly like a table that does not exist.
 MUTABLE_TABLES = frozenset(
     {
-        "applications",  # the current recruitment projection and tracking fields
+        "applications",  # notes, job text and soft deletion change in place
         "cv_documents",  # the one mutable resume document (product invariant 3)
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
         "user_settings",  # safe mutable Web preferences, guarded by edit_version
@@ -128,7 +119,6 @@ def _create_application(
     application_id = new_id()
     created_at = utc_now()
     application_store = SqlAlchemyApplicationStore(transactions)
-    recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
 
     def insert_records(transaction) -> None:
         user_id = _one_user_id(transactions, transaction)
@@ -144,13 +134,6 @@ def _create_application(
             job_normalized_hash=sha256_text(normalized_text(text)),
             source_url=None,
             created_at=created_at,
-        )
-        recruitment.insert_initial_saved_event(
-            transaction,
-            application_id=application_id,
-            actor_type="user",
-            client="web",
-            occurred_at=created_at,
         )
 
     if tx is None:
@@ -305,17 +288,8 @@ def test_user_settings_default_read_is_pure_and_updates_are_optimistic_and_atomi
 
 
 def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> None:
-    """Every CHECK and uniqueness rule the recruitment trail depends on, over real rows.
-
-    `ready` and `preparing` are workflow projections, never stored statuses; the
-    removed `cli` client is refused by the command and record contracts and by the
-    event CHECK; and an internal submission must carry the document and both
-    immutable file copies. Repeated external submissions carry no invented
-    document or artifact references.
-    """
-    for status in ("preparing", "ready"):
-        with pytest.raises(ValueError):
-            ApplicationStatus(status)
+    """The removed `cli` client is refused by the command and record contracts and by
+    the audit CHECK; the job text stays an ordinary editable field."""
     with pytest.raises(ValidationError):
         IngestCommand(
             company="Removed Client",
@@ -341,86 +315,39 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
     )
     with transactions.read() as tx:
         user_id = _one_user_id(transactions, tx)
-    recruitment = SqlAlchemyRecruitmentRepository(transactions)
-    submission_store = SqlAlchemyDocumentSubmissionStore(transactions)
 
-    def current_status_ready(tx) -> None:
-        transactions.connection_for(tx, access="write").execute(
-            update(applications).where(applications.c.id == app_id).values(current_status="ready")
-        )
-
-    def cli_client_event(tx) -> None:
-        recruitment.insert_next_action(
-            tx,
-            application_id=app_id,
-            next_action="Follow up",
-            next_action_date="2026-09-01",
-            actor_type="user",
-            client="cli",
-            occurred_at="2026-08-30T12:00:00+00:00",
-        )
-
-    def internal_without_content(tx):
-        transactions.connection_for(tx, access="write").execute(
-            insert(submissions).values(
-                id=new_id(),
-                application_id=app_id,
-                submission_type="internal",
-                submitted_at=utc_now(),
-                metadata_json={},
-            )
-        )
-
-    for write, constraint in (
-        (current_status_ready, "ck_applications_current_status"),
-        (cli_client_event, "ck_recruitment_events_client"),
-        (internal_without_content, None),
-    ):
-        with pytest.raises(IntegrityError, match=constraint):
-            with transactions.write() as tx:
-                write(tx)
-    for _ in range(2):
+    with pytest.raises(IntegrityError, match="ck_audit_records_client"):
         with transactions.write() as tx:
-            submission_store.insert_submission(
-                tx,
-                DocumentSubmission(
+            transactions.connection_for(tx, access="write").execute(
+                insert(audit_records).values(
                     id=new_id(),
                     application_id=app_id,
-                    submission_type="external",
-                    submitted_at=utc_now(),
-                ),
+                    action="test",
+                    entity_type="application",
+                    entity_id=app_id,
+                    actor_type="user",
+                    client="cli",
+                    occurred_at=utc_now(),
+                )
             )
-    with transactions.read() as tx:
-        assert len(submission_store.submissions(tx, app_id)) == 2
-        assert (
-            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id, user_id)[
-                "current_status"
-            ]
-            == "saved"
-        )
 
-    # A Submission locks the job text: the store refuses the edit, and the trigger
-    # refuses a direct write that bypasses the store.
-    with pytest.raises(StateConflict, match="locked"):
+    def edit_job_text(text: str):
         with transactions.write() as tx:
-            SqlAlchemyApplicationStore(transactions).update_job_text(
+            return SqlAlchemyApplicationStore(transactions).update_job_text(
                 tx,
                 app_id,
                 user_id,
-                job_text="Edited role",
-                job_text_hash=sha256_text("Edited role"),
-                job_normalized_hash=sha256_text(normalized_text("Edited role")),
+                job_text=text,
+                job_text_hash=sha256_text(text),
+                job_normalized_hash=sha256_text(normalized_text(text)),
                 source_url=None,
                 expected_job_text_hash=job_text_hash,
                 updated_at=utc_now(),
             )
-    with pytest.raises(ProgrammingError, match="job text is locked after submission"):
-        with transactions.write() as tx:
-            transactions.connection_for(tx, access="write").execute(
-                update(applications)
-                .where(applications.c.id == app_id)
-                .values(job_text="Edited role")
-            )
+
+    assert edit_job_text("Edited role")["job_text"] == "Edited role"
+    with pytest.raises(StateConflict):
+        edit_job_text("Stale edit")
     with transactions.write() as tx:
         transactions.connection_for(tx, access="write").execute(
             update(applications).where(applications.c.id == app_id).values(notes="still mutable")
@@ -595,7 +522,7 @@ def test_immutability_triggers_refuse_real_repository_writes(
 
     The derived test above covers every immutable table, but with foreign keys
     and CHECK constraints suspended. This one keeps them on and uses rows the
-    repository created, so the three tables it can reach cheaply are proven under
+    repository created, so the table it can reach cheaply is proven under
     the conditions production actually runs in.
     """
     repository = transaction_manager
@@ -608,34 +535,22 @@ def test_immutability_triggers_refuse_real_repository_writes(
     with transaction_manager.read() as tx:
         user_id = _one_user_id(transaction_manager, tx)
         application_id = application_projection_reader.applications(tx, user_id)[0]["id"]
-    transactions = transaction_manager
-    external_submission_id = new_id()
-    with transactions.write() as tx:
-        SqlAlchemyDocumentSubmissionStore(transactions).insert_submission(
-            tx,
-            DocumentSubmission(
-                id=external_submission_id,
-                application_id=application_id,
-                submission_type="external",
-                submitted_at="2026-08-19T10:00:00+00:00",
-            ),
-        )
     with transaction_manager.write() as tx:
         audit_log.insert_audit(
             tx,
             AuditRecord(
                 id=new_id(),
                 application_id=application_id,
-                action="record_external_submission",
-                entity_type="submission",
-                entity_id=external_submission_id,
+                action="update_application_notes",
+                entity_type="application",
+                entity_id=application_id,
                 actor_type="user",
                 client="web",
                 occurred_at="2026-08-19T10:00:00+00:00",
             ),
         )
 
-    for table_name in ("recruitment_events", "submissions", "audit_records"):
+    for table_name in ("audit_records",):
         table = metadata.tables[table_name]
         for statement in (update(table).values(id=table.c.id), delete(table)):
             with pytest.raises(ProgrammingError, match="immutable record"):
@@ -699,8 +614,7 @@ def test_nullable_document_json_columns_bind_none_as_sql_null():
     """JSON null is a value; optional document fields must satisfy SQL IS NULL guards."""
     columns = [
         column
-        for table in (metadata.tables["cv_documents"], metadata.tables["submissions"])
-        for column in table.columns
+        for column in metadata.tables["cv_documents"].columns
         if column.nullable and isinstance(column.type, JSONB)
     ]
     assert columns

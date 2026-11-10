@@ -7,7 +7,6 @@ from helpers import actor_of
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT
 from cv_engine.application.commands import (
-    ExternalSubmissionCommand,
     IngestCommand,
     UpdatedJobText,
     UpdateJobTextCommand,
@@ -18,13 +17,13 @@ from cv_engine.application.errors import (
     UnknownRecord,
 )
 from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
-from cv_engine.util import new_id, sha256_text, utc_now
+from cv_engine.util import new_id, sha256_text
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
 
 
-def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
+def test_job_text_is_exact_edited_in_place_and_atomic(
     services,
     monkeypatch: pytest.MonkeyPatch,
     transaction_manager,
@@ -34,8 +33,7 @@ def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
     """The job text is stored exactly on the Application and edited in place.
 
     An edit names the text it replaces (`expected_job_text_hash`); an unchanged
-    edit writes nothing; a failed audit insert rolls the edit back; a Submission
-    locks the text; and a failed initial event rolls back the whole ingest.
+    edit writes nothing; and a failed audit insert rolls the edit back.
     """
     actor = actor_of(services)
     initial_text = "עברית  English\r\n<script>x</script>\n"
@@ -53,9 +51,7 @@ def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
     detail = services.queries.application_detail(actor, created.application_id)
     assert detail.job_posting.job_text == initial_text
     assert detail.job_posting.source_url == "https://jobs.example/first"
-    assert detail.job_posting.locked is False
     assert detail.job_text_hash == created.job_text_hash
-    assert services.payloads.payload_inventory() == []
 
     replacement_text = "Replacement line one\r\nReplacement line two\n"
 
@@ -116,15 +112,6 @@ def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
     )
     assert audit_count() == 1
 
-    services.submission.record_external_submission(
-        actor,
-        ExternalSubmissionCommand(
-            application_id=created.application_id, submitted_at=utc_now(), client="web"
-        ),
-    )
-    assert services.queries.application_detail(actor, created.application_id).job_posting.locked
-    with pytest.raises(StateConflict, match="locked"):
-        edit("After submission", replacement.job_text_hash)
     with pytest.raises(UnknownRecord):
         services.applications.update_job_text(
             actor,
@@ -136,31 +123,8 @@ def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
             ),
         )
 
-    def refuse_initial_event(*args, **kwargs):
-        raise RuntimeError("event refused")
 
-    with monkeypatch.context() as patch:
-        patch.setattr(
-            services.applications._recruitment,
-            "insert_initial_saved_event",
-            refuse_initial_event,
-        )
-        with pytest.raises(RuntimeError, match="event refused"):
-            services.applications.ingest(
-                actor,
-                IngestCommand(
-                    company="Atomic Intake",
-                    target_role="Developer",
-                    job_text="Python and PostgreSQL",
-                    client="web",
-                ),
-            )
-    with transaction_manager.read() as tx:
-        rows = application_projection_reader.applications(tx, actor.user_id)
-    assert all(row["company"] != "Atomic Intake" for row in rows)
-
-
-def test_application_http_create_read_edit_and_close_sequence(
+def test_application_http_create_read_edit_and_delete_sequence(
     api_paused, services, transaction_manager, application_projection_reader
 ) -> None:
     api = api_paused.client
@@ -186,7 +150,6 @@ def test_application_http_create_read_edit_and_close_sequence(
     assert detail.status_code == 200
     assert detail.json()["job_text_hash"] == job_text_hash
     assert detail.json()["job_posting"]["job_text"] == "HTTP initial text\r\n"
-    assert detail.json()["job_posting"]["locked"] is False
 
     notes = api.patch(
         f"{API_PREFIX}/applications/{application_id}/notes",
@@ -236,27 +199,17 @@ def test_application_http_create_read_edit_and_close_sequence(
     assert job_text_audit[-1]["actor_type"] == "user"
     assert job_text_audit[-1]["client"] == "web"
 
-    closed = api.post(
-        f"{API_PREFIX}/applications/{application_id}/close",
-        headers=MUTATION_HEADERS,
-    )
-    assert closed.status_code == 200
-    assert closed.json()["current_status"] == "closed"
-
     final = api.get(f"{API_PREFIX}/applications/{application_id}")
     assert final.status_code == 200
     assert final.json()["job_text_hash"] == replacement_hash
     assert final.json()["job_posting"]["job_text"] == "HTTP replacement text\n"
-    assert final.json()["recruitment_status"] == "closed"
 
-    # delete_application is orthogonal to RecruitmentStatus and callable
-    # from a terminal status: it neither requires nor changes `closed`.
     deleted = api.post(
         f"{API_PREFIX}/applications/{application_id}/delete",
         headers=MUTATION_HEADERS,
     )
     assert deleted.status_code == 200
-    assert deleted.json()["current_status"] == "closed"
+    assert deleted.json() == {"application_id": application_id}
 
     # Excluded from the default list, but still individually reachable by ID.
     listed_after_delete = api.get(f"{API_PREFIX}/applications")
@@ -367,11 +320,6 @@ def test_application_http_duplicate_precheck_and_acknowledgement_contract(
         "DUPLICATE_COMPANY_TITLE",
     ]
     assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 2
-    creation_event = api.get(
-        f"{API_PREFIX}/applications/{accepted.json()['application_id']}"
-    ).json()["recruitment_timeline"][0]
-    assert creation_event["actor_type"] == "user"
-    assert creation_event["client"] == "web"
     base = {
         "company": "URL Safety Co",
         "target_role": "Developer",
@@ -424,11 +372,6 @@ def test_application_list_query_narrows_orders_and_pages_at_the_boundary(
             },
         )
         assert created.status_code == 201
-        if company == "Cegal":
-            closed_id = created.json()["application_id"]
-
-    closed = api.post(f"{API_PREFIX}/applications/{closed_id}/close", headers=MUTATION_HEADERS)
-    assert closed.status_code == 200
 
     whole = api.get(f"{API_PREFIX}/applications").json()
     assert (whole["matched"], whole["total"]) == (3, 3)
@@ -436,24 +379,7 @@ def test_application_list_query_narrows_orders_and_pages_at_the_boundary(
     # Every row is at the first stage, and a state nothing reached is absent
     # rather than reported as zero.
     assert whole["stage_counts"] == {"needs_analysis": 3}
-    assert whole["preset_counts"] == {
-        "all": 3,
-        "needs_attention": 0,
-        "ready_to_send": 0,
-        "active_interviews": 0,
-    }
-    assert whole["recruitment_status_counts"] == {"saved": 2, "closed": 1}
-    assert {item["company"]: item["is_closed"] for item in whole["items"]} == {
-        "Alpha": False,
-        "Binat": False,
-        "Cegal": True,
-    }
-
-    # A closed Application stays stored and reachable, and is not what a board
-    # of live work is asking about.
-    live = api.get(f"{API_PREFIX}/applications", params={"activity": "open"}).json()
-    assert sorted(item["company"] for item in live["items"]) == ["Alpha", "Binat"]
-    assert (live["matched"], live["total"]) == (2, 3)
+    assert whole["preset_counts"] == {"all": 3, "needs_attention": 0, "ready_to_send": 0}
 
     found = api.get(f"{API_PREFIX}/applications", params={"search": "binat"}).json()
     assert [item["company"] for item in found["items"]] == ["Binat"]
@@ -484,7 +410,7 @@ def test_application_list_query_narrows_orders_and_pages_at_the_boundary(
     assert past_end["items"] == [] and past_end["matched"] == 3
 
     for params in (
-        {"activity": "archived"},
+        {"preset": "active_interviews"},
         {"stage": ["not_a_stage"]},
         {"sort": "whatever"},
         {"limit": 0},

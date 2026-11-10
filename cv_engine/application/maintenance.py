@@ -11,14 +11,13 @@ so the CSV writer lives in `infrastructure/exports.py`.
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any
 
 from ..util import utc_now
 from .commands import BoundaryDTO
 from .queries import ApplicationListView
 
-EXPORT_SCHEMA_VERSION = "2.0"
+EXPORT_SCHEMA_VERSION = "3.0"
 
 
 EXPORT_FIELDS = [
@@ -30,9 +29,6 @@ EXPORT_FIELDS = [
     "track",
     "profile",
     "emphasis",
-    "current_status",
-    "next_action",
-    "next_action_date",
     "notes",
     "created_at",
     "updated_at",
@@ -68,10 +64,8 @@ class ApplicationExport(BoundaryDTO):
 def build_application_export(applications: ApplicationListView) -> ApplicationExport:
     """Project applications onto the versioned export schema.
 
-    The v1 export had no version marker, so a consumer could not tell which
-    columns to expect. No such consumer was found in this repository, so the
-    v2 export keeps the same columns and records the schema beside them rather
-    than inventing a compatibility mode nothing asked for.
+    The schema version is recorded beside the columns so a consumer can tell which
+    to expect. v3 dropped the recruitment-tracking columns.
     """
     source = [item.model_dump(mode="json") for item in applications.items]
     return ApplicationExport(
@@ -80,17 +74,3 @@ def build_application_export(applications: ApplicationListView) -> ApplicationEx
         rows=[{field: row.get(field) for field in EXPORT_FIELDS} for row in source],
         generated_at=utc_now(),
     )
-
-
-#: How long an unregistered payload must have been stored before inspection
-#: reports it (architecture.md §7.1). Every writer registers its payload within
-#: seconds of storing it, so a younger unregistered payload is most likely a
-#: write still in progress and would only be noise in the report. This filters a
-#: read-only report; nothing is deleted on the strength of it.
-ORPHAN_MIN_AGE = timedelta(hours=1)
-
-
-class OrphanInventory(BoundaryDTO):
-    """Unregistered payloads older than `ORPHAN_MIN_AGE`."""
-
-    candidates: list[str]

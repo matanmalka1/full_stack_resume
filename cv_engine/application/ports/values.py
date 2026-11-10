@@ -11,15 +11,6 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class PayloadReference:
-    """Storage-neutral metadata for one immutable stored payload (a Submission file)."""
-
-    reference: str
-    sha256: str
-    size: int
-
-
-@dataclass(frozen=True)
 class ArtifactStream:
     """One verified immutable payload, as bytes rather than as a location.
 

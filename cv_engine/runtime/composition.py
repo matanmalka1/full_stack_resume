@@ -44,17 +44,13 @@ from ..application.services.operations import (
     RegenerationOperationHandler,
     RenderOperationHandler,
 )
-from ..application.services.recruitment.lifecycle import RecruitmentService
-from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
 from ..application.services.settings import SettingsService
 from ..infrastructure.database_knowledge import DatabaseKnowledge
 from ..infrastructure.document_files import DocumentFiles
 from ..infrastructure.knowledge import load_task_contracts
-from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3ObjectStore
 from ..infrastructure.operation_logging import OperationFailureLogger
 from ..infrastructure.passwords import Argon2PasswordHasher
-from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.persistence import (
     SqlAlchemyTransactionManager,
     create_database_engine,
@@ -68,17 +64,11 @@ from ..infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
 from ..infrastructure.persistence.audit_log import SqlAlchemyAuditLog
-from ..infrastructure.persistence.documents import (
-    SqlAlchemyDocumentStore,
-    SqlAlchemyDocumentSubmissionStore,
-)
+from ..infrastructure.persistence.documents import SqlAlchemyDocumentStore
 from ..infrastructure.persistence.draft_history_sources import (
     SqlAlchemyDraftHistoryApplicationReader,
 )
 from ..infrastructure.persistence.gap_questions import SqlAlchemyGapQuestionStore
-from ..infrastructure.persistence.initial_recruitment_events import (
-    SqlAlchemyInitialRecruitmentEventWriter,
-)
 from ..infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
 from ..infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
@@ -86,7 +76,6 @@ from ..infrastructure.persistence.knowledge_lifecycle import (
 from ..infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
 from ..infrastructure.persistence.operation_client import SqlAlchemyOperationClientStore
 from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
-from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from ..infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from ..infrastructure.persistence.user_knowledge import SqlAlchemyUserKnowledgeRepository
 from ..infrastructure.persistence.worker_lock import worker_exclusivity
@@ -95,7 +84,7 @@ from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
 from .config import API_MAX_BODY_BYTES_DEFAULT, RuntimeConfig, resolve_config
 from .execution import OperationWorker
-from .paths import AppPaths, PathConfigurationError
+from .paths import AppPaths
 
 
 def _config_for(root: Path) -> RuntimeConfig:
@@ -117,7 +106,6 @@ class Services:
     database_url: str
     schema_version: str
     knowledge: UserKnowledgeSource
-    payloads: PayloadStore
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
@@ -126,8 +114,6 @@ class Services:
     draft_history: DraftHistoryService
     draft_review: DraftReviewService
     rendering: RenderingService
-    recruitment: RecruitmentService
-    submission: SubmissionService
     maintenance: MaintenanceService
     knowledge_lifecycle: FactLifecycleService
     knowledge_queries: KnowledgeQueryService
@@ -142,42 +128,10 @@ class Services:
     gap_questions: GapQuestionService
 
 
-def build_object_store(paths: AppPaths, config: RuntimeConfig) -> ObjectStore:
-    """Choose the immutable payload backend named by configuration.
-
-    Local is the default and stays the default: a caller that configures
-    nothing gets exactly the filesystem behaviour it had, which is what keeps
-    the local workflow working with no cloud SDK installed.
-
-    The choice is made here, in the composition root, rather than inside
-    `PayloadStore`. A store that branched on a backend name internally would
-    put the polymorphism in the wrong place - the two implementations already
-    differ behind one protocol, and nothing above this line should be able to
-    tell which one it got.
-    """
-    backend = str(config.get("object_store") or "local").strip().lower()
-    if backend == "local":
-        return LocalObjectStore(paths.artifacts_root)
-    if backend != "s3":
-        raise PathConfigurationError(
-            f"unknown object store backend: {backend} (expected 'local' or 's3')"
-        )
-    bucket = config.get("s3_bucket")
-    if not bucket:
-        raise PathConfigurationError("object store 's3' requires a bucket; set CV_S3_BUCKET")
-    return S3ObjectStore(
-        str(bucket),
-        prefix=str(config.get("s3_prefix") or ""),
-        endpoint_url=config.get("s3_endpoint_url") or None,
-        region_name=config.get("s3_region") or None,
-    )
-
-
 def build_services(
     paths: AppPaths,
     *,
     database_url: str | None = None,
-    payloads: PayloadStore | None = None,
     renderer: Renderer | None = None,
     provider: AIProvider | None = None,
     config: RuntimeConfig | None = None,
@@ -201,13 +155,11 @@ def build_services(
         session_days=int(resolved_config.get("session_days")),
     )
     intake_applications = SqlAlchemyApplicationStore(transactions)
-    intake_recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
     intake_audit = SqlAlchemyAuditLog(transactions)
     knowledge_lifecycle_store = SqlAlchemyKnowledgeLifecycleRepository(transactions)
     user_knowledge = SqlAlchemyUserKnowledgeRepository(transactions)
     # Knowledge is the user's rows; templates and policy are the installation's files.
     resolved_knowledge = DatabaseKnowledge(transactions, user_knowledge, paths.knowledge_root)
-    resolved_payloads = payloads or PayloadStore(paths, build_object_store(paths, resolved_config))
     resolved_renderer = renderer or PlaywrightRenderer(paths.knowledge_root)
     # Built only when a key is configured. Constructing an adapter that refuses
     # at import time would break every command, including the ones that never
@@ -231,14 +183,12 @@ def build_services(
         transactions=transactions, store=knowledge_lifecycle_store, knowledge=resolved_knowledge
     )
     maintenance_service = MaintenanceService(
-        payloads=resolved_payloads,
         transactions=transactions,
         inspection=SqlAlchemyMaintenanceInspection(transactions),
         knowledge=knowledge_queries,
     )
     documents = SqlAlchemyDocumentStore(transactions)
-    document_submissions = SqlAlchemyDocumentSubmissionStore(transactions)
-    document_files = DocumentFiles(paths, resolved_payloads)
+    document_files = DocumentFiles(paths)
     # One activation per use-case, shared by the service's synchronous path and the
     # Operation handler that activates the same result inside the runner's scope.
     analysis_activation = AnalysisActivation(
@@ -300,19 +250,6 @@ def build_services(
         files=document_files,
         knowledge=resolved_knowledge,
         renderer=resolved_renderer,
-        payloads=resolved_payloads,
-    )
-    recruitment_store = SqlAlchemyRecruitmentRepository(transactions)
-    recruitment_service = RecruitmentService(transactions, recruitment_store, intake_audit)
-    submission_service = SubmissionService(
-        transactions=transactions,
-        documents=documents,
-        sources=analysis_sources,
-        submissions=document_submissions,
-        files=document_files,
-        recruitment=recruitment_store,
-        audit=intake_audit,
-        knowledge=resolved_knowledge,
     )
     knowledge_service = FactLifecycleService(
         transactions=transactions,
@@ -401,18 +338,15 @@ def build_services(
         database_url=resolved_database_url,
         schema_version=schema_version,
         knowledge=resolved_knowledge,
-        payloads=resolved_payloads,
         applications=ApplicationService(
             transactions=transactions,
             applications=intake_applications,
-            recruitment=intake_recruitment,
             audit=intake_audit,
         ),
         queries=ApplicationQueryService(
             transactions=transactions,
             projections=application_projections,
             documents=documents,
-            submissions=document_submissions,
             knowledge=resolved_knowledge,
         ),
         analysis=analysis_service,
@@ -421,8 +355,6 @@ def build_services(
         draft_history=draft_history,
         draft_review=draft_review,
         rendering=rendering_service,
-        recruitment=recruitment_service,
-        submission=submission_service,
         maintenance=maintenance_service,
         knowledge_lifecycle=knowledge_service,
         knowledge_queries=knowledge_queries,
@@ -479,8 +411,6 @@ def build_api_services(
         draft_history=services.draft_history,
         draft_review=services.draft_review,
         rendering=services.rendering,
-        recruitment=services.recruitment,
-        submission=services.submission,
         knowledge=services.knowledge_lifecycle,
         knowledge_queries=services.knowledge_queries,
         operation_submissions=services.operation_submissions,

@@ -49,6 +49,12 @@ class IntakeApplicationStore(Protocol):
         updated_at: str,
     ) -> dict[str, Any]: ...
 
+    def set_deleted(
+        self, tx: WriteTransaction, application_id: str, user_id: str, deleted_at: str
+    ) -> None:
+        """Soft-delete the user's active Application; `StateConflict` if already deleted."""
+        ...
+
     def update_application_notes(
         self,
         tx: WriteTransaction,
@@ -59,18 +65,6 @@ class IntakeApplicationStore(Protocol):
         *,
         updated_at: str,
     ) -> dict[str, Any]: ...
-
-
-class InitialRecruitmentEventWriter(Protocol):
-    def insert_initial_saved_event(
-        self,
-        tx: WriteTransaction,
-        *,
-        application_id: str,
-        actor_type: str,
-        client: str,
-        occurred_at: str,
-    ) -> str: ...
 
 
 class AuditLogWriter(Protocol):

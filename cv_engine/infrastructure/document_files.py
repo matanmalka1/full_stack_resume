@@ -1,11 +1,9 @@
-"""The CV document's rendered files, and the immutable copies a Submission owns.
+"""The CV document's rendered files.
 
-state-and-use-cases.md §16 and §18. A render writes to a unique per-attempt
-directory under `<artifacts>/documents/<application>/<attempt>/`; those files are
-mutable working outputs - the next render supersedes them, a re-pin releases them -
-so they live outside every managed immutable layout and `payload_inventory` never
-lists them. What was actually sent is copied into the payload store's
-`submissions/` layout, hashed as it is stored.
+state-and-use-cases.md §16. A render writes to a unique per-attempt directory under
+`<artifacts>/documents/<application>/<attempt>/`; those files are mutable working
+outputs - the next render supersedes them, a re-pin releases them - so they live
+outside every immutable layout.
 """
 
 from __future__ import annotations
@@ -19,28 +17,20 @@ from ..application.errors import (
     ArtifactPayloadMissing,
     InfrastructureFailure,
 )
-from ..application.ports.documents import RenderedFiles, SubmittedFiles
-from ..application.ports.values import ArtifactStream, PayloadReference
+from ..application.ports.documents import RenderedFiles
+from ..application.ports.values import ArtifactStream
 from ..application.transactions import assert_external_io_allowed
 from .paths import is_regular_file_within, relative_within, resolve_within
 
 
 class DocumentFilePaths(Protocol):
-    """The application paths this store uses, declared locally (see `PayloadPaths`)."""
+    """The application paths this store uses, declared locally."""
 
     @property
     def root(self) -> Path: ...
 
     @property
     def artifacts_root(self) -> Path: ...
-
-
-class SubmissionPayloads(Protocol):
-    """The part of `PayloadStore` a Submission copy needs."""
-
-    def commit_submission_file(
-        self, application_id: str, submission_id: str, *, suffix: str, payload: bytes
-    ) -> PayloadReference: ...
 
 
 _STREAM_CHUNK_BYTES = 64 * 1024
@@ -62,12 +52,11 @@ def _component(value: str, *, name: str) -> str:
 
 
 class DocumentFiles:
-    def __init__(self, paths: DocumentFilePaths, payloads: SubmissionPayloads):
+    def __init__(self, paths: DocumentFilePaths):
         self._project_root = Path(paths.root).resolve()
         self._documents_root = resolve_within(
             self._project_root, Path(paths.artifacts_root) / "documents"
         )
-        self._payloads = payloads
 
     def render_targets(self, application_id: str, attempt_id: str) -> tuple[Path, Path]:
         assert_external_io_allowed("document render target preparation")
@@ -137,25 +126,3 @@ class DocumentFiles:
                 yield payload[offset : offset + _STREAM_CHUNK_BYTES]
 
         return ArtifactStream(size=len(payload), chunks=chunks)
-
-    def copy_for_submission(
-        self, application_id: str, submission_id: str, files: RenderedFiles
-    ) -> SubmittedFiles:
-        """Copy the rendered files into the Submission's immutable layout.
-
-        The caller registers the copies in the transaction that inserts the
-        Submission; a copy left unregistered is an orphan (architecture.md §7.1).
-        """
-        assert_external_io_allowed("submission file copy")
-        html = self._payloads.commit_submission_file(
-            application_id, submission_id, suffix="html", payload=self._read(files.html)
-        )
-        pdf = self._payloads.commit_submission_file(
-            application_id, submission_id, suffix="pdf", payload=self._read(files.pdf)
-        )
-        return SubmittedFiles(
-            html_path=html.reference,
-            html_sha256=html.sha256,
-            pdf_path=pdf.reference,
-            pdf_sha256=pdf.sha256,
-        )

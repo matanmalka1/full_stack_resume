@@ -49,7 +49,6 @@ from .routers import (
     operations,
     settings,
     templates,
-    tracking,
 )
 from .services import ApiServices
 from .session_cookie import require_session
@@ -145,7 +144,6 @@ def create_app(
         facts.router,
         settings.router,
         templates.router,
-        tracking.router,
     ):
         app.include_router(
             router,

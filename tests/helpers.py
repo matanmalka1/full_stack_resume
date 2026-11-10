@@ -20,10 +20,7 @@ from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.domain.drafts import seal_draft
 from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
-from cv_engine.infrastructure.persistence.documents import (
-    SqlAlchemyDocumentStore,
-    SqlAlchemyDocumentSubmissionStore,
-)
+from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
 from cv_engine.infrastructure.persistence.tables import metadata, users
 from cv_engine.runtime.composition import Services
 from cv_engine.util import utc_now
@@ -314,12 +311,6 @@ def persisted_counts(database_engine) -> dict[str, int]:
             table.name: connection.execute(select(func.count()).select_from(table)).scalar_one()
             for table in metadata.sorted_tables
         }
-
-
-def stored_submissions(services: Services, application_id: str):
-    transactions = services_transactions(services)
-    with transactions.read() as tx:
-        return SqlAlchemyDocumentSubmissionStore(transactions).submissions(tx, application_id)
 
 
 def edit_document_claim(
