@@ -1,4 +1,3 @@
-import { useIsFetching } from "@tanstack/react-query";
 import { File, Plus } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -6,25 +5,6 @@ import { cx } from "@/ui/cx";
 import { SignOutButton } from "@/features/auth";
 import { routePaths } from "@/navigation/routePaths";
 import { AppNavigation, areaTitle } from "./AppNavigation";
-
-/* Whether the application is currently talking to the server, anywhere. Decorative: the
-   screens announce their own loading in words through `QueryState`, and a bar that also
-   spoke would say it a second time on every refetch. This one answers the same question
-   at a glance, in the one place that is on screen on every route. */
-const GlobalActivityBar = () => {
-  const fetching = useIsFetching();
-
-  if (fetching === 0) {
-    return null;
-  }
-
-  return (
-    <span
-      aria-hidden="true"
-      className="absolute inset-x-0 bottom-0 h-0.5 bg-cv-accent motion-safe:animate-pulse lg:fixed lg:inset-x-0 lg:top-0 lg:bottom-auto lg:z-(--cv-z-toast)"
-    />
-  );
-};
 
 /* The product's name, led by its mark: a page of a CV on the accent square. It links to
    the board, the area every visit starts from. */
@@ -70,7 +50,7 @@ export const AppHeader = ({
   return (
     <header
       className={cx(
-        "sticky top-0 z-(--cv-z-navigation) bg-cv-canvas",
+        "cv-glass-header sticky top-0 z-(--cv-z-navigation)",
         "lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-e lg:border-cv-hairline lg:bg-cv-surface",
         hiddenOnPhone && "max-lg:hidden",
       )}
@@ -102,8 +82,6 @@ export const AppHeader = ({
           <SignOutButton className="min-h-10 flex-1 justify-start gap-2.5 rounded-item px-3 text-label font-normal text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text" />
         </span>
       </div>
-
-      <GlobalActivityBar />
     </header>
   );
 };

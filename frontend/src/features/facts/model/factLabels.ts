@@ -32,6 +32,18 @@ export const factStyleLabels: Record<FactStyle, string> = {
   contact: "פרט קשר",
 };
 
+/* The pool's sections inside one knowledge file, in the order a CV reads them: who the
+   candidate is and how to reach them, the titles and dates that frame each role, the
+   summaries, the experience lines, then the short items - skills, languages, tools. */
+export const factKindSections: { label: string; style: FactStyle }[] = [
+  { label: "פרטי קשר", style: "contact" },
+  { label: "כותרות ותפקידים", style: "heading" },
+  { label: "תאריכים וקישורים", style: "date" },
+  { label: "תקצירים", style: "paragraph" },
+  { label: "שורות ניסיון", style: "bullet" },
+  { label: "פריטים ומיומנויות", style: "item" },
+];
+
 export const factStatusLabels: Record<FactStatus, string> = {
   pending: "ממתינה לאישור",
   canonical: "מקור אמת",

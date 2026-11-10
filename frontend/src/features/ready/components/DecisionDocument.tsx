@@ -2,122 +2,68 @@ import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 
-import type { Fact } from "@/api/contracts";
+import type { DecisionExport, Fact, PreparationState } from "@/api/contracts";
 import { factsQueryOptions } from "@/api/facts";
-import type { DecisionExport } from "@/api/contracts";
-import { factLabelInLanguage, factSourceLabel } from "@/features/facts";
+import { factLabelInLanguage, factSourceLabel, factStatusLabel } from "@/features/facts";
 import {
   classificationFieldLabels,
   emphasisLabels,
   fitLevelLabel,
   languageLabels,
+  preparationStateLabels,
   profileLabels,
   trackLabel,
 } from "@/features/preparation";
 import { Button } from "@/ui/Button";
-import { Disclosure } from "@/ui/Disclosure";
+import { DateTime } from "@/ui/DateTime";
 import { EmptyState } from "@/ui/EmptyState";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { LtrText } from "@/ui/LtrText";
 import { Skeleton } from "@/ui/Skeleton";
-import { SummaryList, type SummaryItem } from "@/ui/SummaryList";
-import {
-  type DecisionBlock,
-  type DecisionSection,
-  parseDecisionMarkdown,
-  parseInline,
-  readDecision,
-} from "./decisionMarkdown";
+import { StatusBadge } from "@/ui/StatusBadge";
+import type { Tone } from "@/ui/tone";
+import { type DecisionPair, parseDecisionMarkdown, readDecision } from "./decisionMarkdown";
 
-/* Rows of a list and spans of a line are positional: the document is immutable, so their
-   order is the only identity they have. The selected facts are the exception - their
-   wording is read live from the fact store, so each row is keyed by its fact id. */
-/* oxlint-disable react/no-array-index-key */
-
-const Inline = ({ text }: { text: string }) => (
-  <>
-    {parseInline(text).map((span, index) => {
-      switch (span.kind) {
-        case "code":
-          /* Identifiers and hashes are one unbroken run; they wrap anywhere rather than
-             widen the aside. */
-          return (
-            <code className="mono-code break-all rounded-control bg-cv-surface-sunken px-1 text-caption" key={index}>
-              {span.text}
-            </code>
-          );
-        case "strong":
-          return (
-            <strong className="font-semibold text-cv-text" key={index}>
-              {span.text}
-            </strong>
-          );
-        case "link":
-          return (
-            <a
-              className="text-cv-accent underline underline-offset-2"
-              href={span.href}
-              key={index}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              {span.text}
-            </a>
-          );
-        default:
-          return span.text;
-      }
-    })}
-  </>
-);
-
-const Block = ({ block }: { block: DecisionBlock }) => {
-  switch (block.kind) {
-    case "heading":
-      return (
-        <h6 className="font-medium text-cv-text" dir="auto">
-          <Inline text={block.text} />
-        </h6>
-      );
-    case "list":
-      return (
-        <ul className="flex list-disc flex-col gap-1 ps-5 marker:text-cv-text-muted">
-          {block.items.map((item, index) => (
-            <li dir="auto" key={index}>
-              <Inline text={item} />
-            </li>
-          ))}
-        </ul>
-      );
-    default:
-      return (
-        <p dir="auto">
-          <Inline text={block.text} />
-        </p>
-      );
-  }
-};
-
-/* A section the reading does not interpret, shown as the record wrote it. */
-const RawSection = ({ section }: { section: DecisionSection }) => (
-  <section className="flex flex-col gap-2">
-    {section.heading === null ? null : (
-      <h5 className="font-medium text-cv-text" dir="auto">
-        <Inline text={section.heading} />
-      </h5>
-    )}
-    <div className="flex flex-col gap-2 leading-6 text-cv-text-muted">
-      {section.blocks.map((block, index) => (
-        <Block block={block} key={index} />
-      ))}
+/* One part of the explanation: a numbered heading, a sentence saying what the part
+   answers, and its content. The number is the reading order on a phone, where the parts
+   stack; it is decoration, so the heading's text alone names the part. */
+const Part = ({
+  children,
+  count,
+  intro,
+  step,
+  title,
+}: {
+  children: ReactNode;
+  count?: number;
+  intro: string;
+  step: number;
+  title: string;
+}) => (
+  <section aria-labelledby={`decision-part-${step}`} className="flex flex-col gap-3">
+    <div className="flex items-start gap-3">
+      <span
+        aria-hidden="true"
+        className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-pill bg-cv-accent text-caption font-bold text-cv-on-accent"
+      >
+        {step}
+      </span>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <h4
+          className="flex flex-wrap items-center gap-2 text-heading-sm font-semibold text-cv-text"
+          id={`decision-part-${step}`}
+        >
+          {title}
+          {count === undefined ? null : (
+            <span className="rounded-pill bg-cv-surface-muted px-2 text-caption font-bold text-cv-text-muted">
+              {count}
+            </span>
+          )}
+        </h4>
+        <p className="text-support text-cv-text-muted">{intro}</p>
+      </div>
     </div>
-  </section>
-);
-
-const Part = ({ children, title }: { children: ReactNode; title: string }) => (
-  <section className="flex flex-col gap-3 border-t border-cv-border pt-4">
-    <h4 className="font-semibold text-cv-text">{title}</h4>
-    {children}
+    <div className="sm:ps-9">{children}</div>
   </section>
 );
 
@@ -161,7 +107,7 @@ const overridesText = (raw: string): string => {
 
 interface FactGroup {
   label: string;
-  facts: { id: string; text: string }[];
+  facts: { id: string; status: Fact["status"]; text: string }[];
 }
 
 /* Selected facts are recorded by id. A reader needs what each one says, so each id is
@@ -182,10 +128,15 @@ const groupFacts = (
       continue;
     }
     const label = factSourceLabel(fact.source);
-    groups.set(label, [...(groups.get(label) ?? []), { id, text: factLabelInLanguage(fact, language) }]);
+    groups.set(label, [
+      ...(groups.get(label) ?? []),
+      { id, status: fact.status, text: factLabelInLanguage(fact, language) },
+    ]);
   }
   return { groups: [...groups].map(([label, members]) => ({ label, facts: members })), missing };
 };
+
+const factStatusTones: Partial<Record<Fact["status"], Tone>> = { pending: "warning", deleted: "blocker" };
 
 const SelectedFacts = ({ ids, language }: { ids: string[]; language: string | null }) => {
   const factsQuery = useQuery({ ...factsQueryOptions(), enabled: ids.length > 0 });
@@ -194,10 +145,10 @@ const SelectedFacts = ({ ids, language }: { ids: string[]; language: string | nu
     [factsQuery.data],
   );
 
-  if (ids.length === 0) return <p className="text-cv-text-muted">לא נרשמו עובדות שנבחרו.</p>;
+  if (ids.length === 0) return <p className="text-support text-cv-text-muted">לא נרשמו עובדות שנבחרו.</p>;
   if (factsQuery.error !== null) {
     return (
-      <p className="text-cv-text-muted">
+      <p className="text-support text-cv-text-muted">
         לא ניתן לטעון כרגע את נוסח העובדות. נבחרו {ids.length} עובדות, והרשימה המלאה נשמרת בקובץ להורדה.
       </p>
     );
@@ -207,25 +158,44 @@ const SelectedFacts = ({ ids, language }: { ids: string[]; language: string | nu
   const { groups, missing } = groupFacts(ids, facts, language ?? "he");
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-caption text-cv-text-muted">מוצג הנוסח הנוכחי של כל עובדה במאגר.</p>
+    <div className="flex flex-col gap-3">
       {groups.map((group) => (
-        <div className="flex flex-col gap-1.5" key={group.label}>
-          <h5 className="text-caption font-semibold text-cv-text-muted">
-            {group.label} · {group.facts.length}
+        <div className="overflow-hidden rounded-surface border border-cv-border bg-cv-surface" key={group.label}>
+          <h5 className="flex items-center justify-between gap-2 border-b border-cv-border bg-cv-surface-sunken px-4 py-2 text-caption font-semibold text-cv-text-muted">
+            <span>{group.label}</span>
+            <span>{group.facts.length}</span>
           </h5>
-          <ul className="flex list-disc flex-col gap-1 ps-5 leading-6 marker:text-cv-text-muted">
-            {group.facts.map((fact) => (
-              <li dir="auto" key={fact.id} lang={language ?? undefined}>
-                {fact.text}
-              </li>
-            ))}
+          <ul className="divide-y divide-cv-border">
+            {group.facts.map((fact) => {
+              const tone = factStatusTones[fact.status];
+              return (
+                <li
+                  className="flex flex-col gap-1.5 px-4 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+                  key={fact.id}
+                >
+                  <span
+                    className="min-w-0 break-words text-support leading-6 text-cv-text"
+                    dir="auto"
+                    lang={language ?? undefined}
+                  >
+                    {fact.text}
+                  </span>
+                  {tone === undefined ? null : (
+                    <StatusBadge className="self-start" tone={tone}>
+                      {factStatusLabel(fact.status)}
+                    </StatusBadge>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}
       {missing.length === 0 ? null : (
-        <div className="flex flex-col gap-1.5">
-          <h5 className="text-caption font-semibold text-cv-text-muted">עובדות שאינן במאגר כעת · {missing.length}</h5>
+        <div className="rounded-surface border border-dashed border-cv-border-strong px-4 py-3">
+          <h5 className="mb-1.5 text-caption font-semibold text-cv-text-muted">
+            עובדות שאינן במאגר כעת · {missing.length}
+          </h5>
           <ul className="flex flex-col gap-1">
             {missing.map((id) => (
               <li key={id}>
@@ -237,9 +207,51 @@ const SelectedFacts = ({ ids, language }: { ids: string[]; language: string | nu
           </ul>
         </div>
       )}
+      <p className="text-caption text-cv-text-muted">מוצג הנוסח הנוכחי של כל עובדה במאגר.</p>
     </div>
   );
 };
+
+const contentChecks: Record<string, { label: string; tone: Tone }> = {
+  passed: { label: "הבדיקה עברה", tone: "success" },
+  failed: { label: "הבדיקה נכשלה", tone: "blocker" },
+  outdated: { label: "הבדיקה אינה עדכנית", tone: "warning" },
+  none: { label: "התוכן לא נבדק", tone: "neutral" },
+};
+
+const ContentReport = ({ check, issues }: { check: string | null; issues: DecisionPair[] }) => {
+  const known = check === null ? null : (contentChecks[check] ?? { label: check, tone: "neutral" as Tone });
+  return (
+    <div className="flex flex-col gap-3">
+      {known === null ? null : (
+        <StatusBadge className="self-start" tone={known.tone}>
+          {known.label}
+        </StatusBadge>
+      )}
+      {issues.length === 0 ? (
+        <p className="text-support text-cv-text-muted">לא נמצאו בעיות בתוכן.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {issues.map((issue) => (
+            <li
+              className="flex flex-col gap-1 rounded-control border border-cv-border bg-cv-surface-sunken px-3 py-2"
+              key={`${issue.key}:${issue.value}`}
+            >
+              <span className="break-words text-support text-cv-text" dir="auto">
+                {issue.value}
+              </span>
+              <LtrText className="break-all text-caption text-cv-text-muted" mono>
+                {issue.key}
+              </LtrText>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+const isPreparationState = (value: string): value is PreparationState => value in preparationStateLabels;
 
 interface DecisionDocumentProps {
   decision: DecisionExport | undefined;
@@ -247,9 +259,10 @@ interface DecisionDocumentProps {
   pending: boolean;
 }
 
-/* §16 `export_decision_markdown`: the provenance of the current document - its analysis,
-   selection, the facts it depends on and its content report. It writes nothing, so this
-   view offers reading and a download and nothing that edits it. */
+/* §16 `export_decision_markdown`: why the current document reads the way it does - the
+   role it was built for, the classification that shaped it, the facts it draws on and
+   its content check. It writes nothing, so this view offers reading and a download and
+   nothing that edits it. Record ids and hashes stay in the downloaded file. */
 export const DecisionDocument = ({ decision, onDownload, pending }: DecisionDocumentProps) => {
   /* A response without text content is a missing document, not a crash. */
   const content = typeof decision?.markdown === "string" ? decision.markdown : null;
@@ -272,61 +285,91 @@ export const DecisionDocument = ({ decision, onDownload, pending }: DecisionDocu
   }
 
   const reading = readDecision(parsed);
-  const factCount = reading.selectedFactIds?.length ?? null;
-  const overview: SummaryItem[] = [
-    ...reading.classification.map(({ key, value }) => classified(key, value)),
-    ...(factCount === null ? [] : [{ term: "עובדות שנבחרו", value: factCount === 0 ? "לא נרשמו" : String(factCount) }]),
-    ...(reading.overrides === null
-      ? []
-      : [{ term: "בחירות ידניות", value: reading.overrides === "" ? "אין" : overridesText(reading.overrides) }]),
-  ];
+  const classification = reading.classification.map(({ key, value }) => classified(key, value));
+  const state =
+    reading.preparationState === null
+      ? null
+      : isPreparationState(reading.preparationState)
+        ? preparationStateLabels[reading.preparationState]
+        : reading.preparationState;
+  let step = 0;
 
   return (
-    <article aria-labelledby="decision-document-title" className="flex flex-col gap-4 text-support text-cv-text">
-      <header className="flex flex-col gap-2">
-        <h3 className="font-semibold text-cv-text" id="decision-document-title">
-          למה קורות החיים נראים כך
+    <article aria-labelledby="decision-document-title" className="flex flex-col gap-6 text-support text-cv-text">
+      <header className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface-sunken p-4 sm:p-5">
+        <p className="text-caption font-semibold text-cv-text-muted">קורות החיים נבנו עבור</p>
+        <h3
+          className="break-words text-heading-card font-semibold text-cv-text"
+          dir="auto"
+          id="decision-document-title"
+        >
+          {reading.application ?? "המשרה הזו"}
         </h3>
-        {reading.summary === null ? null : (
-          <p className="text-body leading-7 text-cv-text" dir="auto">
-            <Inline text={reading.summary} />
-          </p>
+        {state === null && reading.approvedAt === null ? null : (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {state === null ? null : (
+              <StatusBadge tone={reading.preparationState === "ready" ? "success" : "neutral"}>{state}</StatusBadge>
+            )}
+            {reading.approvedAt === null ? null : (
+              <span className="text-caption text-cv-text-muted">
+                אושר <DateTime value={reading.approvedAt} />
+              </span>
+            )}
+          </div>
         )}
       </header>
 
-      {overview.length === 0 ? null : (
-        <section aria-label="תקציר ההחלטה" className="rounded-control border border-cv-border bg-cv-surface-sunken p-3">
-          <SummaryList items={overview} />
-        </section>
-      )}
-
-      {reading.selectedFactIds === null ? null : (
-        <Part title="העובדות שנבחרו לקורות החיים">
-          <SelectedFacts ids={reading.selectedFactIds} language={reading.language} />
+      {classification.length === 0 && reading.overrides === null ? null : (
+        <Part intro="הסיווג קבע את מבנה קורות החיים, את השפה ואת מה שמודגש בהם." step={++step} title="איך המשרה סווגה">
+          <div className="flex flex-col gap-3">
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {classification.map((item) => (
+                <div
+                  className="flex min-w-0 flex-col gap-1 rounded-control border border-cv-border bg-cv-surface px-3 py-2.5"
+                  key={item.term}
+                >
+                  <dt className="text-caption text-cv-text-muted">{item.term}</dt>
+                  <dd className="break-words text-label font-semibold text-cv-text" dir="auto">
+                    {item.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {reading.overrides === null ? null : reading.overrides === "" ? (
+              <p className="text-caption text-cv-text-muted">הסיווג נשאר כפי שהניתוח קבע, בלי שינויים ידניים.</p>
+            ) : (
+              <p className="rounded-control border border-cv-border bg-cv-surface-sunken px-3 py-2 text-support">
+                <span className="font-semibold">שינית ידנית: </span>
+                <span dir="auto">{overridesText(reading.overrides)}</span>
+              </p>
+            )}
+          </div>
         </Part>
       )}
 
-      {/* Record ids, content hashes and the approval actor: evidence for an audit, not
-          reading for a person, so held closed and shown exactly as written. */}
-      {reading.rest.length === 0 ? null : (
-        <div className="border-t border-cv-border pt-4">
-          <Disclosure summary="שרשרת המקור והאישור">
-            <p className="mb-3">מזהי הרשומות וחתימות התוכן שהמסמך נבנה מהם, ומי אישר אותו.</p>
-            <div className="flex flex-col gap-4">
-              {reading.rest.map((section, index) => (
-                <RawSection key={index} section={section} />
-              ))}
-            </div>
-          </Disclosure>
-        </div>
+      {reading.factIds === null ? null : (
+        <Part
+          count={reading.factIds.length}
+          intro="כל טענה בקורות החיים נשענת על אחת מהעובדות האלה, ורק עליהן."
+          step={++step}
+          title="העובדות שקורות החיים נשענים עליהן"
+        >
+          <SelectedFacts ids={reading.factIds} language={reading.language} />
+        </Part>
       )}
 
-      <footer className="flex flex-col gap-2 border-t border-cv-border pt-4">
-        <Button className="self-start" onClick={onDownload} variant="secondary">
+      {reading.contentCheck === null && reading.contentIssues.length === 0 ? null : (
+        <Part intro="בדיקה שהתוכן תואם לעובדות ולכללי הניסוח." step={++step} title="בדיקת התוכן">
+          <ContentReport check={reading.contentCheck} issues={reading.contentIssues} />
+        </Part>
+      )}
+
+      <footer className="flex flex-col gap-2 border-t border-cv-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-caption text-cv-text-muted">הקובץ המלא, כפי שהשרת מפיק אותו מהמסמך הנוכחי.</p>
+        <Button className="w-full sm:w-auto" onClick={onDownload} variant="secondary">
           <Download aria-hidden="true" className="size-icon-md" />
           הורדת מסמך ההחלטה
         </Button>
-        <p className="text-caption text-cv-text-muted">הקובץ כפי שהשרת מפיק אותו מהמסמך הנוכחי.</p>
       </footer>
     </article>
   );

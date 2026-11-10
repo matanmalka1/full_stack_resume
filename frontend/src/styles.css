@@ -517,6 +517,12 @@ select {
   outline: none;
 }
 
+/* A settings row's select keeps focus after the system picker closes, and iOS Safari
+   then draws the ring as a black box around the borderless row. */
+.cv-settings-select:focus-visible {
+  outline: none;
+}
+
 /* A.3: LTR islands inside the RTL shell — URLs, IDs, ETags, error codes,
    filenames, English job/CV text. */
 code,
@@ -840,7 +846,28 @@ dialog::backdrop {
       0 1px 3px var(--cv-shadow-lift);
   }
 
+  /* The phone's top bar, after an iPhone's navigation bar: the page scrolls under a
+     translucent pane that blurs it, closed by a hairline at its foot. The pane is a
+     pseudo-element: a backdrop-filter on the header itself would make it the containing
+     block of the tab bar, which is fixed to the viewport from inside it. */
+  .cv-glass-header::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: color-mix(in srgb, var(--color-cv-canvas) 72%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 0 0.5px 0 var(--color-cv-hairline);
+  }
+
   @media (prefers-reduced-transparency: reduce) {
+    .cv-glass-header::before {
+      background: var(--color-cv-canvas);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+
     .cv-glass-bar {
       background: var(--color-cv-surface);
       -webkit-backdrop-filter: none;

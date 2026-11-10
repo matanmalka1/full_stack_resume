@@ -15,7 +15,9 @@ interface FactPoolFiltersProps {
   pendingHref: string | null;
   /* How many facts in the whole pool still wait for confirmation, whatever the filters. */
   pendingCount: number;
-  sources: string[];
+  /* The knowledge files the pool holds, each with how many facts it has. */
+  sources: { count: number; source: string }[];
+  total: number;
 }
 
 const bannerClasses =
@@ -77,10 +79,17 @@ const PendingBanner = ({
    leads with the banner and sets the field and the chips side by side under it. The
    chips are the knowledge files the pool holds - the one axis every fact has exactly one
    of, and the one the phone's list is grouped by. */
-export const FactPoolFilters = ({ filters, onChange, pendingCount, pendingHref, sources }: FactPoolFiltersProps) => {
+export const FactPoolFilters = ({
+  filters,
+  onChange,
+  pendingCount,
+  pendingHref,
+  sources,
+  total,
+}: FactPoolFiltersProps) => {
   const chips = [
-    { label: "הכל", value: "all" },
-    ...sources.map((source) => ({ label: factSourceLabel(source), value: source })),
+    { count: total, label: "הכל", value: "all" },
+    ...sources.map(({ count, source }) => ({ count, label: factSourceLabel(source), value: source })),
   ];
 
   return (
@@ -113,13 +122,18 @@ export const FactPoolFilters = ({ filters, onChange, pendingCount, pendingHref, 
           room to wrap it beside the field. */}
       <div
         aria-label="סינון לפי מאגר מקור"
-        className={cx("flex gap-2", "cv-scroll-quiet max-lg:-mx-4 max-lg:overflow-x-auto max-lg:px-4 max-lg:py-0.5", "lg:flex-wrap")}
+        className={cx(
+          "flex gap-2",
+          "cv-scroll-quiet max-lg:-mx-4 max-lg:overflow-x-auto max-lg:px-4 max-lg:py-0.5",
+          "lg:flex-wrap",
+        )}
         // A set of toggles under one name; there is no native grouping element for it.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         role="group"
       >
         {chips.map((chip) => (
           <FilterChip
+            count={chip.count}
             key={chip.value}
             onClick={() => onChange({ ...filters, source: chip.value })}
             pressed={filters.source === chip.value}

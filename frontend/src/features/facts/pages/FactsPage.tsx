@@ -60,7 +60,10 @@ export const FactsPage = () => {
   const detailQuery = useFactDetail(requestedId);
   const visible = filterFactEntries(entries, filters);
   const poolEmpty = poolQuery.isSuccess && entries.length === 0;
-  const sources = [...new Set(entries.map(({ fact }) => fact.source))];
+  const sources = [...new Set(entries.map(({ fact }) => fact.source))].map((source) => ({
+    count: entries.filter(({ fact }) => fact.source === source).length,
+    source,
+  }));
   const pending = entries.filter(({ fact }) => fact.status === "pending");
   const poolHref = (() => {
     const next = new URLSearchParams(searchParams);
@@ -178,6 +181,7 @@ export const FactsPage = () => {
               pendingCount={pending.length}
               pendingHref={pending.length === 1 && pending[0] !== undefined ? factHref(pending[0].fact.fact_id) : null}
               sources={sources}
+              total={entries.length}
             />
           ) : null}
           <QueryState

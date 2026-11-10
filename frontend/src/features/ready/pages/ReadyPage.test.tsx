@@ -48,10 +48,8 @@ describe("ReadyPage", () => {
     renderReady();
 
     expect(await screen.findByRole("heading", { name: "קורות החיים מוכנים" })).toBeInTheDocument();
-    /* The file's facts, its length read from the render's own count. */
-    expect(await screen.findByText(/2 עמודים/)).toBeInTheDocument();
     /* The page itself, framed from the document's own preview. */
-    expect(screen.getByTitle("קורות החיים המוכנים")).toHaveAttribute(
+    expect(await screen.findByTitle("קורות החיים המוכנים")).toHaveAttribute(
       "src",
       `/api/v1/applications/app-1/document/preview?v=${HASH}`,
     );
@@ -60,14 +58,14 @@ describe("ReadyPage", () => {
     expect(downloads).toHaveLength(1);
     expect(downloads[0]).toHaveAttribute("href", `/api/v1/applications/app-1/document/pdf?v=${HASH}`);
     /* Editing a Ready document is allowed; it is the way back, not a new record. */
-    expect(screen.getByRole("link", { name: "חזרה לעריכת הטיוטה" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "עריכת קורות החיים" })).toHaveAttribute(
       "href",
       "/applications/app-1/draft",
     );
     expect(screen.queryByText("פרטים טכניים")).not.toBeInTheDocument();
     expect(screen.queryByText("חתימת המסמך")).not.toBeInTheDocument();
     /* The step ends with the way back to the CV library, opened on this CV. */
-    expect(screen.getByRole("link", { name: "סיום וחזרה לקורות החיים" })).toHaveAttribute("href", "/?application=app-1");
+    expect(screen.getByRole("link", { name: "סיום" })).toHaveAttribute("href", "/?application=app-1");
   });
 
   it("sends a document that changed since rendering back to the editor, offering no file", async () => {
@@ -81,6 +79,6 @@ describe("ReadyPage", () => {
       "/applications/app-1/draft",
     );
     expect(screen.queryByRole("link", { name: "הורדת PDF" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "סיום וחזרה לקורות החיים" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "סיום" })).not.toBeInTheDocument();
   });
 });

@@ -97,26 +97,31 @@ describe("FactsPage", () => {
     expect(screen.queryByText("לא נמצאו עובדות התואמות לחיפוש.")).not.toBeInTheDocument();
   });
 
-  /* One table, a fact per row and a group per knowledge file; each fact links to its own
-     page. */
+  /* A section per knowledge file, a block per kind inside it, a fact per row; each fact
+     links to its own page. */
   it("lists the pool and narrows it by search and by knowledge file", async () => {
     stubFacts([fact(), sales]);
 
     renderRoute("/facts", "/facts", <FactsPage />);
-    const table = await screen.findByRole("table", { name: "רשימת העובדות" });
+    const table = await screen.findByRole("region", { name: "רשימת העובדות" });
     expect(within(table).getByRole("link", { name: "בניית שירותי Backend" })).toHaveAttribute(
       "href",
       "/facts?fact=fact.backend",
     );
     expect(within(table).getByRole("link", { name: "Managed accounts" })).toBeInTheDocument();
-    /* Each knowledge file's heading row names it and how many facts it holds. */
-    expect(within(table).getByRole("columnheader", { name: "ניסיון בפיתוח 1 עובדות" })).toBeInTheDocument();
+    /* Each knowledge file is its own section, and its facts sit under their kind. */
+    const development = within(table).getByRole("region", { name: "ניסיון בפיתוח" });
+    expect(within(development).getByRole("heading", { level: 3, name: "שורות ניסיון 1" })).toBeInTheDocument();
+    /* A wide screen's outline jumps to each file. */
+    expect(
+      within(screen.getByRole("navigation", { name: "תוכן המאגר" })).getByRole("link", { name: "ניסיון בפיתוח 1" }),
+    ).toHaveAttribute("href", "#fact-file-development-json");
 
     fireEvent.change(screen.getByLabelText("חיפוש עובדות"), { target: { value: "managed" } });
     expect(within(table).queryByRole("link", { name: "בניית שירותי Backend" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("חיפוש עובדות"), { target: { value: "" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "ניסיון במכירות" }));
+    fireEvent.click(screen.getByRole("button", { name: "ניסיון במכירות 1" }));
     expect(within(table).getByRole("link", { name: "Managed accounts" })).toBeInTheDocument();
     expect(within(table).queryByRole("link", { name: "בניית שירותי Backend" })).not.toBeInTheDocument();
   });
@@ -136,7 +141,7 @@ describe("FactsPage", () => {
 
     renderRoute("/facts", "/facts", <FactsPage />);
     const banner = await screen.findByRole("button", { name: /2 עובדות ממתינות לאישורך/ });
-    const table = screen.getByRole("table");
+    const table = screen.getByRole("region", { name: "רשימת העובדות" });
     fireEvent.click(banner);
     expect(banner).toHaveAttribute("aria-pressed", "true");
     expect(within(table).queryByRole("link", { name: "בניית שירותי Backend" })).not.toBeInTheDocument();
@@ -155,7 +160,7 @@ describe("FactsPage", () => {
     expect(
       within(screen.getByRole("complementary", { name: "פרטי העובדה" })).getByText("ניסיון בפיתוח"),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "רשימת העובדות" })).not.toBeInTheDocument();
     expect(screen.getByText(/נוצרה כממתינה/).closest("li")).toHaveAttribute("aria-current", "location");
   });
 

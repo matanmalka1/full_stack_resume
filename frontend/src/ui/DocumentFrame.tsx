@@ -20,6 +20,10 @@ interface DocumentFrameProps {
   busy?: boolean;
   className?: string;
   onLoad?: () => void;
+  /* "frame" bounds the canvas to the screen and scrolls the page inside it, for a frame
+     that sits beside other work; "page" shows the whole page and lets the screen scroll,
+     so a screen whose subject is the document has no scroll inside a scroll. */
+  scroll?: "frame" | "page";
   src: string;
   title: string;
 }
@@ -38,7 +42,7 @@ const fitZoomForWidth = (width: number): number =>
    It owns its whole presentation - toolbar, canvas, and the page on it - so every
    screen that shows a CV shows the same object, and no caller wraps the toolbar in a
    surface of its own. */
-export const DocumentFrame = ({ busy = false, className, onLoad, src, title }: DocumentFrameProps) => {
+export const DocumentFrame = ({ busy = false, className, onLoad, scroll = "frame", src, title }: DocumentFrameProps) => {
   const viewportRef = useRef<HTMLElement>(null);
   const [fitZoom, setFitZoom] = useState(100);
   const [manualZoom, setManualZoom] = useState(100);
@@ -125,12 +129,17 @@ export const DocumentFrame = ({ busy = false, className, onLoad, src, title }: D
       <section
         aria-busy={busy || undefined}
         aria-label="מסמך קורות החיים — ניתן לגלול"
-        className="w-full overflow-auto overscroll-contain [scrollbar-gutter:stable]"
+        className={cx(
+          "w-full",
+          scroll === "frame"
+            ? "overflow-auto overscroll-contain [scrollbar-gutter:stable]"
+            : "overflow-x-auto overflow-y-hidden",
+        )}
         dir="ltr"
         ref={viewportRef}
         style={{
           height: PAGE_HEIGHT_PX * scale + CANVAS_PADDING_PX * 2,
-          maxHeight: "75vh",
+          maxHeight: scroll === "frame" ? "75vh" : undefined,
           padding: CANVAS_PADDING_PX,
         }}
         /* A scrollable document must be focusable for arrow/PageUp/PageDown navigation.

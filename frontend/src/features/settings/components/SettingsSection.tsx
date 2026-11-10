@@ -75,7 +75,7 @@ export const SettingsSelectRow = ({
       <span className="relative flex min-w-0 shrink items-center">
         <select
           className={cx(
-            "min-w-0 cursor-pointer truncate bg-transparent text-label text-cv-text-muted max-lg:min-h-13.5 max-lg:appearance-none max-lg:pe-6 max-lg:text-end",
+            "cv-settings-select min-w-0 cursor-pointer truncate bg-transparent text-label text-cv-text-muted max-lg:min-h-13.5 max-lg:appearance-none max-lg:pe-6 max-lg:text-end",
             "lg:h-10 lg:rounded-control-sm lg:border lg:border-cv-field-border lg:bg-cv-field-background lg:px-2.5 lg:text-cv-text lg:hover:border-cv-border-strong",
           )}
           id={id}

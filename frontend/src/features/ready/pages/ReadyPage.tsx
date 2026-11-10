@@ -4,13 +4,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
-import {
-  decisionExportQueryOptions,
-  documentPageCountQueryOptions,
-  documentPdfHref,
-  documentPreviewSrc,
-  documentQueryOptions,
-} from "@/api/documents";
+import { decisionExportQueryOptions, documentPdfHref, documentPreviewSrc, documentQueryOptions } from "@/api/documents";
 import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
 import { PreparationAlerts } from "@/features/preparation";
@@ -27,7 +21,6 @@ import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
 import { useIsPhone } from "@/ui/useIsPhone";
 import { DecisionDocument } from "../components/DecisionDocument";
-import { ReadyFileFacts } from "../components/ReadyDocumentSummary";
 
 const readyLoading = (
   <div className="flex flex-col gap-4">
@@ -85,12 +78,6 @@ export const ReadyPage = () => {
     ...decisionExportQueryOptions(applicationId, documentHash ?? ""),
     enabled: ready && documentHash !== null,
   });
-  /* The render's own measure of the file. A count the server could not make leaves the
-     format to stand alone. */
-  const pagesQuery = useQuery({
-    ...documentPageCountQueryOptions(applicationId, documentHash ?? ""),
-    enabled: ready && documentHash !== null,
-  });
   const document = documentQuery.data?.document;
   /* A fact is listed by its own words; one the read carries without them has nothing
      to show the reader but an identifier, so it is left out. */
@@ -142,7 +129,7 @@ export const ReadyPage = () => {
       to={routePaths.home(applicationId)}
     >
       <Check aria-hidden="true" className="size-icon-lg" />
-      סיום וחזרה לקורות החיים
+      סיום
     </Link>
   );
 
@@ -237,16 +224,6 @@ export const ReadyPage = () => {
                 <>
                   {isPhone ? page : null}
 
-                  {document === undefined ? (
-                    <Skeleton className="block h-24 w-full" />
-                  ) : (
-                    <ReadyFileFacts
-                      approvedAt={detail.approved_at ?? null}
-                      language={document.language}
-                      pages={pagesQuery.data?.pages ?? null}
-                    />
-                  )}
-
                   {/* A wide screen's two commands, under the file they act on. A phone pins
                       the same two to its bottom edge instead. */}
                   {isPhone ? null : (
@@ -272,7 +249,7 @@ export const ReadyPage = () => {
                     )}
                     <ListRow
                       icon={isPhone ? PencilLine : undefined}
-                      label="חזרה לעריכת הטיוטה"
+                      label="עריכת קורות החיים"
                       to={routePaths.draft(applicationId)}
                     />
                   </ListCard>

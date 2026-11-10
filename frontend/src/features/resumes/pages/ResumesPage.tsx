@@ -1,5 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpLeft, BookOpen, Download, FileText, PencilLine, Plus } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpLeft,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FileText,
+  PencilLine,
+  Plus,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -24,9 +34,11 @@ import { useIsPhone } from "@/ui/useIsPhone";
 import { PreparationMeter } from "../components/PreparationMeter";
 import { applicationAttention } from "../model/resumePresentation";
 
-/* Every Application, newest first, in the endpoint's largest page. The product has no
-   pager; a list past the server's own bound is far beyond its scale. */
+/* Every Application, newest first, in the endpoint's largest page; a list past the
+   server's own bound is far beyond the product's scale. The list column pages it on the
+   client, so the column stays the length of a screen rather than of the whole library. */
 const listQuery = { sort: "updated" as const, limit: 200 };
+const ROWS_PER_PAGE = 20;
 
 const resumesLoading = (
   <div className="flex flex-col gap-3">
@@ -116,20 +128,60 @@ const InProgressPanel = ({ item }: { item: ApplicationListItem }) => {
   );
 };
 
+/* The way between the list's pages. In a right-to-left page the previous one is on the
+   right and the next on the left, so each arrow points where it leads. */
+const ListPager = ({
+  onPage,
+  page,
+  pageCount,
+}: {
+  onPage: (page: number) => void;
+  page: number;
+  pageCount: number;
+}) => (
+  <nav aria-label="דפדוף ברשימה" className="flex items-center justify-between gap-2">
+    <button
+      className={buttonClasses("ghost", undefined, "compact")}
+      disabled={page === 0}
+      onClick={() => onPage(page - 1)}
+      type="button"
+    >
+      <ChevronRight aria-hidden="true" className="size-icon-md" />
+      הקודם
+    </button>
+    <span className="text-label text-cv-text-muted tabular-nums">
+      עמוד {page + 1} מתוך {pageCount}
+    </span>
+    <button
+      className={buttonClasses("ghost", undefined, "compact")}
+      disabled={page >= pageCount - 1}
+      onClick={() => onPage(page + 1)}
+      type="button"
+    >
+      הבא
+      <ChevronLeft aria-hidden="true" className="size-icon-md" />
+    </button>
+  </nav>
+);
+
 /* The chosen CV's head: whose it is on the start side, what to do with it on the end, so
    the commands sit on the document's edge rather than float above it. The main command
-   comes last, at the far end. */
-const DetailHeader = ({ actions, item }: { actions: ReactNode; item: ApplicationListItem }) => (
-  <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
-    <div className="min-w-0">
-      <h2 className="truncate text-heading-card font-extrabold text-cv-text">
-        <bdi>{item.target_role}</bdi>
-      </h2>
-      <p className="truncate text-support text-cv-text-muted" dir="auto">
-        {item.company}
-      </p>
+   comes last, at the far end. On a phone the way back leads, alone on its row, and the
+   commands share one row at equal widths under the heading. */
+const DetailHeader = ({ actions, back, item }: { actions: ReactNode; back?: ReactNode; item: ApplicationListItem }) => (
+  <div className="flex flex-col gap-3">
+    {back}
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-4">
+      <div className="min-w-0">
+        <h2 className="truncate text-heading-card font-extrabold text-cv-text">
+          <bdi>{item.target_role}</bdi>
+        </h2>
+        <p className="truncate text-support text-cv-text-muted" dir="auto">
+          {item.company}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 lg:flex lg:shrink-0 lg:items-center">{actions}</div>
     </div>
-    <div className="flex flex-wrap items-center gap-2">{actions}</div>
   </div>
 );
 
@@ -142,15 +194,21 @@ export const ResumesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const list = useQuery(applicationListQueryOptions(listQuery));
   const [query, setQuery] = useState("");
+  const [requestedPage, setPage] = useState(0);
   const allItems = list.data?.items ?? [];
   const items = allItems.filter((item) => matchesQuery(item, query));
   const inProgress = items.filter((item) => !isReady(item));
   const ready = items.filter(isReady);
+  /* One sequence across both sections - in preparation first, as they are shown - cut
+     into pages; a section empty on this page is not shown on it. */
+  const ordered = [...inProgress, ...ready];
+  const pageCount = Math.max(1, Math.ceil(ordered.length / ROWS_PER_PAGE));
+  const page = Math.min(requestedPage, pageCount - 1);
+  const pageItems = ordered.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
   const requestedId = searchParams.get("application");
   /* Unasked, a wide screen opens on the newest Ready CV - its document is what this screen
      is for - and on the newest in preparation when nothing is Ready yet. */
-  const selected =
-    items.find((item) => item.id === requestedId) ?? (isPhone ? undefined : (ready[0] ?? inProgress[0]));
+  const selected = items.find((item) => item.id === requestedId) ?? (isPhone ? undefined : (ready[0] ?? inProgress[0]));
 
   const select = (applicationId: string | null) => {
     const next = new URLSearchParams(searchParams);
@@ -175,11 +233,12 @@ export const ResumesPage = () => {
     />
   );
 
-  const section = (title: string, sectionItems: ApplicationListItem[]) =>
+  /* A section's count is all of its CVs, not only the ones on this page. */
+  const section = (title: string, total: number, sectionItems: ApplicationListItem[]) =>
     sectionItems.length === 0 ? null : (
       <section aria-label={title} className="flex flex-col gap-2">
         <h2 className="text-label font-bold text-cv-text-muted">
-          {title} ({sectionItems.length})
+          {title} ({total})
         </h2>
         <ListCard>{sectionItems.map(row)}</ListCard>
       </section>
@@ -192,7 +251,10 @@ export const ResumesPage = () => {
       </label>
       <SearchInput
         id="resume-search"
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setPage(0);
+        }}
         placeholder="חיפוש לפי חברה או תפקיד"
         value={query}
       />
@@ -200,15 +262,25 @@ export const ResumesPage = () => {
         <p className="text-body text-cv-text-muted">לא נמצאו קורות חיים שתואמים לחיפוש.</p>
       ) : (
         <>
-          {section("בהכנה", inProgress)}
-          {section("מוכנים", ready)}
+          {section(
+            "בהכנה",
+            inProgress.length,
+            pageItems.filter((item) => !isReady(item)),
+          )}
+          {section("מוכנים", ready.length, pageItems.filter(isReady))}
+          {pageCount > 1 ? <ListPager onPage={setPage} page={page} pageCount={pageCount} /> : null}
         </>
       )}
     </div>
   );
 
   const backToList = isPhone ? (
-    <button className={buttonClasses("ghost", undefined, "compact")} onClick={() => select(null)} type="button">
+    <button
+      className={buttonClasses("ghost", "self-start -ms-2", "compact")}
+      onClick={() => select(null)}
+      type="button"
+    >
+      <ArrowRight aria-hidden="true" className="size-icon-md" />
       חזרה לרשימה
     </button>
   ) : null;
@@ -228,7 +300,6 @@ export const ResumesPage = () => {
             <DetailHeader
               actions={
                 <>
-                  {backToList}
                   {openApplication(routePaths.ready(selected.id))}
                   <a
                     className={buttonClasses("primary", undefined, "compact")}
@@ -239,11 +310,13 @@ export const ResumesPage = () => {
                   </a>
                 </>
               }
+              back={backToList}
               item={selected}
             />
             <DocumentFrame
               className="w-full"
               key={selected.id}
+              scroll="page"
               src={documentPreviewSrc(selected.id, selected.document_hash)}
               title={`קורות החיים: ${resumeLabel(selected)}`}
             />
@@ -253,7 +326,6 @@ export const ResumesPage = () => {
             <DetailHeader
               actions={
                 <>
-                  {backToList}
                   {openApplication(routePaths.application(selected.id))}
                   <Link
                     className={buttonClasses("primary", undefined, "compact")}
@@ -263,6 +335,7 @@ export const ResumesPage = () => {
                   </Link>
                 </>
               }
+              back={backToList}
               item={selected}
             />
             <InProgressPanel item={selected} />

@@ -1,7 +1,7 @@
 /* The decision document is Markdown the server writes from a fixed template: one `#`
    title, `##` sections, paragraphs and `-` lists with inline code. This reads exactly that
-   subset into blocks React renders as elements - never as HTML - so nothing in the stored
-   text can become markup. Anything outside the subset stays readable as a paragraph.
+   subset into blocks - plain strings, never HTML - so nothing in the stored text can
+   become markup. Anything outside the subset stays readable as a paragraph.
 
    Nothing here changes the stored content; the download still hands over the original. */
 
@@ -59,83 +59,80 @@ export const parseDecisionMarkdown = (content: string): ParsedDecision => {
   return { sections: sections.filter((section) => section.heading !== null || section.blocks.length > 0), title };
 };
 
-type InlineSpan = { kind: "code" | "strong" | "text"; text: string } | { kind: "link"; href: string; text: string };
-
-/* Only http(s) targets become links; any other scheme stays visible text. */
-const INLINE = /`([^`]+)`|\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-
-export const parseInline = (text: string): InlineSpan[] => {
-  const spans: InlineSpan[] = [];
-  let last = 0;
-  for (const match of text.matchAll(INLINE)) {
-    const start = match.index ?? 0;
-    if (start > last) spans.push({ kind: "text", text: text.slice(last, start) });
-    const [whole, code, strong, label, href] = match;
-    if (code !== undefined) spans.push({ kind: "code", text: code });
-    else if (strong !== undefined) spans.push({ kind: "strong", text: strong });
-    else spans.push({ kind: "link", href: href!, text: label! });
-    last = start + whole.length;
-  }
-  if (last < text.length) spans.push({ kind: "text", text: text.slice(last) });
-  return spans;
-};
-
 /* The template's sections, read for a person rather than shown as written. The server
-   names facts by id and the classification by English key; a reader wants the decision,
-   what shaped it, and which facts it drew on. Each part is read off the section the
-   template gives it, and a document without that section shows less rather than a
-   guessed value. Everything the reading does not claim - lineage hashes, the approval
-   actor, any section a later template adds - stays in `rest`, shown as written, so
-   nothing in the record drops out of view. */
-interface DecisionReading {
-  classification: { key: string; value: string }[];
+   names facts by id and the classification by English key; a reader wants which role the
+   CV was built for, what shaped it, which facts it drew on and whether its content
+   passed. Each part is read off the section the template gives it, and a document
+   without that section shows less rather than a guessed value. Record ids, hashes and
+   the lineage section are audit evidence, not reading: they stay in the downloaded file
+   and are not shown. */
+export interface DecisionPair {
+  key: string;
+  value: string;
+}
+
+export interface DecisionReading {
+  /* "Company — Role", as the opening list names the Application. */
+  application: string | null;
+  approvedAt: string | null;
+  classification: DecisionPair[];
+  contentCheck: string | null;
+  /* `group/code: message` lines of the content report. */
+  contentIssues: DecisionPair[];
+  /* The facts the content uses; `null` when the record has no such section. */
+  factIds: string[] | null;
   language: string | null;
   /* `""` when the record says there were none; `null` when it does not say. */
   overrides: string | null;
-  rest: DecisionSection[];
-  selectedFactIds: string[] | null;
-  summary: string | null;
+  preparationState: string | null;
 }
 
 const EMPTY_VALUES = new Set(["", "{}", "[]", "none", "null"]);
-const READ_SECTIONS = new Set(["decision", "classification", "selected facts", "overrides"]);
+const REPORT_READ = new Set(["content check", "passed"]);
 
-const keyValue = (line: string) => {
+const unquote = (value: string) => value.replace(/^`|`$/g, "").trim();
+
+const keyValue = (line: string): DecisionPair | null => {
   const match = /^([^:]+):\s*(.*)$/.exec(line);
-  return match === null ? null : { key: match[1]!.trim(), value: match[2]!.trim() };
+  return match === null ? null : { key: match[1]!.trim(), value: unquote(match[2]!.trim()) };
 };
 
 export const readDecision = (parsed: ParsedDecision): DecisionReading => {
-  const section = (name: string) => parsed.sections.find((candidate) => candidate.heading?.toLowerCase() === name);
-  const listItems = (name: string) =>
-    section(name)?.blocks.flatMap((block) => (block.kind === "list" ? block.items : [])) ?? null;
+  const listOf = (candidate: DecisionSection | undefined) =>
+    candidate?.blocks.flatMap((block) => (block.kind === "list" ? block.items : [])) ?? null;
+  const section = (name: string) =>
+    listOf(parsed.sections.find((candidate) => candidate.heading?.toLowerCase() === name));
+  const pairs = (items: string[] | null) =>
+    (items ?? []).flatMap((line) => {
+      const pair = keyValue(line);
+      return pair === null ? [] : [pair];
+    });
+  const find = (from: DecisionPair[], key: string) =>
+    from.find((pair) => pair.key.toLowerCase() === key)?.value || null;
 
-  const summary =
-    section("decision")
-      ?.blocks.flatMap((block) => (block.kind === "paragraph" ? [block.text] : []))
-      .join(" ") || null;
+  const preamble = pairs(listOf(parsed.sections.find((candidate) => candidate.heading === null)));
 
-  const classification = (listItems("classification") ?? []).flatMap((line) => {
-    const pair = keyValue(line);
-    return pair === null || pair.value === "" ? [] : [pair];
-  });
-  const language = classification.find((pair) => pair.key.toLowerCase() === "language")?.value ?? null;
-
-  const facts = listItems("selected facts");
-  const selectedFactIds =
-    facts === null
-      ? null
-      : facts.filter((fact) => !/^none recorded$/i.test(fact)).map((fact) => fact.replace(/^`|`$/g, "").trim());
-
-  const overrideValue = (listItems("overrides") ?? [])
-    .map(keyValue)
-    .find((pair) => pair?.key.toLowerCase() === "user overrides")?.value;
+  const classified = pairs(section("classification"));
+  const overrideValue = classified.find((pair) => pair.key.toLowerCase() === "user overrides")?.value;
   const overrides =
     overrideValue === undefined ? null : EMPTY_VALUES.has(overrideValue.toLowerCase()) ? "" : overrideValue;
+  const classification = classified.filter((pair) => pair.value !== "" && pair.key.toLowerCase() !== "user overrides");
 
-  const rest = parsed.sections.filter(
-    (candidate) => candidate.heading === null || !READ_SECTIONS.has(candidate.heading.toLowerCase()),
-  );
+  const used = section("facts the content uses");
+  const factIds =
+    used === null ? null : used.filter((fact) => !/^none recorded$/i.test(fact)).map((fact) => unquote(fact));
 
-  return { classification, language, overrides, rest, selectedFactIds, summary };
+  const report = pairs(section("content report"));
+
+  return {
+    application: find(preamble, "application"),
+    approvedAt: find(preamble, "approved at"),
+    classification,
+    contentCheck: find(report, "content check"),
+    contentIssues: report.filter((pair) => !REPORT_READ.has(pair.key.toLowerCase())),
+    factIds,
+    language: find(classification, "language"),
+    overrides,
+    preparationState: find(preamble, "preparation state"),
+  };
 };

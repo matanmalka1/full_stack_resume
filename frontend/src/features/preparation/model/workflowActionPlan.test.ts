@@ -96,7 +96,7 @@ describe("recommended action destinations", () => {
       action: "edit",
       emphasized: false,
       href: "/applications/app-1/draft",
-      label: "חזרה לעריכת הטיוטה",
+      label: "עריכת קורות החיים",
     });
     expect(plan.createDraft).toBeNull();
     expect(plan.unbuiltRecommendation).toBeNull();

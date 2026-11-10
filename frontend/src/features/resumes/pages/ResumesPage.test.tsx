@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -116,6 +116,26 @@ describe("ResumesPage", () => {
 
     fireEvent.change(field, { target: { value: "nothing" } });
     expect(screen.getByText("לא נמצאו קורות חיים שתואמים לחיפוש.")).toBeInTheDocument();
+  });
+
+  it("pages the list by twenty rows and keeps each section's full count", async () => {
+    const items = Array.from({ length: 25 }, (_, index) => readyItem(`app-${index}`, `Company ${index}`));
+    renderPage(items);
+
+    const firstPage = await screen.findByRole("region", { name: "מוכנים" });
+    expect(firstPage).toHaveTextContent("מוכנים (25)");
+    expect(within(firstPage).getByText("Company 19")).toBeInTheDocument();
+    expect(within(firstPage).queryByText("Company 20")).not.toBeInTheDocument();
+    expect(screen.getByText("עמוד 1 מתוך 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "הקודם" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "הבא" }));
+
+    const secondPage = screen.getByRole("region", { name: "מוכנים" });
+    expect(secondPage).toHaveTextContent("מוכנים (25)");
+    expect(within(secondPage).getByText("Company 24")).toBeInTheDocument();
+    expect(within(secondPage).queryByText("Company 0")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "הבא" })).toBeDisabled();
   });
 
   it("offers the first job when there is no CV at all", async () => {

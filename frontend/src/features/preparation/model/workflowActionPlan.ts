@@ -94,7 +94,7 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
         : checkHref !== null
           ? { action: "check" as const, href: checkHref, label: actionLabel("check") }
           : editHref !== null
-            ? { action: "edit" as const, href: editHref, label: readyNow ? "חזרה לעריכת הטיוטה" : actionLabel("edit") }
+            ? { action: "edit" as const, href: editHref, label: readyNow ? "עריכת קורות החיים" : actionLabel("edit") }
             : null;
   const draftScreen =
     draftScreenTarget === null
