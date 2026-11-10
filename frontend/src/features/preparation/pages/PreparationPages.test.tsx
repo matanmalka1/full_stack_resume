@@ -204,7 +204,7 @@ describe("AnalysisPage", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "הרצת ניתוח המשרה" })).toBeInTheDocument();
     const steps = screen.getByRole("list", { name: "שלבי ההרצה" });
     expect(within(steps).getByText("ביצוע").closest("li")).toHaveAttribute("aria-current", "step");
-    expect(screen.getByRole("link", { name: "חזרה ללוח" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "חזרה לקורות החיים" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
   });
 

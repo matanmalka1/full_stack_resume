@@ -1,7 +1,7 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { preparationStateLabels } from "@/features/preparation";
 import { ProgressSegments } from "@/ui/ProgressSegments";
-import { preparationProgress } from "../model/applicationListPresentation";
+import { preparationProgress } from "../model/resumePresentation";
 
 /* The CV track on a card: one segment per preparation state, filled to where the
    Application's document stands, and its position in words beside it - "קו״ח 3/5", or

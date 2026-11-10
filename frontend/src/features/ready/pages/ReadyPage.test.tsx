@@ -66,8 +66,8 @@ describe("ReadyPage", () => {
     );
     expect(screen.queryByText("פרטים טכניים")).not.toBeInTheDocument();
     expect(screen.queryByText("חתימת המסמך")).not.toBeInTheDocument();
-    /* The step ends with the way back to the board. */
-    expect(screen.getByRole("link", { name: "סיום וחזרה ללוח" })).toHaveAttribute("href", "/");
+    /* The step ends with the way back to the CV library, opened on this CV. */
+    expect(screen.getByRole("link", { name: "סיום וחזרה לקורות החיים" })).toHaveAttribute("href", "/?application=app-1");
   });
 
   it("sends a document that changed since rendering back to the editor, offering no file", async () => {
@@ -81,6 +81,6 @@ describe("ReadyPage", () => {
       "/applications/app-1/draft",
     );
     expect(screen.queryByRole("link", { name: "הורדת PDF" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "סיום וחזרה ללוח" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "סיום וחזרה לקורות החיים" })).not.toBeInTheDocument();
   });
 });

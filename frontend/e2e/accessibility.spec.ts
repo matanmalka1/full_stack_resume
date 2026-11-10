@@ -71,12 +71,12 @@ const board = (): ApplicationListResponse => {
 };
 
 test.describe("accessibility", () => {
-  test("the application board has no automatically detectable violations", async ({ api, page }) => {
-    /* The board reads its list once; the action hub is drawn from the same answer. */
+  test("the CV library has no automatically detectable violations", async ({ api, page }) => {
+    /* The library reads its list once. */
     api.stub("GET /api/v1/applications?limit=200&sort=updated", json(board()));
 
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1, name: "לוח המועמדויות" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "קורות החיים" })).toBeVisible();
     await expect(page.getByText("Globex").first()).toBeVisible();
 
     await scan(page);

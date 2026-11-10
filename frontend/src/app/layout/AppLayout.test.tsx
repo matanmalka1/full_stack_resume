@@ -94,8 +94,8 @@ it("gives every route the brand, the new-job command, the areas and sign-out", (
   expect(screen.getByRole("link", { name: "סביבת קורות החיים" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "קליטת משרה חדשה" })).toBeInTheDocument();
   const navigation = screen.getByRole("navigation", { name: "ניווט ראשי" });
-  expect(navigation).toContainElement(screen.getByRole("link", { name: "לוח המועמדויות" }));
-  expect(screen.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute("aria-current", "page");
+  expect(navigation).toContainElement(screen.getByRole("link", { name: "קורות החיים" }));
+  expect(screen.getByRole("link", { name: "קורות החיים" })).toHaveAttribute("aria-current", "page");
   expect(navigation).toContainElement(screen.getByRole("link", { name: "מאגר העובדות" }));
   expect(navigation).toContainElement(screen.getByRole("link", { name: "הגדרות" }));
   expect(screen.getByRole("button", { name: "התנתקות" })).toBeInTheDocument();
@@ -118,6 +118,6 @@ it("keeps the board marked on an Application's screens", () => {
     </QueryClientProvider>,
   );
 
-  expect(screen.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute("aria-current", "true");
+  expect(screen.getByRole("link", { name: "קורות החיים" })).toHaveAttribute("aria-current", "true");
   expect(screen.getByRole("link", { name: "מאגר העובדות" })).not.toHaveAttribute("aria-current");
 });

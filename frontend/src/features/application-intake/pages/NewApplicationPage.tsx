@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { useIsPhone } from "@/ui/useIsPhone";
 import { useAiAvailability } from "@/features/settings";
-import { boardPath } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
 import { isJobTextWithinBudget } from "@/features/application-detail";
 import { workflowStageLabels, workflowStages } from "@/features/preparation";
@@ -182,9 +181,9 @@ export const NewApplicationPage = () => {
       {isPhone ? (
         <div className="-ms-2 -mt-1.5 flex items-center justify-between gap-3">
           <Link
-            aria-label="ביטול וחזרה ללוח"
+            aria-label="ביטול וחזרה לקורות החיים"
             className="flex size-11 shrink-0 items-center justify-center rounded-control text-cv-text"
-            to={boardPath()}
+            to={routePaths.home()}
           >
             <X aria-hidden="true" className="size-5.5" />
           </Link>
@@ -217,7 +216,7 @@ export const NewApplicationPage = () => {
                 <div className="flex flex-col gap-3">
                   {noteLine}
                   <div className="flex justify-end gap-2.5">
-                    <Link className={buttonClasses("secondary", undefined, "default")} to={boardPath()}>
+                    <Link className={buttonClasses("secondary", undefined, "default")} to={routePaths.home()}>
                       ביטול
                     </Link>
                     {primary}

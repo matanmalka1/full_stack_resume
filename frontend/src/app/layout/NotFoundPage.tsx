@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { buttonClasses } from "@/ui/Button";
-import { boardPath } from "@/navigation/boardReturn";
+import { routePaths } from "@/navigation/routePaths";
 
 /* A URL that matches no route, or a record the server no longer has. It offers the way
    back rather than only reporting the miss, because the reader who lands here typed or
@@ -31,13 +31,13 @@ export const NotFoundPage = () => (
       העמוד לא נמצא
     </h1>
     <p className="max-w-75 text-body leading-relaxed text-cv-text-muted lg:max-w-115 lg:text-[1.0625rem]">
-      ייתכן שהכתובת השתנתה או שהרשומה נסגרה. אפשר לחזור ללוח המועמדויות ולהמשיך משם.
+      ייתכן שהכתובת השתנתה או שהרשומה נסגרה. אפשר לחזור לקורות החיים ולהמשיך משם.
     </p>
     <Link
       className={buttonClasses("primary", "mt-2 shadow-action max-lg:w-full lg:min-h-12.5 lg:px-6", "large")}
-      to={boardPath()}
+      to={routePaths.home()}
     >
-      חזרה ללוח המועמדויות
+      חזרה לקורות החיים
     </Link>
   </section>
 );

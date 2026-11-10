@@ -181,5 +181,5 @@ test("analysis, AI draft, approval and real PDF compose through the browser", as
   const pdf = await readFile(pdfPath!);
   expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
 
-  await expect(page.getByRole("link", { name: "סיום וחזרה ללוח", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "סיום וחזרה לקורות החיים", exact: true }).first()).toBeVisible();
 });

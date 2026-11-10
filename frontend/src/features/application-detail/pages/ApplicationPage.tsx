@@ -6,7 +6,6 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
 import { documentPdfHref } from "@/api/documents";
-import { boardPath, boardReturnState } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
 import { buttonClasses } from "@/ui/Button";
@@ -88,7 +87,7 @@ export const ApplicationPage = () => {
   const detail = query.data;
   const [dialog, setDialog] = useState<HubDialog | null>(null);
   const { deleteMutation } = useApplicationRecordMutations(applicationId, {
-    onDeleted: () => void navigate(boardPath(), { state: boardReturnState(applicationId) }),
+    onDeleted: () => void navigate(routePaths.home()),
   });
 
   /* The intake screen hands a new Application over in route state, with the analysis it
@@ -120,10 +119,9 @@ export const ApplicationPage = () => {
       {/* A phone's header row: the way back to the board, and the record's menu. */}
       <div className="-mx-2 -mt-2 mb-1 flex items-center justify-between lg:hidden">
         <Link
-          aria-label="חזרה ללוח המועמדויות"
+          aria-label="חזרה לקורות החיים"
           className="flex size-11 items-center justify-center rounded-control text-cv-text transition-colors hover:bg-cv-surface-muted"
-          state={boardReturnState(applicationId)}
-          to={boardPath()}
+          to={routePaths.home(applicationId)}
         >
           <ChevronRight aria-hidden="true" className="size-icon-lg" />
         </Link>
@@ -135,10 +133,9 @@ export const ApplicationPage = () => {
       <nav aria-label="מיקום" className="mb-5.5 flex gap-1.5 text-support text-cv-text-muted max-lg:hidden">
         <Link
           className="underline underline-offset-4 hover:text-cv-text"
-          state={boardReturnState(applicationId)}
-          to={boardPath()}
+          to={routePaths.home(applicationId)}
         >
-          לוח המועמדויות
+          קורות החיים
         </Link>
         <span aria-hidden="true">/</span>
         <span aria-current="page" dir="auto">
@@ -202,7 +199,7 @@ export const ApplicationPage = () => {
               /* A deleted Application stays reachable by ID (product-spec.md invariant #20)
                  so its history is never orphaned, but no command is offered against it. */
               <Callout role="alert" title="המועמדות הזו נמחקה" tone="warning">
-                המועמדות הוסרה מלוח המועמדויות ואין לבצע עליה פעולות נוספות. נוסח המשרה, הניתוח ומסמך קורות החיים נשארים
+                המועמדות הוסרה מרשימת קורות החיים ואין לבצע עליה פעולות נוספות. נוסח המשרה, הניתוח ומסמך קורות החיים נשארים
                 בדיוק כפי שהם.
               </Callout>
             ) : null

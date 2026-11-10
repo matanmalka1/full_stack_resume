@@ -16,9 +16,9 @@ test.describe("the application shell", () => {
     };
     api.stub("GET /api/v1/applications?limit=200&sort=updated", json(emptyList));
     await page.goto("/settings");
-    await page.getByRole("link", { name: "לוח המועמדויות" }).click();
+    await page.getByRole("link", { name: "קורות החיים", exact: true }).click();
 
-    await expect(page.getByRole("heading", { level: 1, name: "לוח המועמדויות" })).toBeFocused();
+    await expect(page.getByRole("heading", { level: 1, name: "קורות החיים" })).toBeFocused();
   });
 });
 

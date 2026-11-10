@@ -3,11 +3,11 @@ import type { RouteObject } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { NewApplicationPage } from "@/features/application-intake/pages/NewApplicationPage";
-import { ApplicationListPage } from "@/features/application-list/pages/ApplicationListPage";
 import { AnalysisPage } from "@/features/preparation/pages/AnalysisPage";
 import { ApplicationPage } from "@/features/application-detail/pages/ApplicationPage";
 import { ApplicationResumePage } from "@/features/application-detail/pages/ApplicationResumePage";
 import { DraftEditorPage } from "@/features/drafts/pages/DraftEditorPage";
+import { ResumesPage } from "@/features/resumes/pages/ResumesPage";
 import { ReadyPage } from "@/features/ready/pages/ReadyPage";
 import { SessionGate } from "@/features/auth";
 import { LoginPage } from "@/features/auth/pages/LoginPage";
@@ -30,10 +30,10 @@ const screenOf = async (entry: RouteObject | undefined) => {
 const elementType = (path: string) => screenOf(route(path));
 
 describe("the route table", () => {
-  it("puts the board at the root and intake on its own path", async () => {
+  it("puts the CV library at the root and intake on its own path", async () => {
     const index = screens.find((entry) => entry.index === true);
 
-    expect(await screenOf(index)).toBe(ApplicationListPage);
+    expect(await screenOf(index)).toBe(ResumesPage);
     expect(await elementType("applications/new")).toBe(NewApplicationPage);
   });
 

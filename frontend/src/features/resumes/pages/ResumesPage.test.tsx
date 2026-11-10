@@ -7,7 +7,7 @@ import type { ApplicationListItem, ApplicationListResponse } from "@/api/contrac
 import { json } from "@/test/fixtures";
 import { ResumesPage } from "./ResumesPage";
 
-const readyItem = (id: string, company: string): ApplicationListItem =>
+const readyItem = (id: string, company: string, overrides: Partial<ApplicationListItem> = {}): ApplicationListItem =>
   ({
     id,
     company,
@@ -24,7 +24,17 @@ const readyItem = (id: string, company: string): ApplicationListItem =>
     available_actions: ["download_pdf"],
     blocked_actions: [],
     recommended_action: "download_pdf",
+    ...overrides,
   }) as ApplicationListItem;
+
+const draftItem = (id: string, company: string, overrides: Partial<ApplicationListItem> = {}): ApplicationListItem =>
+  readyItem(id, company, {
+    preparation_state: "draft_in_progress",
+    document_hash: null,
+    available_actions: ["patch_draft"],
+    recommended_action: "patch_draft",
+    ...overrides,
+  });
 
 const listBody = (items: ApplicationListItem[]): ApplicationListResponse => ({
   items,
@@ -41,7 +51,7 @@ const renderPage = (items: ApplicationListItem[]) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/resumes"]}>
+      <MemoryRouter initialEntries={["/"]}>
         <ResumesPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -54,13 +64,32 @@ afterEach(() => {
 });
 
 describe("ResumesPage", () => {
-  it("asks the server for Ready CVs only and previews the first one", async () => {
-    const fetchMock = renderPage([readyItem("app-1", "Acme"), readyItem("app-2", "Binat")]);
+  it("lists CVs in preparation and Ready ones, and previews the newest Ready one", async () => {
+    const fetchMock = renderPage([draftItem("app-0", "Draftco"), readyItem("app-1", "Acme"), readyItem("app-2", "Binat")]);
 
     expect(await screen.findByRole("button", { name: /Acme/ })).toBeInTheDocument();
     const requested = new URL(String(fetchMock.mock.calls[0]?.[0]), "http://localhost");
-    expect(requested.searchParams.getAll("stage")).toEqual(["ready"]);
+    expect(requested.searchParams.getAll("stage")).toEqual([]);
+    expect(screen.getByRole("region", { name: "בהכנה" })).toHaveTextContent("Draftco");
+    expect(screen.getByRole("region", { name: "מוכנים" })).toHaveTextContent("Acme");
     expect(screen.getByTitle("קורות החיים: Acme · Backend Engineer")).toBeInTheDocument();
+  });
+
+  it("shows where a CV in preparation stands and the way on to its step", async () => {
+    const reason = {
+      code: "PENDING_FACT_REQUIRES_RESOLUTION",
+      message: "m",
+      entity_references: {},
+      allowed_resolution_actions: [],
+    };
+    renderPage([draftItem("app-0", "Draftco", { review_reasons: [reason] }), readyItem("app-1", "Acme")]);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Draftco/ }));
+
+    expect(screen.getByRole("link", { name: "המשך הכנה" })).toHaveAttribute("href", "/applications/app-0/draft");
+    expect(screen.getByText("טיוטה בעבודה")).toBeInTheDocument();
+    expect(screen.getAllByText("דורש טיפול").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "הורדת PDF" })).not.toBeInTheDocument();
   });
 
   it("switches the preview to the chosen CV", async () => {
@@ -89,9 +118,10 @@ describe("ResumesPage", () => {
     expect(screen.getByText("לא נמצאו קורות חיים שתואמים לחיפוש.")).toBeInTheDocument();
   });
 
-  it("says so when no CV is Ready yet", async () => {
+  it("offers the first job when there is no CV at all", async () => {
     renderPage([]);
 
-    expect(await screen.findByText("עדיין אין קורות חיים מוכנים.")).toBeInTheDocument();
+    expect(await screen.findByText("עוד אין קורות חיים")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /קליטת משרה ראשונה/ })).toHaveAttribute("href", "/applications/new");
   });
 });

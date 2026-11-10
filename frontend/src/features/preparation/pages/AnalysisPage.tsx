@@ -229,7 +229,7 @@ export const AnalysisPage = () => {
               /* A deleted Application stays reachable by id so its history is never
              orphaned, but no preparation runs against it. */
               <Callout role="alert" title="המועמדות הזו נמחקה" tone="warning">
-                המועמדות הוסרה מלוח המועמדויות ואין לבצע עליה פעולות הכנה נוספות. נוסח המשרה, הניתוח ומסמך קורות החיים
+                המועמדות הוסרה מרשימת קורות החיים ואין לבצע עליה פעולות הכנה נוספות. נוסח המשרה, הניתוח ומסמך קורות החיים
                 נשארים בדיוק כפי שהם.
               </Callout>
             ) : (

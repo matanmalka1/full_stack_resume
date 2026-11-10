@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
 import { cancelOperation, operationQueryKey } from "@/api/operations";
-import { boardPath, boardReturnState } from "@/navigation/boardReturn";
+import { routePaths } from "@/navigation/routePaths";
 import { Button, buttonClasses } from "@/ui/Button";
 import { CommitBar } from "@/ui/CommitBar";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -29,8 +29,8 @@ export const OperationRunBar = ({ operation }: { operation: Operation }) => {
   return (
     <CommitBar
       primary={
-        <Link className={buttonClasses("primary")} state={boardReturnState(operation.application_id)} to={boardPath()}>
-          חזרה ללוח
+        <Link className={buttonClasses("primary")} to={routePaths.home(operation.application_id)}>
+          חזרה לקורות החיים
         </Link>
       }
       {...(cancel.error === null

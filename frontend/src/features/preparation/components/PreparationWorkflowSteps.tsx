@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { boardPath, boardReturnState } from "@/navigation/boardReturn";
+import { routePaths } from "@/navigation/routePaths";
 import { cx } from "@/ui/cx";
 import { type WorkflowStep, WorkflowStepsRail } from "./WorkflowStepsRail";
 import {
@@ -144,12 +144,11 @@ export const PreparationWorkflowSteps = ({
     <div className="flex flex-col gap-2 max-lg:grid max-lg:grid-cols-[auto_minmax(0,1fr)_auto] max-lg:items-center max-lg:gap-x-2 max-lg:gap-y-3">
       <Link
         className="inline-flex min-h-11 w-fit shrink-0 items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text max-lg:min-w-11 max-lg:justify-center max-lg:px-0 max-lg:text-cv-text"
-        state={boardReturnState(applicationId)}
-        to={boardPath()}
+        to={routePaths.home(applicationId)}
       >
         <ArrowRight aria-hidden="true" className="size-icon-md shrink-0 max-lg:hidden" />
         <ChevronRight aria-hidden="true" className="size-icon-lg shrink-0 lg:hidden" />
-        <span className="max-lg:sr-only">חזרה ללוח המועמדויות</span>
+        <span className="max-lg:sr-only">חזרה לקורות החיים</span>
       </Link>
 
       {/* Drawn for sighted readers only: the page's heading and its eyebrow, which say the

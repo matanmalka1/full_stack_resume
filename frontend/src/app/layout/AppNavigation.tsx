@@ -1,23 +1,21 @@
-import { BookOpen, FileText, LayoutDashboard, Settings } from "lucide-react";
+import { BookOpen, FileText, Settings } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import { cx } from "@/ui/cx";
-import { boardPath } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
 
 /* `within` names the addresses that sit under an area without being its own page: an
-   Application and its steps are reached from the board, so the board stays marked
+   Application and its steps are reached from the CV library, so the library stays marked
    there. */
 const areas = () => [
   {
-    icon: LayoutDashboard,
-    key: routePaths.home,
-    label: "לוח המועמדויות",
-    short: "לוח",
-    to: boardPath(),
+    icon: FileText,
+    key: routePaths.home(),
+    label: "קורות החיים",
+    short: "קו״ח",
+    to: routePaths.home(),
     within: (pathname: string) => pathname.startsWith("/applications/"),
   },
-  { icon: FileText, key: routePaths.resumes, label: "כל קורות החיים", short: "קו״ח", to: routePaths.resumes, within: null },
   { icon: BookOpen, key: routePaths.facts, label: "מאגר העובדות", short: "עובדות", to: routePaths.facts, within: null },
   { icon: Settings, key: routePaths.settings, label: "הגדרות", short: "הגדרות", to: routePaths.settings, within: null },
 ];

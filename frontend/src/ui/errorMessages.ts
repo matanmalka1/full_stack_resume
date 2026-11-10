@@ -29,7 +29,7 @@ const artifactUnavailable: ProblemMessage = {
 
 const problemMessages: Record<string, ProblemMessage> = {
   UNKNOWN_RECORD: { reason: "הפריט המבוקש לא נמצא. ייתכן שנמחק.", action: refreshAndRetry },
-  ROUTE_NOT_FOUND: { reason: "הכתובת המבוקשת אינה קיימת.", action: "אפשר לחזור ללוח המועמדויות." },
+  ROUTE_NOT_FOUND: { reason: "הכתובת המבוקשת אינה קיימת.", action: "אפשר לחזור לקורות החיים." },
   REQUEST_VALIDATION_FAILED: { reason: "חלק מהפרטים אינם תקינים.", action: fixFields },
   APPLICATION_INTAKE_INVALID: { reason: "חלק מהפרטים אינם תקינים.", action: fixFields },
   BAD_REQUEST: { reason: "הבקשה לא התקבלה.", action: refreshAndRetry },

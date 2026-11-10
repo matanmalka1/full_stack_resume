@@ -1,12 +1,11 @@
 import { useIsFetching } from "@tanstack/react-query";
 import { File, Plus } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { cx } from "@/ui/cx";
 import { SignOutButton } from "@/features/auth";
-import { boardPath } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
-import { AppNavigation } from "./AppNavigation";
+import { AppNavigation, areaTitle } from "./AppNavigation";
 
 /* Whether the application is currently talking to the server, anywhere. Decorative: the
    screens announce their own loading in words through `QueryState`, and a bar that also
@@ -30,7 +29,7 @@ const GlobalActivityBar = () => {
 /* The product's name, led by its mark: a page of a CV on the accent square. It links to
    the board, the area every visit starts from. */
 const Brand = () => (
-  <Link className="flex min-w-0 items-center gap-2.5 rounded-control p-1 text-cv-text" to={boardPath()}>
+  <Link className="hidden min-w-0 items-center gap-2.5 rounded-control p-1 text-cv-text lg:flex" to={routePaths.home()}>
     <span
       aria-hidden="true"
       className="flex size-8.5 shrink-0 items-center justify-center rounded-control-sm bg-cv-accent text-cv-on-accent"
@@ -41,9 +40,22 @@ const Brand = () => (
   </Link>
 );
 
+/* Below the large breakpoint the top bar titles the screen, centred, as an iPhone's
+   navigation bar does; the brand is the sidebar's alone. Decorative: the page's own
+   heading is the one assistive tech reads, and saying it twice helps no one. */
+const PhoneTitle = () => {
+  const { pathname } = useLocation();
+
+  return (
+    <p aria-hidden="true" className="min-h-6 truncate text-body font-bold tracking-tight text-cv-text lg:hidden">
+      {areaTitle(pathname) ?? "סביבת קורות החיים"}
+    </p>
+  );
+};
+
 /* One element, two shapes. From the large breakpoint it is the sidebar, top to bottom:
    the brand, the new-job command, the areas, and sign-out pinned to the foot. Below it,
-   it is a top bar of the brand, with the areas as a tab bar pinned to the bottom of the viewport (`AppNavigation`); the new-job
+   it is a top bar titling the screen (`PhoneTitle`), with the areas as a tab bar pinned to the bottom of the viewport (`AppNavigation`); the new-job
    command moves to the board's floating button and sign-out to Settings.
 
    `hiddenOnPhone` drops the whole header - top bar and tab bar, which lives inside it -
@@ -57,8 +69,9 @@ export const AppHeader = ({ hiddenOnPhone = false }: { hiddenOnPhone?: boolean }
         hiddenOnPhone && "max-lg:hidden",
       )}
     >
-      <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2 lg:h-full lg:flex-col lg:items-stretch lg:justify-start lg:gap-4 lg:py-5">
+      <div className="flex items-center justify-center gap-3 px-4 pt-4 pb-2 lg:h-full lg:flex-col lg:items-stretch lg:justify-start lg:gap-4 lg:py-5">
         <Brand />
+        <PhoneTitle />
 
         {/* The wrapper carries the breakpoint: the link's own `inline-flex` and a `hidden`
             beside it would be settled by stylesheet order. */}

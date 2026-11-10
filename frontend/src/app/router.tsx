@@ -7,7 +7,7 @@ import { AppLayout } from "./layout/AppLayout";
 import { NotFoundPage } from "./layout/NotFoundPage";
 import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorBoundary";
 
-/* The preparation workflow is carried by the board, intake, the Application hub, its
+/* The preparation workflow is carried by the CV library, intake, the Application hub, its
    preparation tab, the draft editor, and the ready document. Candidate facts and
    settings are durable product areas outside that per-Application workflow.
 
@@ -19,7 +19,7 @@ import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorB
    An Operation has no route either. Queueing reports in place, and a direct link lands on
    the Application whose panel shows the run.
 
-   Every screen is its own chunk, loaded when it is first visited, so opening the board
+   Every screen is its own chunk, loaded when it is first visited, so opening the library
    does not download the draft editor. Navigating keeps the current screen on view until
    the next one has arrived; only the very first load has nothing to show, and there the
    shell renders and the content column says it is loading. A chunk that fails to load is
@@ -58,12 +58,12 @@ export const routes: RouteObject[] = [
           {
             index: true,
             lazy: screen(
-              () => import("@/features/application-list/pages/ApplicationListPage"),
-              (module) => module.ApplicationListPage,
+              () => import("@/features/resumes/pages/ResumesPage"),
+              (module) => module.ResumesPage,
             ),
           },
 
-          /* Creating is one action taken from the board, not what the root does. */
+          /* Creating is one action taken from the CV library, not what the root does. */
           {
             path: "applications/new",
             lazy: screen(
@@ -136,13 +136,6 @@ export const routes: RouteObject[] = [
             ),
           },
 
-          {
-            path: "resumes",
-            lazy: screen(
-              () => import("@/features/resumes/pages/ResumesPage"),
-              (module) => module.ResumesPage,
-            ),
-          },
           {
             path: "facts",
             lazy: screen(

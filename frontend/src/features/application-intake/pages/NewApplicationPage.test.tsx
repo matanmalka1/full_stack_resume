@@ -170,15 +170,10 @@ afterEach(() => {
 });
 
 describe("NewApplicationPage", () => {
-  /* The board's filtering is remembered by the board itself and read back by every screen
-     that offers a way to it, rather than threaded through this one screen's own URL. What
-     is guarded here is that this screen returns to the remembered board and not to a bare
-     one; that what gets remembered is the board's canonical query is the board's own. */
-  it("returns to the board the user left rather than to a bare board", () => {
-    window.sessionStorage.setItem("cv:board-query", "preset=ready_to_send");
+  it("cancels back to the CV library", () => {
     renderPage("/");
 
-    expect(screen.getByRole("link", { name: "ביטול" })).toHaveAttribute("href", "/?preset=ready_to_send");
+    expect(screen.getByRole("link", { name: "ביטול" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("heading", { name: "משרה חדשה" })).toBeInTheDocument();
   });
 

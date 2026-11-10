@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
-import { boardPath, boardReturnState } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
 import { Button, buttonClasses } from "@/ui/Button";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -138,8 +137,8 @@ export const LiveRunScreen = ({
 };
 
 const BoardLink = ({ applicationId }: { applicationId: string | undefined }) => (
-  <Link className={buttonClasses("primary", "max-lg:flex-1")} state={boardReturnState(applicationId)} to={boardPath()}>
-    חזרה ללוח
+  <Link className={buttonClasses("primary", "max-lg:flex-1")} to={routePaths.home(applicationId)}>
+    חזרה לקורות החיים
   </Link>
 );
 

@@ -6,7 +6,7 @@ import { Card } from "@/ui/Card";
 import { problemSentence } from "@/ui/errorMessages";
 import { PageShell } from "@/ui/PageShell";
 import { reportError } from "@/ui/reportError";
-import { boardPath } from "@/navigation/boardReturn";
+import { routePaths } from "@/navigation/routePaths";
 
 interface SafeRouteError {
   title: string;
@@ -19,13 +19,13 @@ const toSafeRouteError = (error: unknown): SafeRouteError => {
   if (isRouteErrorResponse(error)) {
     return {
       title: "לא ניתן לפתוח את העמוד",
-      detail: "העמוד המבוקש אינו זמין כרגע. אפשר לחזור ללוח המועמדויות.",
+      detail: "העמוד המבוקש אינו זמין כרגע. אפשר לחזור לקורות החיים.",
     };
   }
 
   return {
     title: "לא ניתן להציג את העמוד",
-    detail: problemSentence(error, "אירעה שגיאה בלתי צפויה. אפשר לרענן את העמוד או לחזור ללוח המועמדויות."),
+    detail: problemSentence(error, "אירעה שגיאה בלתי צפויה. אפשר לרענן את העמוד או לחזור לקורות החיים."),
   };
 };
 
@@ -33,8 +33,8 @@ const RouteErrorContent = () => (
   <Card aria-labelledby="route-heading" role="alert">
     {/* A route failure leaves no useful action on its screen, so the shared presentation
         always carries one deterministic way back to the board. */}
-    <Link className={buttonClasses("primary")} to={boardPath()}>
-      חזרה ללוח המועמדויות
+    <Link className={buttonClasses("primary")} to={routePaths.home()}>
+      חזרה לקורות החיים
     </Link>
   </Card>
 );

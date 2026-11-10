@@ -34,7 +34,7 @@ export const DeleteApplicationDialog = ({
     <p className="text-label leading-relaxed text-cv-text" dir="auto">
       {application === null
         ? null
-        : `${applicationSubject(application)} תרד מלוח המועמדויות ולא תיספר עוד בברירת המחדל.`}
+        : `${applicationSubject(application)} תרד מרשימת קורות החיים ולא תיספר עוד בברירת המחדל.`}
     </p>
     <p className="mt-3 rounded-control bg-cv-surface-muted px-3.5 py-2.5 text-label leading-relaxed text-cv-text">
       הפעולה סופית ואין לה ביטול. תצלומי המשרה, הניתוחים, מסמך קורות החיים וכל קובץ שהופק נשארים בדיוק כפי שהם.

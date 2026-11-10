@@ -9,15 +9,16 @@ const segment = (value: string): string => encodeURIComponent(value);
 const application = (applicationId: string): string => `/applications/${segment(applicationId)}`;
 
 export const routePaths = {
-  home: "/",
+  /* The CV library, opened on one Application when it is named: every "back" from an
+     Application lands on it there. */
+  home: (applicationId?: string): string =>
+    applicationId === undefined ? "/" : `/?application=${encodeURIComponent(applicationId)}`,
   /* Sign-in, with where to return afterwards. `next` is a path inside this app: the login
      screen refuses anything else, so the address cannot send a reader off-site. */
   login: (next?: string): string =>
     next === undefined || next === "/" ? "/login" : `/login?next=${encodeURIComponent(next)}`,
   newApplication: "/applications/new",
   facts: "/facts",
-  /* Every Ready CV, with a preview of the one chosen. */
-  resumes: "/resumes",
   settings: "/settings",
   /* One address for the screen that prepares one Application's CV. It once carried a
      second name, `preparation`, resolving to `/applications/:id/preparation` - the same

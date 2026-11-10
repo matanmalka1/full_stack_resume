@@ -11,7 +11,6 @@ import {
   documentPreviewSrc,
   documentQueryOptions,
 } from "@/api/documents";
-import { boardPath, boardReturnState } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
 import { PreparationAlerts } from "@/features/preparation";
@@ -140,11 +139,10 @@ export const ReadyPage = () => {
   const finish = !ready ? null : (
     <Link
       className={buttonClasses("secondary", "w-full", isPhone ? "large" : "default")}
-      state={boardReturnState(applicationId)}
-      to={boardPath()}
+      to={routePaths.home(applicationId)}
     >
       <Check aria-hidden="true" className="size-icon-lg" />
-      סיום וחזרה ללוח
+      סיום וחזרה לקורות החיים
     </Link>
   );
 
@@ -176,8 +174,8 @@ export const ReadyPage = () => {
       <nav aria-label="מיקום" className="mb-5.5 text-support text-cv-text-muted max-lg:hidden">
         <ol className="flex flex-wrap items-center gap-1.5">
           <li>
-            <Link className="underline hover:text-cv-text" state={boardReturnState(applicationId)} to={boardPath()}>
-              לוח המועמדויות
+            <Link className="underline hover:text-cv-text" to={routePaths.home(applicationId)}>
+              קורות החיים
             </Link>
           </li>
           <li aria-hidden="true">/</li>
