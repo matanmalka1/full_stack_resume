@@ -11,11 +11,11 @@ type FilterChipCount = "plain" | "badge";
    accent; a chip that asks for attention keeps a stronger edge at rest. */
 const filterChipClasses = (pressed: boolean, emphasis = false, className?: ClassValue): string =>
   cx(
-    "inline-flex h-9.5 shrink-0 items-center gap-1.5 rounded-pill border text-label whitespace-nowrap transition-colors",
+    "inline-flex h-9.5 shrink-0 items-center gap-1.5 rounded-pill border text-label whitespace-nowrap transition-colors max-lg:h-8",
     pressed
-      ? "border-cv-accent bg-cv-accent px-4 font-bold text-cv-on-accent"
+      ? "border-cv-accent bg-cv-accent px-4 font-bold text-cv-on-accent max-lg:px-3.5"
       : cx(
-          "bg-cv-surface px-3.5 hover:border-cv-border-strong",
+          "bg-cv-surface px-3.5 hover:border-cv-border-strong max-lg:px-3",
           emphasis
             ? "border-cv-border-strong font-bold text-cv-text"
             : "border-cv-border font-medium text-cv-text-muted",

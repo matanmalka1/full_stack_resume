@@ -11,7 +11,8 @@ const MAX_ZOOM_PERCENT = 200;
 const ZOOM_STEP_PERCENT = 10;
 
 /* The canvas pads the page on every side; the fit calculation reads the padded
-   viewport's content box, so the padding never pushes the page into a scrollbar. */
+   viewport's content box, so the padding never pushes the page into a scrollbar. The
+   toolbar floats on the same canvas above it, so the frame reads as one surface. */
 const CANVAS_PADDING_PX = 16;
 
 interface DocumentFrameProps {
@@ -28,10 +29,6 @@ type ZoomMode = "fit" | "manual";
 const clampZoom = (zoom: number): number => Math.min(MAX_ZOOM_PERCENT, Math.max(MIN_ZOOM_PERCENT, zoom));
 const fitZoomForWidth = (width: number): number =>
   Math.min(100, Math.max(MIN_ZOOM_PERCENT, (width / PAGE_WIDTH_PX) * 100));
-
-/* `compact` keeps the button 32px tall; its inline padding leaves exactly one icon's
-   width inside the fixed step width. */
-const zoomStepClasses = "w-9";
 
 /* The rendered CV remains a fixed 794x1123 A4 page. This component changes only the
    browser presentation around that page: the iframe always receives its native layout
@@ -79,48 +76,50 @@ export const DocumentFrame = ({ busy = false, className, onLoad, src, title }: D
     >
       <div
         aria-label="בקרות זום למסמך"
-        className="flex flex-wrap items-center justify-between gap-2 border-b border-cv-border bg-cv-surface px-3 py-2"
+        className="flex justify-center px-3 pt-3"
         role="toolbar"
       >
-        <div className="inline-flex items-stretch overflow-hidden rounded-control border border-cv-border bg-cv-surface">
+        <div className="inline-flex items-center gap-0.5 rounded-control-sm border border-cv-hairline bg-cv-surface p-0.5 shadow-surface">
           <Button
             aria-label="הקטנת המסמך"
-            className={zoomStepClasses}
             disabled={zoom <= MIN_ZOOM_PERCENT}
             onClick={() => selectManualZoom(zoom - ZOOM_STEP_PERCENT)}
-            size="compact"
-            variant="ghost"
+            size="icon-sm"
+            variant="quiet"
           >
             <Minus aria-hidden="true" className="size-icon-md" />
           </Button>
           <output
             aria-live="polite"
-            className="flex min-w-14 items-center justify-center border-x border-cv-border px-2 text-support font-semibold tabular-nums text-cv-text"
+            className="min-w-12 text-center text-label font-semibold tabular-nums text-cv-text"
           >
             {shownZoom}%
           </output>
           <Button
             aria-label="הגדלת המסמך"
-            className={zoomStepClasses}
             disabled={zoom >= MAX_ZOOM_PERCENT}
             onClick={() => selectManualZoom(zoom + ZOOM_STEP_PERCENT)}
-            size="compact"
-            variant="ghost"
+            size="icon-sm"
+            variant="quiet"
           >
             <Plus aria-hidden="true" className="size-icon-md" />
           </Button>
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-cv-border" />
+          <button
+            aria-pressed={zoomMode === "fit"}
+            className={cx(
+              "inline-flex min-h-8 items-center gap-1.5 rounded-item px-2.5 text-label font-bold transition-colors duration-200",
+              zoomMode === "fit"
+                ? "bg-cv-accent-soft text-cv-text"
+                : "text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text",
+            )}
+            onClick={() => setZoomMode("fit")}
+            type="button"
+          >
+            <MoveHorizontal aria-hidden="true" className="size-icon-md" />
+            התאמה לרוחב
+          </button>
         </div>
-
-        <Button
-          aria-pressed={zoomMode === "fit"}
-          className={cx(zoomMode === "fit" && "bg-cv-accent-soft")}
-          onClick={() => setZoomMode("fit")}
-          size="compact"
-          variant="ghost"
-        >
-          <MoveHorizontal aria-hidden="true" className="size-icon-md" />
-          התאמה לרוחב
-        </Button>
       </div>
 
       <section

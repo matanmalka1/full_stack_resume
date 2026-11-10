@@ -40,10 +40,10 @@ export const ActionBar = ({ align = "end", className, primary, secondary, sticky
      reversing it would flip the group to the wrong edge as well as reorder it. */
   const primaryLeads = !split && secondary !== undefined;
   /* Pinned on a phone, the bar is the screen's bottom edge, as `CommitBar` is: its groups
-     share the width and every command is a 48px target with its label a step larger. */
+     share the width and every command is a 44px capsule with its label a step larger. */
   const group = cx(
     "flex flex-wrap gap-3",
-    sticky && "max-lg:flex-1 max-lg:flex-nowrap max-lg:*:min-h-12 max-lg:*:flex-1",
+    sticky && "max-lg:flex-1 max-lg:flex-nowrap max-lg:*:min-h-11 max-lg:*:flex-1",
   );
 
   return (

@@ -12,18 +12,19 @@ export type ButtonVariant = "primary" | "secondary" | "ghost" | "quiet" | "destr
 
    Sizes follow the design: "default" is the 46px command a form or dialog ends on,
    "large" the 52px one a sheet or an empty state leads with, "compact" the 40px one that
-   sits inside a card or a row. */
+   sits inside a card or a row. On a phone every size steps down to the iPhone's own
+   scale - 34, 40 and 44px capsules, 36px round icon buttons. */
 const baseButtonClasses =
   "inline-flex items-center justify-center gap-2 font-bold transition-colors duration-200 active:translate-y-px disabled:pointer-events-none disabled:translate-y-0 disabled:shadow-none disabled:cursor-not-allowed";
 
 const sizeButtonClasses = {
-  compact: "min-h-10 rounded-control-sm px-3.5 text-label",
-  default: "min-h-11.5 rounded-control px-5 text-body",
-  large: "min-h-13 rounded-control-lg px-5.5 text-body",
-  icon: "size-11 rounded-control px-0",
-  "icon-md": "size-10 rounded-control-sm px-0",
-  "icon-sm": "size-8 rounded-item px-0",
-  flush: "min-h-11 rounded-control px-0 text-label",
+  compact: "min-h-10 rounded-control-sm px-3.5 text-label max-lg:min-h-8.5 max-lg:rounded-pill max-lg:px-3.5",
+  default: "min-h-11.5 rounded-control px-5 text-body max-lg:min-h-10 max-lg:rounded-pill max-lg:px-4",
+  large: "min-h-13 rounded-control-lg px-5.5 text-body max-lg:min-h-11 max-lg:rounded-pill max-lg:px-5",
+  icon: "size-11 rounded-control px-0 max-lg:size-9 max-lg:rounded-pill",
+  "icon-md": "size-10 rounded-control-sm px-0 max-lg:size-8 max-lg:rounded-pill",
+  "icon-sm": "size-8 rounded-item px-0 max-lg:size-7 max-lg:rounded-pill",
+  flush: "min-h-11 rounded-control px-0 text-label max-lg:min-h-9",
 } as const;
 
 const variantButtonClasses: Record<ButtonVariant, string> = {

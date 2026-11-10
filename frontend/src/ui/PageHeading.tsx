@@ -14,6 +14,10 @@ interface PageHeadingProps {
   description?: ReactNode;
   eyebrow?: ReactNode;
   eyebrowTone?: EyebrowTone;
+  /* Heading and description are kept for assistive tech but not drawn below the large
+     breakpoint, where the top bar already names the screen (`PhoneTitle`); a description
+     left standing without its heading would read as a stray line of body text. */
+  hiddenOnPhone?: boolean;
   id: string;
 }
 
@@ -21,7 +25,7 @@ interface PageHeadingProps {
    itself with data-route-heading; moving focus is RouteFocusManager's, so that a
    heading mounting outside a navigation - the first screen of a visit - does not put a
    focus ring on a reader who never left anywhere. */
-export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "accent", id }: PageHeadingProps) => {
+export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "accent", hiddenOnPhone = false, id }: PageHeadingProps) => {
   return (
     <>
       {eyebrow === undefined ? null : (
@@ -31,7 +35,10 @@ export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "acc
           passes a backend title and detail through here, so each picks its own
           direction rather than inheriting the RTL shell. */}
       <h1
-        className="text-title font-extrabold tracking-tight text-cv-text lg:text-display"
+        className={cx(
+          "text-title font-extrabold tracking-tight text-cv-text lg:text-display",
+          hiddenOnPhone && "max-lg:sr-only",
+        )}
         data-route-heading
         dir="auto"
         id={id}
@@ -40,7 +47,13 @@ export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "acc
         {children}
       </h1>
       {description === undefined ? null : (
-        <p className="mt-1 max-w-2xl text-label text-cv-text-muted lg:mt-1.5 lg:text-body" dir="auto">
+        <p
+          className={cx(
+            "mt-1 max-w-2xl text-label text-cv-text-muted lg:mt-1.5 lg:text-body",
+            hiddenOnPhone && "max-lg:sr-only",
+          )}
+          dir="auto"
+        >
           {description}
         </p>
       )}

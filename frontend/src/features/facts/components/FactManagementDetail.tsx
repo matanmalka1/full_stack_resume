@@ -28,7 +28,7 @@ interface FactManagementDetailProps {
 }
 
 /* A phone's pinned command is the large size, sharing the bar's width. */
-const pinnedCommand = "max-lg:min-h-13 max-lg:flex-1 max-lg:rounded-control-lg";
+const pinnedCommand = "max-lg:min-h-11 max-lg:flex-1 max-lg:rounded-pill";
 
 /* A block of the fact's own text: a small heading and the wording at reading size. */
 const WordingCard = ({

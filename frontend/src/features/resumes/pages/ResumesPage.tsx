@@ -272,7 +272,7 @@ export const ResumesPage = () => {
     );
 
   return (
-    <PageShell description="כל קורות החיים שלך: מה שמוכן להורדה ומה שעוד בהכנה." title="קורות החיים">
+    <PageShell description="כל קורות החיים שלך: מה שמוכן להורדה ומה שעוד בהכנה." title="קורות החיים" titleInPhoneBar>
       <QueryState
         error={list.error}
         errorTitle="לא ניתן לטעון את קורות החיים"

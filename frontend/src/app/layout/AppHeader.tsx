@@ -60,7 +60,13 @@ const PhoneTitle = () => {
 
    `hiddenOnPhone` drops the whole header - top bar and tab bar, which lives inside it -
    below the large breakpoint, for a screen that brings its own. */
-export const AppHeader = ({ hiddenOnPhone = false }: { hiddenOnPhone?: boolean }) => {
+export const AppHeader = ({
+  hiddenOnPhone = false,
+  phoneBarSlotRef,
+}: {
+  hiddenOnPhone?: boolean;
+  phoneBarSlotRef?: (element: HTMLDivElement | null) => void;
+}) => {
   return (
     <header
       className={cx(
@@ -69,9 +75,13 @@ export const AppHeader = ({ hiddenOnPhone = false }: { hiddenOnPhone?: boolean }
         hiddenOnPhone && "max-lg:hidden",
       )}
     >
-      <div className="flex items-center justify-center gap-3 px-4 pt-4 pb-2 lg:h-full lg:flex-col lg:items-stretch lg:justify-start lg:gap-4 lg:py-5">
+      <div className="relative flex items-center justify-center gap-3 px-4 pt-4 pb-2 lg:h-full lg:flex-col lg:items-stretch lg:justify-start lg:gap-4 lg:py-5">
         <Brand />
         <PhoneTitle />
+        {/* The trailing corner of the phone's bar, as an iPhone's navigation bar keeps
+            one: a page whose title the bar already shows hands its commands here
+            (`PageShell`'s `titleInPhoneBar`) rather than leaving them on a row alone. */}
+        <div className="absolute inset-y-0 end-4 flex items-center gap-2 pt-2 lg:hidden" ref={phoneBarSlotRef} />
 
         {/* The wrapper carries the breakpoint: the link's own `inline-flex` and a `hidden`
             beside it would be settled by stylesheet order. */}

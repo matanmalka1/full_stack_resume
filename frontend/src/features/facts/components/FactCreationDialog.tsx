@@ -114,7 +114,7 @@ export const FactCreationDialog = ({
             ביטול
           </Button>
           <Button
-            className="max-lg:min-h-13 max-lg:rounded-control-lg"
+            className="max-lg:min-h-11 max-lg:rounded-pill"
             form={formId}
             pending={create.isPending}
             pendingLabel="יוצר…"

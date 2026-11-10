@@ -7,7 +7,7 @@ const iconSizes = { default: "icon", md: "icon-md", sm: "icon-sm" } as const;
 interface IconButtonProps extends Omit<ComponentProps<"button">, "aria-label" | "children"> {
   "aria-label": string;
   children: ReactNode;
-  /* "default" is the 44px touch target. The smaller two are for a control repeated on
+  /* "default" is the 44px touch target (36px on a phone). The smaller two are for a control repeated on
      every row or card, where a full-size target per record would crowd the content it
      serves; each such record still keeps a full-size route to the same place. */
   size?: keyof typeof iconSizes;

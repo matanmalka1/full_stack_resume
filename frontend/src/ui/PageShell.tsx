@@ -1,7 +1,19 @@
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { PageHeading, type EyebrowTone } from "./PageHeading";
 import { cx } from "./cx";
+import { usePhoneBarSlot } from "./phoneBarSlot";
+import { useIsPhone } from "./useIsPhone";
+
+/* On a phone, a page whose title the top bar shows draws its commands in the bar's
+   corner; anywhere else they stay on the heading row. One render either way, so a
+   command is never in the document twice. */
+const MastheadActions = ({ actions, inPhoneBar }: { actions: ReactNode; inPhoneBar: boolean }) => {
+  const phone = useIsPhone();
+  const slot = usePhoneBarSlot();
+  return inPhoneBar && phone && slot !== null ? createPortal(actions, slot) : <>{actions}</>;
+};
 
 interface PageShellProps {
   actions?: ReactNode;
@@ -30,6 +42,9 @@ interface PageShellProps {
      gives a record opened from a list the whole screen. "centered" centres it, for a page
      that is nothing but a statement and its way out. */
   phoneMasthead?: "visible" | "hidden" | "centered";
+  /* For an area's own page, whose name the phone's top bar already shows: the heading
+     stays for assistive tech but is not drawn twice on a phone. */
+  titleInPhoneBar?: boolean;
   title: ReactNode;
 }
 
@@ -47,6 +62,7 @@ export const PageShell = ({
   measure = "wide",
   phoneMasthead = "visible",
   title,
+  titleInPhoneBar = false,
 }: PageShellProps) => {
   return (
     <section
@@ -71,14 +87,23 @@ export const PageShell = ({
                  stop in the tab order. */
               phoneMasthead === "hidden" && "max-lg:sr-only max-lg:[&_a]:hidden max-lg:[&_button]:hidden",
               phoneMasthead === "centered" && "max-lg:justify-center max-lg:text-center",
+              /* Its heading drawn by the top bar and its commands moved into the bar's
+                 corner, the row has nothing left to draw on a phone. */
+              titleInPhoneBar && "max-lg:sr-only",
             )}
           >
             <div className="min-w-0">
-              <PageHeading description={description} eyebrow={eyebrow} eyebrowTone={eyebrowTone} id="route-heading">
+              <PageHeading
+                description={description}
+                eyebrow={eyebrow}
+                eyebrowTone={eyebrowTone}
+                hiddenOnPhone={titleInPhoneBar}
+                id="route-heading"
+              >
                 {title}
               </PageHeading>
             </div>
-            {actions}
+            {actions === undefined ? null : <MastheadActions actions={actions} inPhoneBar={titleInPhoneBar} />}
           </div>
           {children === undefined ? null : (
             <div className="mt-section-gap flex flex-col gap-section-gap">{children}</div>

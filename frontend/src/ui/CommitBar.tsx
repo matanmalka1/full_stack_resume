@@ -138,7 +138,7 @@ export const CommitBar = ({
             </div>
           )}
         </div>
-        {/* On a phone the commands fill their row - each a 48px target, the label a step
+        {/* On a phone the commands fill their row - each a 44px capsule, the label a step
             larger - so the bar reads as the screen's answer rather than a button dropped in
             a corner. The secondary comes first in the DOM, so under RTL it holds the start
             edge and the primary the closing one, on desktop as on a phone. */}
@@ -154,13 +154,13 @@ export const CommitBar = ({
             <div
               className={cx(
                 "flex",
-                secondaryIconOnly ? "shrink-0 max-lg:*:size-12" : "max-lg:flex-1 max-lg:*:min-h-12 max-lg:*:flex-1",
+                secondaryIconOnly ? "shrink-0 max-lg:*:size-11" : "max-lg:flex-1 max-lg:*:min-h-11 max-lg:*:flex-1",
               )}
             >
               {secondary}
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-3 max-lg:min-w-0 max-lg:flex-1 max-lg:flex-nowrap max-lg:*:min-h-12 max-lg:*:flex-1">
+          <div className="flex flex-wrap items-center gap-3 max-lg:min-w-0 max-lg:flex-1 max-lg:flex-nowrap max-lg:*:min-h-11 max-lg:*:flex-1">
             {primary}
           </div>
         </div>

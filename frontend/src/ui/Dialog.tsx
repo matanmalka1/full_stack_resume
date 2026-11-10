@@ -239,7 +239,7 @@ export const Dialog = ({
           <div
             className={cx(
               "flex shrink-0 flex-wrap justify-end gap-2.5 px-7 pt-4 pb-7",
-              "max-lg:gap-2 max-lg:*:min-h-12.5",
+              "max-lg:gap-2 max-lg:*:min-h-11",
               footerLayout === "stack" ? "max-lg:flex-col max-lg:*:w-full" : "max-lg:*:flex-1",
               sheet
                 ? "max-lg:border-t max-lg:border-cv-hairline max-lg:px-4 max-lg:pt-3 max-lg:pb-4"

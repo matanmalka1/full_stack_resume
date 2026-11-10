@@ -37,7 +37,7 @@ export const SettingsPage = () => {
   const openPassword = () => setPasswordOpen(true);
 
   return (
-    <PageShell measure="form" title="הגדרות">
+    <PageShell measure="form" title="הגדרות" titleInPhoneBar>
       <div className="flex flex-col gap-4.5 lg:gap-6">
         <AccountSection onChangePassword={openPassword} />
         <QueryState

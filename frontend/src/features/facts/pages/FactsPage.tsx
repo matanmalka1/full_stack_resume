@@ -125,22 +125,18 @@ export const FactsPage = () => {
       actions={
         mutationsBlocked ? undefined : (
           <Button
-            className="max-lg:size-11 max-lg:rounded-control max-lg:px-0"
+            className="max-lg:size-8! max-lg:min-h-8! max-lg:rounded-pill max-lg:px-0!"
             onClick={() => setCreating(true)}
             size="default"
           >
-            <Plus aria-hidden="true" className="size-icon-md shrink-0 max-lg:size-5" />
+            <Plus aria-hidden="true" className="size-icon-md shrink-0 max-lg:size-4.5" />
             <span className="max-lg:sr-only">עובדה חדשה</span>
           </Button>
         )
       }
-      description={
-        <>
-          <span className="max-lg:hidden">מה שקורות החיים נבנים ממנו. רק עובדות שאושרו כמקור אמת נכנסות לטיוטות.</span>
-          <span className="lg:hidden">מה שקורות החיים נבנים ממנו</span>
-        </>
-      }
+      description="מה שקורות החיים נבנים ממנו. רק עובדות שאושרו כמקור אמת נכנסות לטיוטות."
       title="מאגר העובדות"
+      titleInPhoneBar
     >
       {integrityAlert}
 

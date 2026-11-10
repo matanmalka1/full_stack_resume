@@ -113,7 +113,7 @@ export const FactPoolFilters = ({ filters, onChange, pendingCount, pendingHref, 
           room to wrap it beside the field. */}
       <div
         aria-label="סינון לפי מאגר מקור"
-        className={cx("flex gap-2", "max-lg:-mx-4 max-lg:overflow-x-auto max-lg:px-4 max-lg:py-0.5", "lg:flex-wrap")}
+        className={cx("flex gap-2", "cv-scroll-quiet max-lg:-mx-4 max-lg:overflow-x-auto max-lg:px-4 max-lg:py-0.5", "lg:flex-wrap")}
         // A set of toggles under one name; there is no native grouping element for it.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         role="group"

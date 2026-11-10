@@ -56,7 +56,7 @@ export const OperationActions = ({
 
       {/* On a phone the row is the report's foot: its commands share the width evenly,
           each one a full thumb's target, as the bottom bars of the steps around it do. */}
-      <div className="flex flex-wrap gap-3 max-lg:flex-nowrap max-lg:[&>*]:min-h-11 max-lg:[&>*]:flex-1">
+      <div className="flex flex-wrap gap-3 max-lg:flex-nowrap max-lg:[&>*]:min-h-10 max-lg:[&>*]:flex-1">
         {recovery}
         {canCancel ? (
           <Button

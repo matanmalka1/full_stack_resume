@@ -38,8 +38,12 @@
   /* Below the large breakpoint the primary navigation is a bar pinned to the bottom of the
      viewport (AppNavigation). Everything else that pins itself to the bottom - a commit
      bar, a sticky form action, the page's own end - stands on top of it by this height
-     rather than underneath it. The sidebar layout has no bottom bar, so it is zero there. */
-  --cv-bottom-nav-height: calc(4rem + env(safe-area-inset-bottom, 0px));
+     rather than underneath it. The sidebar layout has no bottom bar, so it is zero there.
+     The bar floats: its own height, plus the gap it keeps above the home indicator (or the
+     screen edge), plus a gap above it so what stands on it does not touch the glass. */
+  --cv-bottom-nav-bar: 4rem;
+  --cv-bottom-nav-gap: max(env(safe-area-inset-bottom, 0px), 0.75rem);
+  --cv-bottom-nav-height: calc(var(--cv-bottom-nav-bar) + var(--cv-bottom-nav-gap) + 0.5rem);
 }
 
 @media (min-width: 64rem) {
@@ -315,6 +319,16 @@ body {
 .page-frame {
   max-width: var(--page-measure, 70rem);
   margin-inline: auto;
+}
+
+/* A row that scrolls sideways under a finger - a phone's filter chips - with no bar
+   drawn under it: the swipe is the affordance, as on an iPhone. */
+.cv-scroll-quiet {
+  scrollbar-width: none;
+}
+
+.cv-scroll-quiet::-webkit-scrollbar {
+  display: none;
 }
 
 button,
@@ -797,5 +811,44 @@ dialog::backdrop {
 
   .cv-toast-timer {
     display: none;
+  }
+}
+
+/* The phone's tab bar as a floating sheet of glass, after the iPhone's: a capsule held
+   off the screen's edges that blurs and brightens the page scrolling under it, with a
+   bright rim on its top edge and a soft shadow beneath. The active destination sits in a
+   capsule of its own, a lighter pane on the glass. Only below the large breakpoint; from
+   it the same element is the sidebar's plain list. A reader who asked for less
+   transparency gets the same shape, solid. */
+@media (max-width: 63.999rem) {
+  .cv-glass-bar {
+    background: light-dark(rgb(255 255 255 / 0.55), rgb(33 37 41 / 0.55));
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid light-dark(rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.12));
+    box-shadow:
+      inset 0 1px 0 light-dark(rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.14)),
+      inset 0 -1px 0 light-dark(rgb(33 37 41 / 0.04), rgb(0 0 0 / 0.2)),
+      0 0 0 0.5px light-dark(rgb(33 37 41 / 0.08), rgb(0 0 0 / 0.5)),
+      0 12px 32px -8px var(--cv-shadow-cast);
+  }
+
+  .cv-glass-pill {
+    background: light-dark(rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.12));
+    box-shadow:
+      inset 0 1px 0 light-dark(rgb(255 255 255 / 1), rgb(255 255 255 / 0.18)),
+      0 1px 3px var(--cv-shadow-lift);
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .cv-glass-bar {
+      background: var(--color-cv-surface);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+
+    .cv-glass-pill {
+      background: var(--color-cv-nav-active-bg);
+    }
   }
 }

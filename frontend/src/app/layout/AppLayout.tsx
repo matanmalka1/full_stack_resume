@@ -4,6 +4,7 @@ import { Outlet } from "react-router-dom";
 
 import { settingsQueryOptions } from "@/api/settings";
 import { cx } from "@/ui/cx";
+import { PhoneBarSlotContext } from "@/ui/phoneBarSlot";
 import { applyTheme, cacheTheme } from "./theme";
 import { AppHeader } from "./AppHeader";
 import { type DisplaySettings, DisplaySettingsPreviewProvider } from "@/features/settings";
@@ -21,6 +22,7 @@ export const AppLayout = () => {
   const settings = useQuery(settingsQueryOptions).data?.settings;
   const [displayPreview, setDisplayPreview] = useState<DisplaySettings | null>(null);
   const displaySettings = displayPreview ?? settings;
+  const [phoneBarSlot, setPhoneBarSlot] = useState<HTMLElement | null>(null);
 
   useLayoutEffect(() => {
     if (settings !== undefined) cacheTheme(settings.ui_theme);
@@ -39,7 +41,7 @@ export const AppLayout = () => {
         {/* Inside a wizard step a phone gives the whole screen to the step: its compact
             header carries the way back and its action bar the way on, so the masthead and
             the bottom navigation fold away below the large breakpoint. */}
-        <AppHeader hiddenOnPhone={inWorkflow} />
+        <AppHeader hiddenOnPhone={inWorkflow} phoneBarSlotRef={setPhoneBarSlot} />
         {/* The page's end clears the bottom navigation bar a narrow screen pins over it.
             On a phone the top bar's own bottom padding is most of the space above the
             heading; a wizard step, which has no top bar, starts from the screen's edge. */}
@@ -49,7 +51,9 @@ export const AppLayout = () => {
             inWorkflow ? "pt-4" : "pt-2",
           )}
         >
-          <Outlet />
+          <PhoneBarSlotContext.Provider value={phoneBarSlot}>
+            <Outlet />
+          </PhoneBarSlotContext.Provider>
         </main>
       </DisplaySettingsPreviewProvider>
     </div>
