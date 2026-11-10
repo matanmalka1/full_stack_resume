@@ -28,16 +28,9 @@ const serverFields = { job_text: "job_text", source_url: "source_url" } as const
   keyof PostingFields
 >;
 
-/* Whether the record's menu offers the edit at all: once the Application has a
-   Submission the text is locked - what was sent stays tied to the posting it was sent
-   for (`lock_submitted_job_text`) - and a deleted record takes no commands. */
-export const jobPostingEditable = (detail: ApplicationDetail): boolean =>
-  !detail.job_posting.locked && detail.application.deleted_at == null;
-
 /* A posting that changed after the Application was opened, edited in place rather than
    by opening a second Application for the same job - which the duplicate check exists to
-   discourage, and which would leave the timeline, analyses, document and Submissions of
-   the first behind.
+   discourage, and which would leave the analyses and document of the first behind.
 
    The edit names the text it replaces by hash, so one made against a text that already
    changed is refused rather than overwriting it. The engine's projection decides the
@@ -96,7 +89,7 @@ export const JobPostingDialog = ({
 
   return (
     <Dialog
-      description="עד להגשת המועמדות אפשר לעדכן את הנוסח שהמשרה נשמרה בו."
+      description="אפשר לעדכן את הנוסח שהמשרה נשמרה בו."
       dismissible={!save.isPending}
       footer={
         <>

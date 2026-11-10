@@ -46,5 +46,5 @@ and reaches the command as an argument.
 
 `ui/` contains only domain-independent primitives. It owns how loud something is —
 the five tones in `tone.ts` — and never which domain value maps to which tone: a
-preparation state, a recruitment status, and an analysis fit are named and toned by
+preparation state and an analysis fit are named and toned by
 the feature that owns them and reach `ui` already reduced to a tone.

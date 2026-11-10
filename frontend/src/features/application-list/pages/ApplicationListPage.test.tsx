@@ -9,16 +9,14 @@ import { json } from "@/test/fixtures";
 import { BOARD_LIMIT } from "../model/applicationListParams";
 import { ApplicationListPage } from "./ApplicationListPage";
 
-const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem => {
-  const result = {
+const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem =>
+  ({
     id: "app-1",
     company: "Acme",
     target_role: "Backend Engineer",
-    current_status: "saved",
     notes: "",
     created_at: "2026-08-24T07:00:00Z",
     updated_at: "2026-08-24T07:00:00Z",
-    recruitment_status: "saved",
     preparation_state: "needs_analysis",
     content_check: "none",
     review_reasons: [],
@@ -28,12 +26,7 @@ const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem
     blocked_actions: [],
     recommended_action: "analyze",
     ...overrides,
-  } as ApplicationListItem;
-  result.is_closed =
-    overrides.is_closed ??
-    (result.terminal_outcome != null || ["rejected", "withdrawn", "closed"].includes(result.recruitment_status));
-  return result;
-};
+  }) as ApplicationListItem;
 
 const reason = (code: string): Reason => ({
   code,
@@ -58,14 +51,9 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}): Applicatio
   offset: 0,
   preset_counts: counts.presetCounts ?? {
     all: items.length,
-    active_interviews: 0,
     ready_to_send: items.filter((entry) => entry.preparation_state === "ready").length,
-    needs_attention: items.filter((entry) => entry.review_reasons.length > 0 || entry.warnings.length > 0).length,
+    needs_attention: items.filter((entry) => entry.review_reasons.length > 0).length,
   },
-  recruitment_status_counts: items.reduce<Record<string, number>>((totals, entry) => {
-    totals[entry.recruitment_status] = (totals[entry.recruitment_status] ?? 0) + 1;
-    return totals;
-  }, {}),
   stage_counts: {},
 });
 
@@ -136,14 +124,14 @@ describe("ApplicationListPage", () => {
     expect(window.sessionStorage.getItem("cv:board-query")).toBe("preset=ready_to_send&sort=company");
   });
 
-  it("asks for the whole open board in one read", async () => {
+  it("asks for the whole board in one read", async () => {
     const fetchMock = stubList([item()]);
 
     renderPage();
 
     await cardsList();
     const board = requestedUrls(fetchMock).find((url) => !url.searchParams.has("preset"));
-    expect(board?.searchParams.get("activity")).toBe("open");
+    expect(board?.searchParams.has("activity")).toBe(false);
     expect(board?.searchParams.get("limit")).toBe(String(BOARD_LIMIT));
     expect(board?.searchParams.has("offset")).toBe(false);
   });
@@ -205,17 +193,16 @@ describe("ApplicationListPage", () => {
   });
 
   /* The reason this screen exists: an Application that was saved has to be reachable
-     without its URL, and its card has to say where it stands on both axes. The whole card
+     without its URL, and its card has to say where its CV stands. The whole card
      is the way in, at the step the server recommends. */
-  it("draws each Application as one link with its recruitment stage and CV progress", async () => {
+  it("draws each Application as one link with its CV progress", async () => {
     stubList([
-      item({ recruitment_status: "applied", preparation_state: "draft_in_progress", recommended_action: "edit" }),
+      item({ preparation_state: "draft_in_progress", recommended_action: "edit" }),
       item({
         id: "app-2",
         company: "Binat",
         preparation_state: "ready",
         recommended_action: null,
-        recruitment_status: "interview",
         target_role: "Sales Engineer",
       }),
     ]);
@@ -226,14 +213,12 @@ describe("ApplicationListPage", () => {
     const acme = within(list).getByRole("link", { name: /Backend Engineer/ });
     expect(acme).toHaveAttribute("href", "/applications/app-1/draft");
     expect(within(acme).getByText("Acme")).toBeInTheDocument();
-    expect(within(acme).getByText("הוגשה מועמדות")).toBeInTheDocument();
     expect(within(acme).getByText("קו״ח")).toBeInTheDocument();
     expect(acme).toHaveTextContent("3/5");
     expect(acme).toHaveTextContent("הכנת קורות החיים: טיוטה בעבודה, שלב 3 מתוך 5");
 
     const binat = within(list).getByRole("link", { name: /Sales Engineer/ });
     expect(binat).toHaveAttribute("href", "/applications/app-2/ready");
-    expect(within(binat).getByText("ראיונות ומטלות")).toBeInTheDocument();
     expect(within(binat).getByText("מוכן")).toBeInTheDocument();
 
     /* The board no longer stacks a next-step block or a menu on each card. */
@@ -241,12 +226,12 @@ describe("ApplicationListPage", () => {
     expect(screen.queryByText("פעולה מומלצת הבאה")).not.toBeInTheDocument();
   });
 
-  it("says how many processes are live, whichever slice is chosen", async () => {
-    stubList([item()], { presetCounts: { all: 12, needs_attention: 3, active_interviews: 2, ready_to_send: 1 } });
+  it("says how many Applications there are, whichever slice is chosen", async () => {
+    stubList([item()], { presetCounts: { all: 12, needs_attention: 3, ready_to_send: 1 } });
 
-    renderPage({ entries: ["/?preset=active_interviews"] });
+    renderPage({ entries: ["/?preset=ready_to_send"] });
 
-    expect(await screen.findByText("12 מועמדויות פעילות")).toBeInTheDocument();
+    expect(await screen.findByText("12 מועמדויות")).toBeInTheDocument();
   });
 
   /* The slices are the board's only narrowing: a chip says how many it holds, a press
@@ -254,7 +239,7 @@ describe("ApplicationListPage", () => {
      it. */
   it("narrows by a slice from the server's counts and writes it to the URL", async () => {
     const fetchMock = stubList([item()], {
-      presetCounts: { all: 12, needs_attention: 3, active_interviews: 2, ready_to_send: 1 },
+      presetCounts: { all: 12, needs_attention: 3, ready_to_send: 1 },
     });
 
     renderPage();
@@ -263,13 +248,13 @@ describe("ApplicationListPage", () => {
     expect(within(slices).getByRole("button", { name: "הכל 12" })).toHaveAttribute("aria-pressed", "true");
     expect(within(slices).getByRole("button", { name: "דורש טיפול 3" })).toHaveAttribute("aria-pressed", "false");
 
-    fireEvent.click(within(slices).getByRole("button", { name: "ראיונות פעילים 2" }));
+    fireEvent.click(within(slices).getByRole("button", { name: "מוכן לשליחה 1" }));
 
-    expect(screen.getByTestId("location")).toHaveTextContent("/?preset=active_interviews");
+    expect(screen.getByTestId("location")).toHaveTextContent("/?preset=ready_to_send");
     await waitFor(() =>
-      expect(requestedUrls(fetchMock).some((url) => url.searchParams.get("preset") === "active_interviews")).toBe(true),
+      expect(requestedUrls(fetchMock).some((url) => url.searchParams.get("preset") === "ready_to_send")).toBe(true),
     );
-    expect(within(slices).getByRole("button", { name: "ראיונות פעילים 2" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(slices).getByRole("button", { name: "מוכן לשליחה 1" })).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(within(slices).getByRole("button", { name: "הכל 12" }));
     expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/);
@@ -291,17 +276,16 @@ describe("ApplicationListPage", () => {
     );
   });
 
-  /* What waits on the reader comes from the whole open board, one row per Application,
-     the most pressing first, each the way to where it is done. */
-  it("lists waiting work in the action hub, most pressing first, each row a link", async () => {
+  /* What blocks the reader comes from the whole board, one row per Application a review
+     reason blocks, each the way to the step that resolves it. */
+  it("lists blocked work in the action hub, each row a link", async () => {
     stubList([
       item({ id: "app-ready", company: "Ready Co", preparation_state: "ready", recommended_action: null }),
       item({ id: "app-attn", company: "Attn Co", review_reasons: [reason("PENDING_FACT_REQUIRES_RESOLUTION")] }),
       item({
-        id: "app-late",
-        company: "Late Co",
-        next_action: "Follow up with recruiter",
-        next_action_date: "2020-01-01",
+        id: "app-warned",
+        company: "Warned Co",
+        warnings: [{ code: "DOCUMENT_ON_OLDER_ANALYSIS", message: "m", entity_references: {} }],
       }),
       item({ id: "app-fine", company: "Fine Co" }),
     ]);
@@ -310,18 +294,10 @@ describe("ApplicationListPage", () => {
 
     const hub = await screen.findByRole("region", { name: "מוקד פעולות" });
     const rows = within(hub).getAllByRole("link");
-    expect(rows.map((row) => row.getAttribute("href"))).toEqual([
-      "/applications/app-late",
-      "/applications/app-attn/analysis",
-      "/applications/app-ready/ready",
-    ]);
-    expect(rows[0]).toHaveTextContent("Follow up with recruiter");
-    expect(rows[0]).toHaveTextContent("באיחור");
-    expect(rows[1]).toHaveTextContent("טענה בלי עובדה מאושרת");
-    expect(rows[1]).toHaveTextContent("דורש טיפול");
-    expect(rows[2]).toHaveTextContent("קורות החיים מוכנים לשליחה");
-    expect(within(hub).getByText("3 ממתינות")).toBeInTheDocument();
-    expect(within(hub).queryByText(/Fine Co/)).not.toBeInTheDocument();
+    expect(rows.map((row) => row.getAttribute("href"))).toEqual(["/applications/app-attn/analysis"]);
+    expect(rows[0]).toHaveTextContent("טענה בלי עובדה מאושרת");
+    expect(rows[0]).toHaveTextContent("דורש טיפול");
+    expect(within(hub).getByText("1 ממתינות")).toBeInTheDocument();
   });
 
   it("folds the hub past its first rows behind one control", async () => {
@@ -351,56 +327,6 @@ describe("ApplicationListPage", () => {
     expect(screen.queryByRole("region", { name: "מוקד פעולות" })).not.toBeInTheDocument();
   });
 
-  /* The stages view draws the whole open board by recruitment stage - a slice chosen in
-     the cards view does not narrow it - and a card there opens a details sheet whose one
-     command is the way into the work. */
-  it("switches to the stages view and opens a card's details from there", async () => {
-    const fetchMock = stubList([
-      item({ recruitment_status: "interview" }),
-      item({
-        id: "app-2",
-        company: "Delta",
-        notes: "Referral from Dana",
-        target_role: "Platform Engineer",
-        warnings: [{ code: "ANALYSIS_LOW_CONFIDENCE", message: "low", entity_references: {} }],
-      }),
-    ]);
-
-    renderPage({ entries: ["/?preset=needs_attention"] });
-
-    await cardsList();
-    fireEvent.click(screen.getAllByRole("button", { name: "שלבים" })[0]!);
-    expect(window.sessionStorage.getItem("cv:application-list:view-mode")).toBe("pipeline");
-
-    const stages = await screen.findByRole("list", { name: "שלבי הגיוס" });
-    await waitFor(() =>
-      expect(
-        requestedUrls(fetchMock).some(
-          (url) => !url.searchParams.has("preset") && url.searchParams.get("limit") === String(BOARD_LIMIT),
-        ),
-      ).toBe(true),
-    );
-    expect(screen.queryByRole("group", { name: "סינון מהיר לפי מצב" })).not.toBeInTheDocument();
-    expect(screen.getByText("מועמדויות לפי שלב גיוס")).toBeInTheDocument();
-    expect(
-      within(stages)
-        .getAllByRole("heading", { level: 2 })
-        .map((heading) => heading.textContent),
-    ).toEqual(["טרם הוגש, 1", "הוגשה מועמדות, 0", "סינון טלפוני / HR, 0", "ראיונות ומטלות, 1", "שלב סופי והצעה, 0"]);
-    expect(within(stages).getAllByText("אין מועמדויות בשלב הזה")).toHaveLength(3);
-    expect(within(stages).getAllByText("דורש טיפול")).toHaveLength(1);
-
-    fireEvent.click(within(stages).getByRole("button", { name: /Platform Engineer/ }));
-    const details = screen.getByRole("dialog", { name: /פרטי משרה: Platform Engineer/ });
-    expect(within(details).getByText("Referral from Dana")).toBeInTheDocument();
-    expect(within(details).getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    expect(within(details).getByText("פתוחה")).toBeInTheDocument();
-    expect(within(details).getByRole("link", { name: "המשך בהכנה" })).toHaveAttribute(
-      "href",
-      "/applications/app-2/analysis",
-    );
-  });
-
   it("offers a first job and the fact pool when no Application exists", async () => {
     stubList([], { total: 0 });
 
@@ -415,7 +341,7 @@ describe("ApplicationListPage", () => {
   /* A slice that holds nothing is a gap in the board, not an empty product: the slices
      stay, and the way out shows everything again. */
   it("offers to show every Application when the slice matches none", async () => {
-    stubList([], { total: 4, presetCounts: { all: 4, ready_to_send: 0, needs_attention: 0, active_interviews: 0 } });
+    stubList([], { total: 4, presetCounts: { all: 4, ready_to_send: 0, needs_attention: 0 } });
 
     renderPage({ entries: ["/?preset=ready_to_send"] });
 

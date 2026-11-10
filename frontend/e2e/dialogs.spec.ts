@@ -8,9 +8,6 @@ import { expect, json, test } from "./fixtures";
    restoration, and Escape reaching the element's cancel behavior. */
 
 const detail = {
-  recruitment_status: "recruiter_screen",
-  allowed_recruitment_transitions: ["interview", "rejected", "withdrawn", "closed"],
-  recruitment_timeline: [],
   preparation_state: "needs_analysis",
   content_check: "none",
   review_reasons: [],
@@ -23,9 +20,6 @@ const detail = {
     id: "app-1",
     company: "Acme",
     target_role: "Backend Engineer",
-    current_status: "recruiter_screen",
-    next_action: "Follow up",
-    next_action_date: "2026-09-05",
     notes: "Referral from a former colleague",
     created_at: "2026-08-24T07:00:00Z",
     updated_at: "2026-08-25T08:00:00Z",
@@ -35,13 +29,14 @@ const detail = {
     source_url: "https://example.com/jobs/1",
     job_text_hash: "c".repeat(64),
     job_text_updated_at: "2026-08-24T07:00:00Z",
-    locked: false,
   },
 };
 
 test.describe("dialogs", () => {
   test.beforeEach(({ api }) => {
     api.stub("GET /api/v1/applications/app-1", json(detail));
+    api.stub("GET /api/v1/facts", json({ items: [] }));
+    api.stub("GET /api/v1/facts/history", json({ events: [] }));
     /* The search palette opens on the Applications needing attention. */
     api.stub(
       "GET /api/v1/applications?preset=needs_attention&limit=8",
@@ -55,21 +50,21 @@ test.describe("dialogs", () => {
   const focusInsideOpenDialog = (page: Page) =>
     page.evaluate(() => document.activeElement?.closest("dialog[open]") != null);
 
-  /* The hub's status sheet: a modal form with a free-text field, so it carries both the
-     focus trap and the rule that a stray backdrop click does not discard typing. */
-  const openStatusDialog = async (page: Page) => {
-    await page.goto("/applications/app-1");
-    const invoker = page.getByRole("button", { name: "עדכון סטטוס" });
+  /* The fact pool's creation dialog: a modal form with free-text fields, so it carries
+     both the focus trap and the rule that a stray backdrop click does not discard typing. */
+  const openFormDialog = async (page: Page) => {
+    await page.goto("/facts");
+    const invoker = page.getByRole("button", { name: "עובדה חדשה" }).first();
     await invoker.click();
-    const dialog = page.getByRole("dialog", { name: "עדכון סטטוס ומשימות" });
+    const dialog = page.getByRole("dialog", { name: "עובדה חדשה" });
     await expect(dialog).toBeVisible();
     return { dialog, invoker };
   };
 
   test("opens on its heading, keeps Tab inside, and hands focus back on Escape", async ({ page }) => {
-    const { dialog, invoker } = await openStatusDialog(page);
+    const { dialog, invoker } = await openFormDialog(page);
 
-    await expect(dialog.getByRole("heading", { name: "עדכון סטטוס ומשימות" })).toBeFocused();
+    await expect(dialog.getByRole("heading", { name: "עובדה חדשה" })).toBeFocused();
 
     await expect(dialog.locator("div").first()).toHaveAttribute("dir", "rtl");
 
@@ -97,14 +92,14 @@ test.describe("dialogs", () => {
   });
 
   test("does not discard typing when the backdrop is clicked", async ({ page }) => {
-    const { dialog, invoker } = await openStatusDialog(page);
-    const notes = dialog.getByRole("textbox", { name: "הערות" });
+    const { dialog, invoker } = await openFormDialog(page);
+    const meaning = dialog.getByRole("textbox", { name: "משמעות" });
 
-    await notes.fill("שיחה טובה עם המגייסת");
+    await meaning.fill("הובלתי מעבר למערכת CRM חדשה");
     await page.mouse.click(5, 5);
 
     await expect(dialog).toBeVisible();
-    await expect(notes).toHaveValue("שיחה טובה עם המגייסת");
+    await expect(meaning).toHaveValue("הובלתי מעבר למערכת CRM חדשה");
 
     /* The deliberate route out still closes, and still returns focus. */
     await page.keyboard.press("Escape");
@@ -113,7 +108,7 @@ test.describe("dialogs", () => {
   });
 
   test("closes on the backdrop while nothing has been typed", async ({ page }) => {
-    const { dialog, invoker } = await openStatusDialog(page);
+    const { dialog, invoker } = await openFormDialog(page);
 
     await page.mouse.click(5, 5);
 

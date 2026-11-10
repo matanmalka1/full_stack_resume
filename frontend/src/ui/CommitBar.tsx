@@ -5,8 +5,7 @@ import { LiveRegion } from "./LiveRegion";
 
 /* What every pinned bar in the flow calls itself when it is a wizard step's action rather
    than a form's commit. Named "מה עושים עכשיו" and not "הצעד הבא": the bar carries the
-   action the current step is waiting on, not the step after it, and the board already
-   spends "הצעד הבא" on a recruitment reminder that has nothing to do with the CV work. */
+   action the current step is waiting on, not the step after it. */
 export const NEXT_STEP_LABEL = "מה עושים עכשיו";
 
 interface CommitBarProps {
@@ -30,8 +29,8 @@ interface CommitBarProps {
      named by the panel it closes. */
   label?: ReactNode;
   primary: ReactNode;
-  /* A second command beside the primary - the PDF download beside "record the
-     submission". It is not a way back (`back`) and not the one emphasized command: the
+  /* A second command beside the primary - the way back to the board beside the PDF
+     download. It is not a way back (`back`) and not the one emphasized command: the
      caller draws it as a secondary button. On a phone the two share the bar's full width
      in equal halves; `secondaryIconOnly` keeps an icon button square at the start of the
      row instead, so the primary takes the rest. */

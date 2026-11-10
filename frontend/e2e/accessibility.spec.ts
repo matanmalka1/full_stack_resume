@@ -31,11 +31,9 @@ const listItem = (overrides: Partial<ApplicationListItem>): ApplicationListItem 
   id: "app-1",
   company: "Acme",
   target_role: "Backend Engineer",
-  current_status: "saved",
   notes: "",
   created_at: "2026-08-24T07:00:00Z",
   updated_at: "2026-08-24T07:00:00Z",
-  recruitment_status: "saved",
   preparation_state: "needs_analysis",
   content_check: "none",
   review_reasons: [],
@@ -44,7 +42,6 @@ const listItem = (overrides: Partial<ApplicationListItem>): ApplicationListItem 
   available_actions: ["analyze"],
   blocked_actions: [],
   recommended_action: "analyze",
-  is_closed: false,
   ...overrides,
 });
 
@@ -55,15 +52,11 @@ const board = (): ApplicationListResponse => {
       id: "app-2",
       company: "Globex",
       target_role: "Account Executive",
-      current_status: "interview",
-      recruitment_status: "interview",
       preparation_state: "ready",
       content_check: "passed",
       job_text_hash: "d".repeat(64),
       available_actions: ["download"],
       recommended_action: null,
-      next_action: "Prepare for the panel",
-      next_action_date: "2026-09-05",
     }),
   ];
   return {
@@ -72,16 +65,15 @@ const board = (): ApplicationListResponse => {
     total: items.length,
     limit: 200,
     offset: 0,
-    preset_counts: { all: 2, active_interviews: 1, ready_to_send: 1, needs_attention: 0 },
-    recruitment_status_counts: { saved: 1, interview: 1 },
+    preset_counts: { all: 2, ready_to_send: 1, needs_attention: 0 },
     stage_counts: { needs_analysis: 1, ready: 1 },
   };
 };
 
 test.describe("accessibility", () => {
   test("the application board has no automatically detectable violations", async ({ api, page }) => {
-    /* The board reads its open list once; the action hub is drawn from the same answer. */
-    api.stub("GET /api/v1/applications?activity=open&limit=200&sort=updated", json(board()));
+    /* The board reads its list once; the action hub is drawn from the same answer. */
+    api.stub("GET /api/v1/applications?limit=200&sort=updated", json(board()));
 
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: "לוח המועמדויות" })).toBeVisible();
@@ -241,10 +233,7 @@ test.describe("accessibility", () => {
     await scan(page);
   });
 
-  test("the Ready screen and its submission dialog have no automatically detectable violations", async ({
-    api,
-    page,
-  }) => {
+  test("the Ready screen has no automatically detectable violations", async ({ api, page }) => {
     const approvedAt = "2026-08-25T08:00:00Z";
     const documentPath = "/api/v1/applications/app-1/document";
     api.stub(
@@ -253,8 +242,8 @@ test.describe("accessibility", () => {
         detail({
           preparation_state: "ready",
           approved_at: approvedAt,
-          available_actions: ["edit", "submit", "download_pdf"],
-          recommended_action: "submit",
+          available_actions: ["edit", "download_pdf"],
+          recommended_action: "download_pdf",
         }),
       ),
     );
@@ -288,13 +277,6 @@ test.describe("accessibility", () => {
     await expect(page.getByRole("heading", { level: 1, name: "קורות החיים מוכנים" })).toBeVisible();
     await expect(page.getByRole("link", { name: "הורדת PDF" }).first()).toBeVisible();
     await expect(page.locator(READY_PREVIEW)).toBeVisible();
-
-    await scan(page, [READY_PREVIEW]);
-
-    await page.getByRole("button", { name: "רישום הגשה" }).first().click();
-    const submission = page.getByRole("dialog", { name: "רישום הגשה קבועה" });
-    await expect(submission).toBeVisible();
-    await expect(submission).toHaveCSS("opacity", "1");
 
     await scan(page, [READY_PREVIEW]);
   });

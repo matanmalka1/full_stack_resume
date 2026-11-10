@@ -20,7 +20,6 @@ interface ApplicationPresetTabsProps {
 const presetTabs: readonly { id: PresetSelection; label: string }[] = [
   { id: "all", label: "הכל" },
   { id: "needs_attention", label: "דורש טיפול" },
-  { id: "active_interviews", label: "ראיונות פעילים" },
   { id: "ready_to_send", label: "מוכן לשליחה" },
 ];
 

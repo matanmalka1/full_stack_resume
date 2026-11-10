@@ -2,7 +2,6 @@ import { type QueryClient, queryOptions } from "@tanstack/react-query";
 
 import { ApiProblem, type ApiPath, apiRequest } from "./client";
 import type {
-  ActivityFilter,
   ApplicationDetail,
   ApplicationIntake,
   ApplicationListResponse,
@@ -10,7 +9,6 @@ import type {
   ApplicationSort,
   CreateAnalysisRequest,
   CreateApplicationRequest,
-  ClosedApplication,
   CreatedApplication,
   DeletedApplication,
   UpdatedApplicationNotes,
@@ -22,7 +20,6 @@ import type {
   DuplicateMatchReason,
   Operation,
   PreparationState,
-  RecruitmentStatus,
 } from "./contracts";
 import { OPERATION_POLL_INTERVAL_MS, isTerminalOperation, type QueuedOperation, queuedOperation } from "./operations";
 
@@ -136,11 +133,7 @@ export const invalidateApplicationViews = (queryClient: QueryClient, application
    optional: an omitted one is the server's default, so the empty query is the whole
    list. */
 export interface ApplicationListQuery {
-  activity?: ActivityFilter;
   stages?: readonly PreparationState[];
-  /* The recruitment axis, beside `stages`. A list for the same reason: the endpoint
-     repeats `recruitment_status` once per status. */
-  recruitmentStatuses?: readonly RecruitmentStatus[];
   /* One named question the server answers, narrowing alongside the other filters
      rather than replacing them. */
   preset?: ApplicationPreset;
@@ -161,15 +154,9 @@ const applicationsPath: ApiPath = "/api/v1/applications";
 const applicationListSearch = (query: ApplicationListQuery): string => {
   const params = new URLSearchParams();
 
-  if (query.activity !== undefined) {
-    params.set("activity", query.activity);
-  }
   /* Repeated rather than joined: the endpoint takes `stage` once per stage. */
   for (const stage of query.stages ?? []) {
     params.append("stage", stage);
-  }
-  for (const status of query.recruitmentStatuses ?? []) {
-    params.append("recruitment_status", status);
   }
   if (query.preset !== undefined) {
     params.set("preset", query.preset);
@@ -244,8 +231,7 @@ export const watchedApplicationDetailQueryOptions = (applicationId: string) =>
    had to be the intake form and "home" meant starting over.
 
    It carries the same §9 state projection per row as the detail read, so the list reports
-   where each Application actually stands rather than deriving a second opinion from its
-   recruitment status.
+   where each Application actually stands.
 
    Search, filter, and sort are the server's answer, not this client's. They narrow by
    `preparation_state`, which §9 computes from a record's job text, analyses and CV
@@ -284,8 +270,7 @@ export const applicationListQueryOptions = (query: ApplicationListQuery = {}) =>
    a text someone else already changed is refused rather than overwriting it. Analyses of
    the earlier text stay on record; what follows - an analysis that no longer matches the
    posting, a document built on it - is the engine's projection rather than this
-   client's. Once the Application has a Submission the text is locked and the edit is
-   refused.
+   client's.
 
    Not idempotency-keyed. This is a synchronous command with no Operation behind it, and a
    resent edit names a hash the first one already replaced, so it cannot apply twice. */
@@ -342,27 +327,8 @@ export const startAnalysis = async (
   );
 };
 
-/* §Tracking: archive one Application without deleting anything.
-
-   It is an append-only status transition, not a delete: the record, its job text, its
-   document and every Submission stay exactly as they are, and the Application keeps its row.
-   What changes is which board it appears on - a closed Application is not what a board
-   of live work is asking about, so the default list filter stops returning it.
-
-   Not in `available_actions`. That projection answers the preparation workflow, and this
-   is the recruitment axis beside it; the one rule this client applies is that an
-   Application already closed is not offered closing again. */
-export const closeApplication = async (applicationId: string): Promise<ClosedApplication> => {
-  const response = await apiRequest<ClosedApplication>(
-    `/api/v1/applications/${encodeURIComponent(applicationId)}/close`,
-    { method: "POST" },
-  );
-  return response.data;
-};
-
-/* §Tracking: soft-delete one Application, orthogonal to `RecruitmentStatus` and callable
-   from any current status including `closed`. Every immutable record it produced -
-   JobAnalysis, Artifact, Submission, Operation - stays exactly as it is; only the default list/Dashboard
+/* Soft-delete one Application. Every immutable record it produced -
+   JobAnalysis, Artifact, Operation - stays exactly as it is; only the default list/Dashboard
    projection and duplicate detection stop surfacing the Application. There is no
    undelete in this phase, so the caller confirms before this is sent. */
 export const deleteApplication = async (applicationId: string): Promise<DeletedApplication> => {

@@ -6,11 +6,10 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
 import { documentPdfHref } from "@/api/documents";
-import { RecruitmentHistoryDialog, RecruitmentUpdateDialog } from "@/features/recruitment";
 import { boardPath, boardReturnState } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
 import { useRequiredParam } from "@/navigation/useRequiredParam";
-import { Button, buttonClasses } from "@/ui/Button";
+import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { CommitBar } from "@/ui/CommitBar";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -24,16 +23,13 @@ import { useApplicationRecordMutations } from "../api/mutations";
 import { ApplicationActionsMenu } from "../components/ApplicationActionsMenu";
 import { ApplicationDetailsSheet } from "../components/ApplicationDetailsSheet";
 import { ApplicationFacts } from "../components/ApplicationFacts";
-import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { DeleteApplicationDialog } from "../components/DeleteApplicationDialog";
 import { JobPostingCard } from "../components/JobPostingCard";
-import { JobPostingDialog, jobPostingEditable } from "../components/JobPostingDialog";
-import { NextActionCard } from "../components/NextActionCard";
+import { JobPostingDialog } from "../components/JobPostingDialog";
 import { PreparationProgressCard } from "../components/PreparationProgressCard";
-import { RecruitmentStageCard } from "../components/RecruitmentStageCard";
-import { continuation, isApplicationClosed } from "../model/applicationHub";
+import { continuation } from "../model/applicationHub";
 
-type HubDialog = "update" | "details" | "history" | "posting" | "close" | "delete";
+type HubDialog = "details" | "posting" | "delete";
 
 /* The cards' own shapes while the record is read, so the screen fills in rather than
    replacing a sentence with a page. */
@@ -73,18 +69,17 @@ const DownloadControl = ({ detail, placement }: { detail: ApplicationDetail; pla
   );
 };
 
-/* One Application as a record: where it stands with the employer, where its CV stands,
-   the reminder the reader set, the posting, and the one command forward.
+/* One Application as a record: where its CV stands, the posting, and the one command
+   forward.
 
    It is not a step of the CV wizard - the analysis, the draft and the ready document each
    have a screen of their own (`AnalysisPage`, the editor, the ready step) - but the place
    the steps hang from: its checklist links to each, and its command opens the one the
-   work is waiting on. The employer's side is managed here, through the status sheet and
-   the record's menu, because it is a fact about the record rather than about any step.
+   work is waiting on.
 
    A phone reads it as a column of cards under the record's name, the command pinned at
    the bottom beside the PDF; a wide screen puts the commands in the header and the
-   reminder, the record's facts and the PDF in a side column. */
+   record's facts and the PDF in a side column. */
 export const ApplicationPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const location = useLocation();
@@ -92,7 +87,7 @@ export const ApplicationPage = () => {
   const query = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = query.data;
   const [dialog, setDialog] = useState<HubDialog | null>(null);
-  const { closeMutation, deleteMutation } = useApplicationRecordMutations(applicationId, {
+  const { deleteMutation } = useApplicationRecordMutations(applicationId, {
     onDeleted: () => void navigate(boardPath(), { state: boardReturnState(applicationId) }),
   });
 
@@ -105,7 +100,6 @@ export const ApplicationPage = () => {
 
   const application = detail?.application;
   const deleted = application?.deleted_at != null;
-  const closed = detail === undefined ? false : isApplicationClosed(detail);
   const next = detail === undefined || deleted ? null : continuation(detail);
   const target =
     application === undefined
@@ -113,12 +107,9 @@ export const ApplicationPage = () => {
       : { company: application.company, id: application.id, target_role: application.target_role };
   const open = (which: HubDialog) => () => setDialog(which);
   const actions = {
-    onClose: open("close"),
     onDelete: open("delete"),
     onDetails: open("details"),
-    onHistory: open("history"),
-    onUpdate: open("update"),
-    ...(detail !== undefined && jobPostingEditable(detail) ? { onEditPosting: open("posting") } : {}),
+    onEditPosting: open("posting"),
   };
 
   return (
@@ -137,7 +128,7 @@ export const ApplicationPage = () => {
           <ChevronRight aria-hidden="true" className="size-icon-lg" />
         </Link>
         {application === undefined || deleted ? null : (
-          <ApplicationActionsMenu {...actions} closed={closed} company={application.company} placement="phone" />
+          <ApplicationActionsMenu {...actions} company={application.company} placement="phone" />
         )}
       </div>
 
@@ -186,10 +177,7 @@ export const ApplicationPage = () => {
         </div>
         {application === undefined || deleted || next === null ? null : (
           <div className="flex items-center gap-2 max-lg:hidden">
-            <Button onClick={actions.onUpdate} size="default" variant="secondary">
-              עדכון סטטוס
-            </Button>
-            <ApplicationActionsMenu {...actions} closed={closed} company={application.company} placement="desktop" />
+            <ApplicationActionsMenu {...actions} company={application.company} placement="desktop" />
             <Link className={buttonClasses("primary", "shadow-action")} to={next.to}>
               {next.label}
             </Link>
@@ -198,9 +186,6 @@ export const ApplicationPage = () => {
       </div>
 
       <div className="mt-4 flex flex-col gap-4 lg:mt-5.5">
-        {closeMutation.error === null ? null : (
-          <ErrorCallout error={closeMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נסגרה" />
-        )}
         {deleteMutation.error === null ? null : (
           <ErrorCallout error={deleteMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נמחקה" />
         )}
@@ -217,22 +202,17 @@ export const ApplicationPage = () => {
               /* A deleted Application stays reachable by ID (product-spec.md invariant #20)
                  so its history is never orphaned, but no command is offered against it. */
               <Callout role="alert" title="המועמדות הזו נמחקה" tone="warning">
-                המועמדות הוסרה מלוח המועמדויות ואין לבצע עליה פעולות נוספות. נוסח המשרה, הניתוח, מסמך קורות החיים
-                וההגשות שנרשמו נשארים בדיוק כפי שהם.
+                המועמדות הוסרה מלוח המועמדויות ואין לבצע עליה פעולות נוספות. נוסח המשרה, הניתוח ומסמך קורות החיים נשארים
+                בדיוק כפי שהם.
               </Callout>
             ) : null
           ) : (
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18.75rem] lg:gap-6">
               <div className="flex min-w-0 flex-col gap-4 lg:gap-4.5">
-                <RecruitmentStageCard detail={detail} onUpdate={actions.onUpdate} />
-                <div className="lg:hidden">
-                  <NextActionCard detail={detail} headingId="next-action-heading-phone" onUpdate={actions.onUpdate} />
-                </div>
                 <PreparationProgressCard detail={detail} />
                 <JobPostingCard detail={detail} />
               </div>
               <aside aria-label="פרטי המועמדות" className="flex flex-col gap-3.5 max-lg:hidden">
-                <NextActionCard detail={detail} headingId="next-action-heading" onUpdate={actions.onUpdate} />
                 <ApplicationFacts detail={detail} />
                 <DownloadControl detail={detail} placement="desktop" />
               </aside>
@@ -263,17 +243,13 @@ export const ApplicationPage = () => {
         </div>
       )}
 
-      <RecruitmentUpdateDialog application={dialog === "update" ? target : null} onClose={() => setDialog(null)} />
-      <RecruitmentHistoryDialog application={dialog === "history" ? target : null} onClose={() => setDialog(null)} />
       <ApplicationDetailsSheet
         application={
           dialog === "details" && detail !== undefined
             ? {
                 ...detail.application,
-                closed,
                 preparation_state: detail.preparation_state,
                 recommended_action: detail.recommended_action,
-                recruitment_status: detail.recruitment_status,
               }
             : null
         }
@@ -293,18 +269,6 @@ export const ApplicationPage = () => {
           }}
         />
       ) : null}
-      <CloseApplicationDialog
-        application={dialog === "close" ? (target ?? null) : null}
-        onCancel={() => setDialog(null)}
-        onConfirm={() =>
-          closeMutation.mutate(undefined, {
-            onSettled: () => setDialog(null),
-            onSuccess: () =>
-              showToast({ body: "היא ירדה מלוח המועמדויות הפעילות, ושום דבר בה לא נמחק.", title: "המועמדות נסגרה" }),
-          })
-        }
-        pending={closeMutation.isPending}
-      />
       <DeleteApplicationDialog
         application={dialog === "delete" ? (target ?? null) : null}
         onCancel={() => setDialog(null)}

@@ -5,9 +5,6 @@ import {
   attentionHubItems,
   formatApplicationDate,
   formatRelativeUpdate,
-  isDueToday,
-  isNextActionOverdue,
-  isDueThisWeek,
   preparationProgress,
 } from "./applicationListPresentation";
 
@@ -43,75 +40,38 @@ describe("preparation progress", () => {
   });
 });
 
-describe("next-action calendar dates", () => {
-  const localToday = new Date(2026, 8, 2, 23, 30);
-
-  it("compares date-only reminders with the reader's local calendar day", () => {
-    expect(isNextActionOverdue("2026-09-01", localToday)).toBe(true);
-    expect(isNextActionOverdue("2026-09-02", localToday)).toBe(false);
-    expect(isDueToday("2026-09-02", localToday)).toBe(true);
-    expect(isDueToday("2026-09-03", localToday)).toBe(false);
-    expect(isDueThisWeek("2026-09-02", localToday)).toBe(false);
-    expect(isDueThisWeek("2026-09-03", localToday)).toBe(true);
-    expect(isDueThisWeek("2026-09-08", localToday)).toBe(true);
-    expect(isDueThisWeek("2026-09-09", localToday)).toBe(false);
-  });
-
-  it("rejects malformed and impossible reminder dates consistently", () => {
-    for (const value of [null, "", "2026-02-29", "2026-09-02T00:00:00Z", "not-a-date"]) {
-      expect(isNextActionOverdue(value, localToday)).toBe(false);
-      expect(isDueToday(value, localToday)).toBe(false);
-      expect(isDueThisWeek(value, localToday)).toBe(false);
-    }
-  });
-});
-
 describe("action hub items", () => {
-  const today = new Date(2026, 8, 2, 12, 0);
   const application = (id: string, overrides: Partial<ApplicationListItem> = {}): ApplicationListItem =>
     ({
       id,
       company: id,
       target_role: "Engineer",
-      recruitment_status: "applied",
       preparation_state: "draft_in_progress",
       review_reasons: [],
       warnings: [],
       recommended_action: null,
-      is_closed: false,
       ...overrides,
     }) as ApplicationListItem;
 
-  /* One row per Application, the most pressing source winning, in the order overdue,
-     today, a projected reason, this week, Ready. Closed and quiet Applications ask for
-     nothing. */
-  it("orders what waits by urgency and gives each row the way to where it is done", () => {
-    const items = attentionHubItems(
-      [
-        application("ready", { preparation_state: "ready" }),
-        application("week", { next_action: "Call back", next_action_date: "2026-09-05" }),
-        application("reason", {
-          warnings: [{ code: "ANALYSIS_LOW_CONFIDENCE", message: "low", entity_references: {} }],
-        }),
-        application("today", { next_action: "Interview", next_action_date: "2026-09-02" }),
-        application("late", {
-          next_action: "Send portfolio",
-          next_action_date: "2026-08-30",
-          warnings: [{ code: "ANALYSIS_LOW_CONFIDENCE", message: "low", entity_references: {} }],
-        }),
-        application("closed", { is_closed: true, next_action: "Old", next_action_date: "2026-08-01" }),
-        application("quiet"),
-      ],
-      today,
-    );
+  const reason = {
+    code: "PENDING_FACT_REQUIRES_RESOLUTION",
+    message: "m",
+    entity_references: {},
+    allowed_resolution_actions: [],
+  };
+  const warning = { code: "DOCUMENT_ON_OLDER_ANALYSIS", message: "m", entity_references: {} };
 
-    expect(items.map((item) => [item.application.id, item.type, item.label, item.to])).toEqual([
-      ["late", "overdue", "באיחור", "/applications/late"],
-      ["today", "due_today", "היום", "/applications/today"],
-      ["reason", "attention", "דורש טיפול", "/applications/reason/draft"],
-      ["week", "due_this_week", "השבוע", "/applications/week"],
-      ["ready", "ready", "מוכן", "/applications/ready/ready"],
+  /* One row per Application a review reason blocks, each the way to the step that
+     resolves it. A warning disables nothing and a Ready CV waits on nothing the board
+     can clear, so neither is listed. */
+  it("lists only what a review reason blocks", () => {
+    const items = attentionHubItems([
+      application("ready", { preparation_state: "ready" }),
+      application("warned", { warnings: [warning] }),
+      application("blocked", { review_reasons: [reason], warnings: [warning] }),
+      application("quiet"),
     ]);
-    expect(items[0]?.title).toBe("Send portfolio");
+
+    expect(items.map((item) => [item.application.id, item.to])).toEqual([["blocked", "/applications/blocked/draft"]]);
   });
 });

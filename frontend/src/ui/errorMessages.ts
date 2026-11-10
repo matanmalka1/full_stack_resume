@@ -147,10 +147,7 @@ const fieldLabels: Record<string, string> = {
   target_role: "תפקיד היעד",
   source_url: "כתובת המשרה",
   job_text: "טקסט המשרה",
-  target_status: "שלב בתהליך",
   reason: "סיבת השינוי",
-  next_action: "הפעולה הבאה",
-  next_action_date: "תאריך יעד",
   notes: "הערות",
   source: "מקור",
   meaning: "משמעות העובדה",
@@ -158,7 +155,6 @@ const fieldLabels: Record<string, string> = {
   english: "ניסוח באנגלית",
   tags: "תגיות",
   resume_style: "סגנון קורות החיים",
-  submitted_at: "מועד ההגשה",
 };
 
 /* Short, and about the value rather than the request: the field's own label already says

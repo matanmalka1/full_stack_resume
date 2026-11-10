@@ -3,14 +3,13 @@ import { describe, expect, it } from "vitest";
 import { BOARD_LIMIT, paramsFromQuery, queryFromParams } from "./applicationListParams";
 
 describe("application list URL parameters", () => {
-  it("reads the slice and the order, and always asks for the open board in one page", () => {
+  it("reads the slice and the order, and always asks for the board in one page", () => {
     const params = new URLSearchParams([
       ["preset", "needs_attention"],
       ["sort", "company"],
     ]);
 
     expect(queryFromParams(params)).toEqual({
-      activity: "open",
       preset: "needs_attention",
       sort: "company",
       limit: BOARD_LIMIT,
@@ -31,21 +30,20 @@ describe("application list URL parameters", () => {
           stage: "ready",
         }),
       ),
-    ).toEqual({ activity: "open", sort: "updated", limit: BOARD_LIMIT });
+    ).toEqual({ sort: "updated", limit: BOARD_LIMIT });
   });
 
   it("falls back from unknown closed-set values without forwarding them", () => {
     expect(queryFromParams(new URLSearchParams({ preset: "everything", sort: "random" }))).toEqual({
-      activity: "open",
       sort: "updated",
       limit: BOARD_LIMIT,
     });
   });
 
   it("writes only non-default state", () => {
-    const params = paramsFromQuery({ activity: "open", preset: "active_interviews", sort: "created", limit: 200 });
+    const params = paramsFromQuery({ preset: "ready_to_send", sort: "created", limit: 200 });
 
-    expect(params.toString()).toBe("preset=active_interviews&sort=created");
-    expect(paramsFromQuery({ activity: "open", sort: "updated", limit: BOARD_LIMIT }).toString()).toBe("");
+    expect(params.toString()).toBe("preset=ready_to_send&sort=created");
+    expect(paramsFromQuery({ sort: "updated", limit: BOARD_LIMIT }).toString()).toBe("");
   });
 });

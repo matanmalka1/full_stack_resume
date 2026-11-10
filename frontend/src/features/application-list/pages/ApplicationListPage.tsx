@@ -5,8 +5,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { ApplicationListItem, ApplicationListResponse } from "@/api/contracts";
 import { returnedApplicationId } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
-import { ApplicationDetailsSheet } from "@/features/application-detail";
-import { preparationResumeDestination } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageShell } from "@/ui/PageShell";
@@ -14,12 +12,9 @@ import { QueryState } from "@/ui/QueryState";
 import { cx } from "@/ui/cx";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
 import { ApplicationCardsSkeleton, ApplicationCardsView } from "../components/ApplicationCardsView";
-import { ApplicationPipelineView } from "../components/ApplicationPipelineView";
 import { ApplicationPresetTabs } from "../components/ApplicationPresetTabs";
-import { BoardSort, BoardViewSwitch } from "../components/BoardControls";
+import { BoardSort } from "../components/BoardControls";
 import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
-import { nextStepText } from "../model/applicationListPresentation";
-import { initialViewMode, rememberViewMode, type ViewMode } from "../model/applicationViews";
 
 /* How long the card the reader came back from stays marked. Matches `cv-returned`. */
 const RETURN_HIGHLIGHT_MS = 2_400;
@@ -114,29 +109,21 @@ const NoResults = ({ onShowAll, title }: { onShowAll?: () => void; title: string
   </EmptyState>
 );
 
-/* "12 מועמדויות פעילות" - the open board's size, whichever slice is on screen. */
-const activeCountText = (page: ApplicationListResponse): string => {
+/* "12 מועמדויות" - the board's size, whichever slice is on screen. */
+const countText = (page: ApplicationListResponse): string => {
   const count = page.preset_counts.all ?? page.matched;
-  return count === 1 ? "מועמדות פעילה אחת" : `${count} מועמדויות פעילות`;
+  return count === 1 ? "מועמדות אחת" : `${count} מועמדויות`;
 };
 
-/* The board reads top to bottom as the design draws it: the title with how many processes
-   are live, the named slices, what is waiting on the reader, and the work itself - in
-   cards, or in columns by recruitment stage. A card is a way into its Application; the
-   stages view's cards open a details sheet first.
+/* The board reads top to bottom as the design draws it: the title with how many
+   Applications there are, the named slices, what is waiting on the reader, and the work
+   itself as cards. A card is a way into its Application.
 
    The board narrows only by its slices. Finding one Application by name is the quick
    search's (⌘K, or the search button on a phone), and the commands that change a record -
-   its status, closing, deleting - are its own screen's. */
+   deleting it - are its own screen's. */
 export const ApplicationListPage = () => {
-  const [viewMode, setViewModeState] = useState<ViewMode>(initialViewMode);
-  const setViewMode = (next: ViewMode) => {
-    rememberViewMode(next);
-    setViewModeState(next);
-  };
-  const cards = viewMode === "cards";
-  const { listQuery, query, updateQuery } = useApplicationListQuery({ withPreset: cards });
-  const [detailsApplicationId, setDetailsApplicationId] = useState<string | null>(null);
+  const { listQuery, query, updateQuery } = useApplicationListQuery();
   const location = useLocation();
   const navigate = useNavigate();
   /* Read once, from the link that left a flow screen. The history entry is then cleared
@@ -151,7 +138,7 @@ export const ApplicationListPage = () => {
   const items: readonly ApplicationListItem[] = page?.items ?? [];
   const loaded = page !== undefined;
   const empty = page?.total === 0;
-  const preset = cards ? (query.preset ?? "all") : "all";
+  const preset = query.preset ?? "all";
 
   /* Once the board holds the card, bring it into view if it is not, and let its mark go
      after a moment. The board's order is untouched: the reader finds the card where it
@@ -172,70 +159,35 @@ export const ApplicationListPage = () => {
     return () => window.clearTimeout(timeout);
   }, [loaded, returnedId]);
 
-  const detailsApplication = items.find((item) => item.id === detailsApplicationId) ?? null;
-  const detailsDestination = detailsApplication === null ? null : preparationResumeDestination(detailsApplication);
-  const detailsContinue =
-    detailsApplication === null || detailsDestination === null
-      ? null
-      : {
-          label:
-            detailsDestination === routePaths.ready(detailsApplication.id) ? "פתיחת קורות החיים המוכנים" : "המשך בהכנה",
-          to: detailsDestination,
-        };
   const showAll = () => updateQuery({ ...query, preset: undefined });
   const sort = query.sort ?? "updated";
   const setSort = (next: typeof sort) => updateQuery({ ...query, sort: next });
 
-  /* The wide screen's controls sit on the title's row: the view switch, and in the cards
-     view the order; on a phone they move into the body - see below. The cards view's
-     slices are the masthead's next line, at every width: they are the first choice the
+  /* The wide screen's order control sits on the title's row; on a phone it moves into the
+     body - see below. The slices are the masthead's next line, at every width: they are the first choice the
      reader makes, and the masthead's own row gap is the design's distance from the
      title. */
   const actions =
     page === undefined || empty ? undefined : (
       <>
         <div className="flex items-center gap-2.5 max-lg:hidden">
-          <BoardViewSwitch onChange={setViewMode} value={viewMode} variant="compact" />
-          {cards ? <BoardSort onChange={setSort} value={sort} variant="boxed" /> : null}
+          <BoardSort onChange={setSort} value={sort} variant="boxed" />
         </div>
-        {cards ? (
-          <div className="min-w-0 basis-full lg:mt-2.5">
-            <ApplicationPresetTabs
-              counts={page.preset_counts}
-              onSelect={(next) => updateQuery({ ...query, preset: next === "all" ? undefined : next })}
-              value={preset}
-            />
-          </div>
-        ) : null}
+        <div className="min-w-0 basis-full lg:mt-2.5">
+          <ApplicationPresetTabs
+            counts={page.preset_counts}
+            onSelect={(next) => updateQuery({ ...query, preset: next === "all" ? undefined : next })}
+            value={preset}
+          />
+        </div>
       </>
     );
 
-  const description =
-    page === undefined || empty ? undefined : cards ? activeCountText(page) : "מועמדויות לפי שלב גיוס";
+  const description = page === undefined || empty ? undefined : countText(page);
 
   const results = () => {
     if (page === undefined) return null;
 
-    if (!cards) {
-      return (
-        <>
-          <div className="lg:hidden">
-            <BoardViewSwitch onChange={setViewMode} value={viewMode} variant="stretch" />
-          </div>
-          <ApplicationPipelineView
-            items={items}
-            onRequestDetails={(item) => setDetailsApplicationId(item.id)}
-            recruitmentStatusCounts={page.recruitment_status_counts}
-            returnedId={returnedId}
-          />
-        </>
-      );
-    }
-
-    /* Every Application is closed: the board is empty, but the product is not. */
-    if (items.length === 0 && preset === "all") {
-      return <NoResults title="אין מועמדויות פעילות. מועמדויות סגורות נמצאות בחיפוש המהיר." />;
-    }
     if (items.length === 0) {
       return <NoResults onShowAll={showAll} title="אין מועמדות שמתאימה לסינון." />;
     }
@@ -250,10 +202,7 @@ export const ApplicationListPage = () => {
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             <div className="flex items-center justify-between gap-3 lg:hidden">
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-heading-card font-extrabold text-cv-text">מועמדויות</h2>
-                <BoardViewSwitch onChange={setViewMode} value={viewMode} variant="compact" />
-              </div>
+              <h2 className="text-heading-card font-extrabold text-cv-text">מועמדויות</h2>
               <BoardSort onChange={setSort} value={sort} variant="plain" />
             </div>
             <ApplicationCardsView items={items} returnedId={returnedId} />
@@ -291,14 +240,6 @@ export const ApplicationListPage = () => {
           {results()}
         </div>
       </QueryState>
-      <ApplicationDetailsSheet
-        application={
-          detailsApplication === null ? null : { ...detailsApplication, closed: detailsApplication.is_closed }
-        }
-        continueTo={detailsContinue}
-        nextStep={detailsApplication === null ? undefined : nextStepText(detailsApplication)}
-        onClose={() => setDetailsApplicationId(null)}
-      />
     </PageShell>
   );
 };

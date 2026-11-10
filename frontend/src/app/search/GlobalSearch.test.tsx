@@ -34,9 +34,7 @@ const application = (number: number): ApplicationListItem =>
     id: `app-${number}`,
     company: `Acme ${number}`,
     target_role: "Engineer",
-    current_status: "saved",
     notes: "",
-    recruitment_status: "saved",
     preparation_state: "needs_analysis",
     content_check: "none",
     review_reasons: [],
@@ -45,7 +43,6 @@ const application = (number: number): ApplicationListItem =>
     available_actions: ["analyze"],
     blocked_actions: [],
     recommended_action: "analyze",
-    is_closed: false,
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
   }) as ApplicationListItem;
@@ -107,7 +104,14 @@ describe("GlobalSearch", () => {
       application(1),
       {
         ...application(2),
-        warnings: [{ code: "ANALYSIS_LOW_CONFIDENCE", message: "low", entity_references: {} }],
+        review_reasons: [
+          {
+            code: "PENDING_FACT_REQUIRES_RESOLUTION",
+            message: "m",
+            entity_references: {},
+            allowed_resolution_actions: [],
+          },
+        ],
       } as ApplicationListItem,
     ];
     vi.stubGlobal(
@@ -144,7 +148,7 @@ describe("GlobalSearch", () => {
     expect(options[0]).toHaveTextContent("Engineer");
     expect(options[0]).toHaveTextContent("Acme 1 · מועמדות");
     expect(within(options[0]!).getByText("Acme", { selector: "mark" })).toBeInTheDocument();
-    expect(within(options[0]!).getByText("טרם הוגש")).toBeInTheDocument();
+    expect(within(options[0]!).getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(within(options[1]!).getByText("דורש טיפול")).toBeInTheDocument();
 
     fireEvent.keyDown(field, { key: "Enter" });

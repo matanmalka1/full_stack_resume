@@ -34,17 +34,17 @@ describe("query cache policy", () => {
 
   it("uses one list key for equivalent requests and distinct keys for distinct filters", () => {
     const filtersFirst = applicationListQueryOptions({
-      activity: "closed",
+      stages: ["ready"],
       search: "platform",
       sort: "company",
     }).queryKey;
     const searchFirst = applicationListQueryOptions({
       sort: "company",
       search: "platform",
-      activity: "closed",
+      stages: ["ready"],
     }).queryKey;
     const differentFilter = applicationListQueryOptions({
-      activity: "open",
+      stages: ["approved"],
       search: "platform",
       sort: "company",
     }).queryKey;

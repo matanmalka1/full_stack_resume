@@ -3,21 +3,10 @@ import type { components } from "../../../openapi/types";
 export type ApiSchemas = components["schemas"];
 
 export type ApplicationDetail = ApiSchemas["ApplicationDetailResponse"];
-export type RecruitmentTimelineItem = ApiSchemas["RecruitmentTimelineItemResponse"];
-export type RecruitmentStatus = NonNullable<RecruitmentTimelineItem["to_status"]>;
-export type TransitionableRecruitmentStatus = ApiSchemas["TransitionStatusRequest"]["target_status"];
-export type ApplicationMutation = ApiSchemas["ApplicationMutationResponse"];
-export type TransitionStatusRequest = ApiSchemas["TransitionStatusRequest"];
-export type CorrectStatusRequest = ApiSchemas["CorrectStatusRequest"];
-export type ExternalSubmissionRequest = ApiSchemas["ExternalSubmissionRequest"];
-export type SubmitApplicationRequest = ApiSchemas["SubmitApplicationRequest"];
-export type Submission = ApiSchemas["SubmissionResponse"];
-export type NextActionRequest = ApiSchemas["NextActionRequest"];
 export type ApplicationListResponse = ApiSchemas["ApplicationListResponse"];
 /* The list query the backend answers. Filtering and ordering are its decision, not
    this client's: `preparation_state` is a computed projection rather than a stored
    column, so a client that narrowed by it would be deriving state a second time. */
-export type ActivityFilter = ApiSchemas["ActivityFilter"];
 export type ApplicationSort = ApiSchemas["ApplicationSort"];
 /* The board's named questions. Each is a predicate over the §9 projection that the
    application layer answers, so it arrives as one filter rather than as rows this
@@ -41,10 +30,9 @@ export type ChangePasswordRequest = ApiSchemas["ChangePasswordRequest"];
 export type ApplicationIntake = ApiSchemas["DuplicateCheckRequest"];
 export type CreateApplicationRequest = ApiSchemas["CreateApplicationRequest"];
 export type CreatedApplication = ApiSchemas["CreateApplicationResponse"];
-export type ClosedApplication = ApiSchemas["CloseApplicationResponse"];
 export type DeletedApplication = ApiSchemas["DeleteApplicationResponse"];
 /* An edit of the posting an Application holds. It replaces the text in place, names the
-   text it replaces by hash, and is refused once the Application has a Submission. */
+   text it replaces by hash. */
 export type UpdateJobTextRequest = ApiSchemas["UpdateJobTextRequest"];
 export type UpdatedJobText = ApiSchemas["UpdateJobTextResponse"];
 export type UpdateApplicationNotesRequest = ApiSchemas["UpdateApplicationNotesRequest"];

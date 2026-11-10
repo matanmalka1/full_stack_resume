@@ -7,7 +7,7 @@ import { Skeleton } from "@/ui/Skeleton";
 import { cardClasses } from "@/ui/surface";
 import { cx } from "@/ui/cx";
 import { formatRelativeUpdate } from "../model/applicationListPresentation";
-import { ApplicationStageBadge, PreparationMeter } from "./ApplicationListStatuses";
+import { PreparationMeter } from "./ApplicationListStatuses";
 
 /* One column on a phone; from the large breakpoint as many 300px-or-wider columns as the
    row beside the action hub holds - two on a laptop, three on a wide screen. */
@@ -16,7 +16,7 @@ const cardGridClasses =
 
 /* One Application as the design draws it: the employer's initial, the role as the
    card's title with the employer and when it last moved under it, and one line for where
-   it stands - the recruitment stage's chip and the CV's step bar.
+   it stands - the CV's step bar.
 
    The whole card is one link, into the Application at the step the server recommends (a
    Ready CV opens on its ready step). Everything the board used to stack on a card - a
@@ -49,7 +49,6 @@ const ApplicationCard = ({ item, returned }: { item: ApplicationListItem; return
         </span>
       </span>
       <span className="flex min-w-0 items-center gap-2.5">
-        <ApplicationStageBadge item={item} phoneIcon />
         <PreparationMeter item={item} />
       </span>
     </Link>
@@ -75,7 +74,7 @@ export const ApplicationCardsView = ({
 const skeletonCards = ["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"];
 
 /* The first load reserves the card grid it will be replaced by, line for line: the
-   initial and the two lines beside it, then the stage chip and the step bar. Drawn with
+   initial and the two lines beside it, then the step bar. Drawn with
    the `Skeleton` primitive so it sweeps like every other waiting region. */
 export const ApplicationCardsSkeleton = () => (
   <output aria-label="טוען את המועמדויות" className={cardGridClasses}>
@@ -89,7 +88,6 @@ export const ApplicationCardsSkeleton = () => (
           </span>
         </span>
         <span className="flex items-center gap-2.5">
-          <Skeleton className="block h-6 w-24" />
           <Skeleton className="block h-1.5 flex-1" />
         </span>
       </span>

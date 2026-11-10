@@ -19,8 +19,8 @@ interface ChoiceChipsProps<TValue extends string> {
   value: TValue | null;
 }
 
-/* One answer out of several, drawn as a wrapping row of pills - a recruitment status, a
-   fact's kind. The pills are native radio inputs in a fieldset, as in
+/* One answer out of several, drawn as a wrapping row of pills - a fact's kind,
+   a setting. The pills are native radio inputs in a fieldset, as in
    `SegmentedControl`: arrow keys move between them, the legend names the group, and the
    focus ring is drawn on the pill through `has-[:focus-visible]`. The chosen pill fills
    with the accent and carries a check, so the choice does not rest on colour alone. */

@@ -25,8 +25,8 @@ interface StatusBadgeProps {
   children?: ReactNode;
   className?: ClassValue;
   /* A more specific mark than the tone's own. The tone says how loud the badge is -
-     four of them across the whole app - while a closed set like the recruitment axis
-     has a face per member. A.2 is unaffected either way: the badge still carries its
+     four of them across the whole app - while a closed set like the preparation axis
+     may have a face per member. A.2 is unaffected either way: the badge still carries its
      Hebrew word, and the icon repeats what the word says rather than replacing it.
      `false` draws the word alone, for a chip whose place already says what it is. */
   icon?: LucideIcon | false;

@@ -29,7 +29,6 @@ const actionLabels: Record<string, string> = {
   check: "בדיקת הטיוטה",
   approve: "אישור הגרסה",
   render: "יצירת קובץ קורות החיים",
-  submit: "רישום ההגשה",
   download_pdf: "הורדת ה־PDF",
 };
 
@@ -52,7 +51,6 @@ const actionDescriptions: Record<string, string> = {
   check: "בדיקת הטיוטה מול העובדות לפני האישור.",
   approve: "הטיוטה מוכנה לבדיקה ולאישור שלך.",
   render: "הגרסה אושרה, ונשאר להפיק ממנה את קובץ קורות החיים.",
-  submit: "קורות החיים מוכנים, ונשאר לרשום שההגשה בוצעה.",
   download_pdf: "קובץ ה־PDF של קורות החיים מוכן להורדה.",
 };
 
@@ -96,7 +94,6 @@ export const reasonTitle = (code: string, fallback: string): string => reasonTit
 /* Warnings carry the same problem and the same answer (§8). None of them disables
    approval; each says what moved and leaves the document as it is. */
 const warningTitles: Record<string, string> = {
-  NEXT_ACTION_OVERDUE: "הפעולה הבאה באיחור",
   DOCUMENT_ON_OLDER_ANALYSIS: "המסמך בנוי על ניתוח ישן יותר",
   PROFILE_CHANGED: "הפרופיל השתנה מאז שהמסמך נבנה",
   FACT_SUPERSEDED: "עובדה בטיוטה הוחלפה בגרסה חדשה יותר",

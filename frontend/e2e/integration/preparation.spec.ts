@@ -24,7 +24,7 @@ async function operationSucceeded(request: APIRequestContext, id: string) {
     .toBe("succeeded");
 }
 
-test("analysis, AI draft, approval, real PDF and submission compose through the browser", async ({ page, request }) => {
+test("analysis, AI draft, approval and real PDF compose through the browser", async ({ page, request }) => {
   test.setTimeout(120_000);
   const applications = "/api/v1/applications";
   await page.goto("/applications/new");
@@ -65,7 +65,7 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   expect(await analysisDetail.json()).toMatchObject({
     preparation_state: "ready_to_draft",
     job_text_hash: jobTextHash,
-    job_posting: { job_text: jobText, job_text_hash: jobTextHash, locked: false },
+    job_posting: { job_text: jobText, job_text_hash: jobTextHash },
   });
 
   // The draft is created on the verification step the analysis leads on to.
@@ -181,33 +181,5 @@ test("analysis, AI draft, approval, real PDF and submission compose through the 
   const pdf = await readFile(pdfPath!);
   expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
 
-  await page.getByRole("button", { name: "רישום הגשה", exact: true }).first().click();
-  const submission = page.getByRole("dialog", { name: "רישום הגשה קבועה" });
-  const submittedResponse = postResponse(page, `${applicationPath}/submissions`);
-  await submission.getByRole("button", { name: "רישום הגשה", exact: true }).click();
-  const submitted = await submittedResponse;
-  expect(submitted.status()).toBe(201);
-  const record = await submitted.json();
-  expect(record.document_hash).toBe(ready.document_hash);
-  expect(record.current_status).toBe("applied");
-  await expect(page.getByText("ההגשה נרשמה", { exact: true })).toBeVisible();
-  await page.reload();
-  await expect(page.getByRole("link", { name: "סיום וחזרה ללוח", exact: true })).toBeVisible();
-  const persistedResponse = await request.get(applicationPath);
-  expect(persistedResponse.status()).toBe(200);
-  const persisted = await persistedResponse.json();
-  expect(persisted.recruitment_status).toBe("applied");
-  expect(persisted.preparation_state).toBe("ready");
-  expect(persisted.document_hash).toBe(ready.document_hash);
-  expect(persisted.job_posting).toMatchObject({ job_text: jobText, locked: true });
-  expect(persisted.recruitment_timeline).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        id: record.submission_id,
-        item_type: "submission",
-        submission_type: "internal",
-        document_hash: ready.document_hash,
-      }),
-    ]),
-  );
+  await expect(page.getByRole("link", { name: "סיום וחזרה ללוח", exact: true }).first()).toBeVisible();
 });

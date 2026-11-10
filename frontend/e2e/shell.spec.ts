@@ -4,7 +4,7 @@ import { type Answer, expect, json, test } from "./fixtures";
 
 test.describe("the application shell", () => {
   test("moves focus to the page heading after a route change", async ({ api, page }) => {
-    /* Landing on the board reads its open list once; the action hub is drawn from it. */
+    /* Landing on the board reads its list once; the action hub is drawn from it. */
     const emptyList = {
       items: [],
       matched: 0,
@@ -12,10 +12,9 @@ test.describe("the application shell", () => {
       limit: 200,
       offset: 0,
       preset_counts: {},
-      recruitment_status_counts: {},
       stage_counts: {},
     };
-    api.stub("GET /api/v1/applications?activity=open&limit=200&sort=updated", json(emptyList));
+    api.stub("GET /api/v1/applications?limit=200&sort=updated", json(emptyList));
     await page.goto("/settings");
     await page.getByRole("link", { name: "לוח המועמדויות" }).click();
 

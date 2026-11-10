@@ -17,9 +17,6 @@ export const OTHER_HASH = "b".repeat(64);
 const JOB_TEXT_HASH = "c".repeat(64);
 
 export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail => ({
-  recruitment_status: "saved",
-  allowed_recruitment_transitions: ["withdrawn", "closed"],
-  recruitment_timeline: [],
   preparation_state: "draft_in_progress",
   content_check: "passed",
   review_reasons: [],
@@ -38,7 +35,6 @@ export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationD
     id: "app-1",
     company: "Acme",
     target_role: "Engineer",
-    current_status: "saved",
     notes: "",
     created_at: "2026-08-24T00:00:00Z",
     updated_at: "2026-08-24T00:00:00Z",
@@ -47,7 +43,6 @@ export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationD
     job_text: "Engineer",
     job_text_hash: JOB_TEXT_HASH,
     job_text_updated_at: "2026-08-24T00:00:00Z",
-    locked: false,
   },
   ...overrides,
 });

@@ -6,13 +6,8 @@ import { type ApplicationListQuery, applicationListQueryOptions } from "@/api/ap
 import { rememberBoardQuery } from "@/navigation/boardReturn";
 import { paramsFromQuery, queryFromParams } from "../model/applicationListParams";
 
-/** Owns the board's shareable URL state and its server query.
- *
- * `withPreset` is false for the stages view: it draws the whole open board by recruitment
- * stage and offers no slices, so a slice chosen in the cards view must not silently
- * narrow it. The slice stays in the URL for the way back to the cards.
- */
-export const useApplicationListQuery = ({ withPreset }: { withPreset: boolean }) => {
+/** Owns the board's shareable URL state and its server query. */
+export const useApplicationListQuery = () => {
   const [params, setParams] = useSearchParams();
   const query = queryFromParams(params);
 
@@ -33,7 +28,7 @@ export const useApplicationListQuery = ({ withPreset }: { withPreset: boolean })
     rememberBoardQuery(rememberedQuery);
   }, [rememberedQuery]);
 
-  const listQuery = useQuery(applicationListQueryOptions(withPreset ? query : { ...query, preset: undefined }));
+  const listQuery = useQuery(applicationListQueryOptions(query));
 
   return { listQuery, query, updateQuery };
 };

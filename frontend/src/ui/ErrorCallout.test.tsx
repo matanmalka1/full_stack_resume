@@ -35,11 +35,11 @@ describe("ErrorCallout", () => {
       <ErrorCallout
         error={problem({ code: "FUTURE_PROBLEM", detail: "Safe future explanation.", status: 412 })}
         fallbackDetail="הרשומות לא השתנו. אפשר לנסות שוב."
-        title="ההגשה לא נרשמה"
+        title="הפעולה לא הושלמה"
       />,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("ההגשה לא נרשמה");
+    expect(screen.getByRole("alert")).toHaveTextContent("הפעולה לא הושלמה");
     expect(screen.getByRole("alert")).toHaveTextContent("הרשומות לא השתנו. אפשר לנסות שוב.");
     expect(screen.queryByText(/Safe future explanation/)).not.toBeInTheDocument();
     expect(warn).toHaveBeenCalledWith(

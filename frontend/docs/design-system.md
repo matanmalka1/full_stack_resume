@@ -198,13 +198,11 @@ name a test or a screen reader finds:
   catalogue's title, what happened, that the prior state was kept, the phases with the
   failed one marked, and the ways on (Settings when a provider is missing, back to the
   application, the run again). Elsewhere a failure is a page in the report sheet.
-- The Application hub (`/applications/:id`) opens on the recruitment stage card, then
-  the dark next-action card, the five-step CV checklist and the folded posting; its one
-  command and the PDF are pinned at the bottom, and its record menu (⋮) is an action
-  sheet; that menu also edits the posting until a Submission locks it. From the large
-  breakpoint the commands move to the header, the checklist
-  becomes a row of tiles, and the reminder, the record's facts and the PDF stand in a
-  300px side column. The preparation steps have addresses of their own: the analysis
+- The Application hub (`/applications/:id`) opens on the five-step CV checklist and the
+  folded posting; its one command and the PDF are pinned at the bottom, and its record
+  menu (⋮) is an action sheet; that menu also edits the posting. From the large
+  breakpoint the commands move to the header, the checklist becomes a row of tiles, and
+  the record's facts and the PDF stand in a 300px side column. The preparation steps have addresses of their own: the analysis
   (`/analysis`), its matching settings (`/analysis/matching`) and the verification
   (`/verification`). On the analysis step a requirement no fact supports offers "הוסף
   עובדה" in its row (the table's evidence cell on a wide screen), and the gap questions

@@ -12,7 +12,7 @@ import { useDeleteFact } from "../api/mutations";
 
 /* The fact's ⋮ menu, which holds its one rare command: deletion. Deletion is one-way -
    nothing brings the fact back to the pool or a Profile - so choosing it from the menu
-   asks once more, stating plainly what stays (history, Submissions), what does not
+   asks once more, stating plainly what stays (history), what does not
    (default listings, attachment targets, new selections), and that a document using the
    fact loses its approval (state-and-use-cases §6). Only that question's own command
    sends the request. An already-deleted fact has no menu: there is no undelete. */
@@ -64,8 +64,8 @@ export const FactDeletionControl = ({ fact, onDeleted }: { fact: Fact; onDeleted
         title="למחוק את העובדה?"
       >
         <p className="text-cv-text-muted">
-          הפעולה סופית ואינה הפיכה. העובדה תוסר מהמאגר ולא תוצע כיעד צירוף חדש. ההיסטוריה שלה וכל הגשה שכבר נרשמה יישארו
-          ללא שינוי. מסמך קורות חיים שמשתמש בה לא ישתנה, אבל האישור שלו יפוג עד שהשימוש בעובדה ייפתר.
+          הפעולה סופית ואינה הפיכה. העובדה תוסר מהמאגר ולא תוצע כיעד צירוף חדש. ההיסטוריה שלה תישאר ללא שינוי. מסמך
+          קורות חיים שמשתמש בה לא ישתנה, אבל האישור שלו יפוג עד שהשימוש בעובדה ייפתר.
         </p>
         {deletion.error === null ? null : (
           <ErrorCallout

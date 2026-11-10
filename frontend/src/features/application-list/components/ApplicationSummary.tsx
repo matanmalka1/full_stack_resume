@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 
 import type { ApplicationListItem } from "@/api/contracts";
+import { preparationStateLabels } from "@/features/preparation";
 import { InitialTile } from "@/ui/InitialTile";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { applicationAttention } from "../model/applicationListPresentation";
-import { ApplicationStageBadge } from "./ApplicationListStatuses";
 
 /* One Application named the way the board names it, with no link of its own: the
    employer's initial, the role, the employer, and one chip - "needs attention" when the
-   projection holds a reason, its recruitment stage otherwise.
+   projection holds a review reason, its CV's preparation state otherwise.
 
    It exists so a caller outside the board - the quick search - can show a result without
    restating how an Application is drawn. A result that is itself one control must not
@@ -37,7 +37,9 @@ export const ApplicationSummary = ({
       </span>
     </span>
     {applicationAttention(item) === null ? (
-      <ApplicationStageBadge className="px-2 py-0.5" item={item} />
+      <StatusBadge icon={false} className="px-2 py-0.5" tone="progress" variant="outline">
+        {preparationStateLabels[item.preparation_state]}
+      </StatusBadge>
     ) : (
       <StatusBadge icon={false} className="px-2 py-0.5" tone="progress" variant="solid">
         דורש טיפול

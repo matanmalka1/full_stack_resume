@@ -42,9 +42,7 @@ const destinations: Record<string, (applicationId: string) => string> = {
   check: routePaths.draft,
   approve: routePaths.draft,
   render: routePaths.draft,
-  /* What is done with a Ready document - taking its file and recording that it was sent -
-     is the ready step's. */
-  submit: routePaths.ready,
+  /* What is done with a Ready document - taking its file - is the ready step's. */
   download_pdf: routePaths.ready,
 };
 

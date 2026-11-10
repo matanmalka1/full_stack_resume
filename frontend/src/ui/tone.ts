@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 /* The five severities the interface draws, and nothing about what is being described.
 
    `ui` owns how loud a thing is - success, warning, blocker, progress, neutral - and
-   never which domain value maps to which: a preparation state, a recruitment status or
+   never which domain value maps to which: a preparation state or
    an analysis fit is named and toned by the feature that owns it, and arrives here
    already reduced to one of these five.
 

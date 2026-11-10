@@ -24,7 +24,6 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
       id: "app-1",
       company: "Acme",
       target_role: "Account Manager",
-      current_status: "saved",
       notes: "",
       created_at: "2026-08-24T07:00:00Z",
       updated_at: "2026-08-24T07:00:00Z",

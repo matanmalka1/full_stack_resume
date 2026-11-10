@@ -2,24 +2,6 @@ import type { ApplicationDetail, PreparationState } from "@/api/contracts";
 import { preparationResumeDestinationFromDetail } from "@/features/preparation";
 import { routePaths } from "@/navigation/routePaths";
 
-/* The statuses that end the process with the employer. Together with a terminal outcome
-   they are the server's own rule for a closed application (`application_is_closed`), so
-   the hub says "סגורה" exactly where the board's list item says `is_closed`. */
-const closedStatuses: ReadonlySet<string> = new Set(["rejected", "withdrawn", "closed"]);
-
-export const isApplicationClosed = (detail: Pick<ApplicationDetail, "recruitment_status" | "terminal_outcome">) =>
-  detail.terminal_outcome != null || closedStatuses.has(detail.recruitment_status);
-
-/* When the application was last sent, read off its recruitment history: the newest
-   submission recorded, internal or external. Null while nothing was sent. */
-export const lastSubmittedAt = (detail: ApplicationDetail): string | null =>
-  detail.recruitment_timeline
-    .filter((item) => item.item_type === "submission")
-    .reduce<string | null>(
-      (latest, item) => (latest === null || item.occurred_at > latest ? item.occurred_at : latest),
-      null,
-    );
-
 type PreparationRowKey = "analysis" | "create" | "draft" | "approve" | "ready";
 export type PreparationRowState = "done" | "current" | "upcoming";
 

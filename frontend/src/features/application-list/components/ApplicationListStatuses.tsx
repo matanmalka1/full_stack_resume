@@ -1,43 +1,7 @@
-import { Archive } from "lucide-react";
-
 import type { ApplicationListItem } from "@/api/contracts";
 import { preparationStateLabels } from "@/features/preparation";
-import { recruitmentStatusLabel } from "@/features/recruitment";
 import { ProgressSegments } from "@/ui/ProgressSegments";
-import { StatusBadge } from "@/ui/StatusBadge";
-import { cx } from "@/ui/cx";
 import { preparationProgress } from "../model/applicationListPresentation";
-import { recruitmentStageOf } from "../model/recruitmentStages";
-
-/* The employer's side of an Application as the board names it: its recruitment stage, on a
-   chip whose weight says how far along it is. A closed Application has no stage, so its
-   chip is the exact status word in a quiet outline.
-
-   The design draws the stage's mark inside the chip on a phone only, where the chip leads
-   the card's second line; `phoneIcon` asks for that. The tone is "progress" for its dark
-   text on the soft fill - the mark is always the stage's own, so nothing spins. */
-export const ApplicationStageBadge = ({
-  className,
-  item,
-  phoneIcon = false,
-}: {
-  className?: string;
-  item: ApplicationListItem;
-  phoneIcon?: boolean;
-}) => {
-  const stage = recruitmentStageOf(item.recruitment_status);
-
-  return (
-    <StatusBadge
-      className={cx(phoneIcon ? "lg:[&>svg]:hidden" : "[&>svg]:hidden", className)}
-      icon={stage?.icon ?? Archive}
-      tone="progress"
-      variant={stage?.badge ?? "outline"}
-    >
-      {stage?.label ?? recruitmentStatusLabel(item.recruitment_status)}
-    </StatusBadge>
-  );
-};
 
 /* The CV track on a card: one segment per preparation state, filled to where the
    Application's document stands, and its position in words beside it - "קו״ח 3/5", or

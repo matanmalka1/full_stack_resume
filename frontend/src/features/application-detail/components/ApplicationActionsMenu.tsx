@@ -1,31 +1,15 @@
-import {
-  Archive,
-  CircleCheck,
-  Ellipsis,
-  EllipsisVertical,
-  FilePenLine,
-  History,
-  Info,
-  type LucideIcon,
-  Trash2,
-} from "lucide-react";
+import { Ellipsis, EllipsisVertical, FilePenLine, Info, type LucideIcon, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { cx } from "@/ui/cx";
 
 interface ApplicationActionHandlers {
-  onClose: () => void;
   onDelete: () => void;
   onDetails: () => void;
-  /* Absent once the posting is locked by a Submission: the menu offers only what can be
-     done. */
-  onEditPosting?: () => void;
-  onHistory: () => void;
-  onUpdate: () => void;
+  onEditPosting: () => void;
 }
 
 interface ApplicationActionsMenuProps extends ApplicationActionHandlers {
-  closed: boolean;
   company: string;
   /* Which trigger this is: the phone header's bare ⋮, or the outlined ⋯ beside the wide
      header's commands. Each is drawn only at its own width. */
@@ -52,8 +36,8 @@ const MenuItem = ({
   </button>
 );
 
-/* The record's own commands, behind one trigger: update its status, read its details or
-   its history, edit the posting it was saved with, close it, delete it. A wide screen opens them as a menu under the trigger;
+/* The record's own commands, behind one trigger: read its details, edit the posting it
+   was saved with, delete it. A wide screen opens them as a menu under the trigger;
    on a phone the same menu is an action sheet over the dimmed screen, under a handle and
    the company's name. It stays one menu either way - same items, same keys, same focus -
    so only its placement changes.
@@ -61,14 +45,10 @@ const MenuItem = ({
    Ending the record is set apart under a rule, and delete is written bold rather than
    coloured: the confirmation it opens is where its weight is stated. */
 export const ApplicationActionsMenu = ({
-  closed,
   company,
-  onClose,
   onDelete,
   onDetails,
   onEditPosting,
-  onHistory,
-  onUpdate,
   placement,
 }: ApplicationActionsMenuProps) => {
   const [open, setOpen] = useState(false);
@@ -159,14 +139,9 @@ export const ApplicationActionsMenu = ({
               ניהול מועמדות: {company}
             </p>
           </div>
-          <MenuItem icon={CircleCheck} label="עדכון סטטוס ומשימות" onSelect={select(onUpdate)} />
           <MenuItem icon={Info} label="פרטי משרה" onSelect={select(onDetails)} />
-          {onEditPosting === undefined ? null : (
-            <MenuItem icon={FilePenLine} label="עריכת נוסח המשרה" onSelect={select(onEditPosting)} />
-          )}
-          <MenuItem icon={History} label="היסטוריית המועמדות" onSelect={select(onHistory)} />
+          <MenuItem icon={FilePenLine} label="עריכת נוסח המשרה" onSelect={select(onEditPosting)} />
           <hr className="mx-2 my-1.5 border-0 border-t border-cv-hairline max-lg:mx-0" />
-          {closed ? null : <MenuItem icon={Archive} label="סגירת המועמדות" onSelect={select(onClose)} />}
           <MenuItem icon={Trash2} label="מחיקת המועמדות" onSelect={select(onDelete)} strong />
         </div>
       ) : null}

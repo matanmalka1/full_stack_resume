@@ -175,10 +175,10 @@ describe("NewApplicationPage", () => {
      is guarded here is that this screen returns to the remembered board and not to a bare
      one; that what gets remembered is the board's canonical query is the board's own. */
   it("returns to the board the user left rather than to a bare board", () => {
-    window.sessionStorage.setItem("cv:board-query", "activity=all&stage=approved");
+    window.sessionStorage.setItem("cv:board-query", "preset=ready_to_send");
     renderPage("/");
 
-    expect(screen.getByRole("link", { name: "ביטול" })).toHaveAttribute("href", "/?activity=all&stage=approved");
+    expect(screen.getByRole("link", { name: "ביטול" })).toHaveAttribute("href", "/?preset=ready_to_send");
     expect(screen.getByRole("heading", { name: "משרה חדשה" })).toBeInTheDocument();
   });
 

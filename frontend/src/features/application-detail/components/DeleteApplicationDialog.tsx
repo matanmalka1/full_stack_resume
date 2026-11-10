@@ -37,7 +37,7 @@ export const DeleteApplicationDialog = ({
         : `${applicationSubject(application)} תרד מלוח המועמדויות ולא תיספר עוד בברירת המחדל.`}
     </p>
     <p className="mt-3 rounded-control bg-cv-surface-muted px-3.5 py-2.5 text-label leading-relaxed text-cv-text">
-      הפעולה סופית ואין לה ביטול. תצלומי המשרה, הניתוחים, מסמך קורות החיים, ההגשות וכל קובץ שהופק נשארים בדיוק כפי שהם.
+      הפעולה סופית ואין לה ביטול. תצלומי המשרה, הניתוחים, מסמך קורות החיים וכל קובץ שהופק נשארים בדיוק כפי שהם.
     </p>
   </ConfirmDialog>
 );

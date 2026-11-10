@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, CalendarDays, ChevronLeft, Clock, FileCheck2, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Bell, ChevronLeft, TriangleAlert } from "lucide-react";
 import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -14,52 +14,36 @@ import { attentionHubItems, type HubItem } from "../model/applicationListPresent
 const PHONE_ROWS = 2;
 const WIDE_ROWS = 3;
 
-const rowIcons: Record<HubItem["type"], LucideIcon> = {
-  overdue: Clock,
-  due_today: Clock,
-  attention: TriangleAlert,
-  due_this_week: CalendarDays,
-  ready: FileCheck2,
-};
-
-const HubRow = ({ hidden, item }: { hidden: string | undefined; item: HubItem }) => {
-  const Icon = rowIcons[item.type];
-  const urgent = item.type === "overdue";
-
-  return (
-    <li className={cx("border-t border-cv-hairline first:border-t-0", hidden)}>
-      <Link
-        className="flex min-h-14 items-center gap-3 px-3.5 py-3 text-cv-text transition-colors hover:bg-cv-surface-muted"
-        to={item.to}
+const HubRow = ({ hidden, item }: { hidden: string | undefined; item: HubItem }) => (
+  <li className={cx("border-t border-cv-hairline first:border-t-0", hidden)}>
+    <Link
+      className="flex min-h-14 items-center gap-3 px-3.5 py-3 text-cv-text transition-colors hover:bg-cv-surface-muted"
+      to={item.to}
+    >
+      {/* A mark on a phone only - the design's wide panel is text. */}
+      <span
+        aria-hidden="true"
+        className="flex size-9 shrink-0 items-center justify-center rounded-control-sm bg-cv-surface-muted text-cv-text lg:hidden"
       >
-        {/* The row's kind as a mark, on a phone only - the design's wide panel is text. */}
-        <span
-          aria-hidden="true"
-          className={cx(
-            "flex size-9 shrink-0 items-center justify-center rounded-control-sm lg:hidden",
-            urgent ? "bg-cv-text text-cv-surface" : "bg-cv-surface-muted text-cv-text",
-          )}
-        >
-          <Icon className="size-icon-md" />
+        <TriangleAlert className="size-icon-md" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-label font-bold">
+          <bdi>{item.title}</bdi>
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-label font-bold">
-            <bdi>{item.title}</bdi>
-          </span>
-          <span className="block truncate text-support text-cv-text-muted">
-            <span dir="auto">{item.application.company}</span> · <span dir="auto">{item.application.target_role}</span>
-          </span>
+        <span className="block truncate text-support text-cv-text-muted">
+          <span dir="auto">{item.application.company}</span> · <span dir="auto">{item.application.target_role}</span>
         </span>
-        <StatusBadge icon={false} className="px-2.25 py-0.75" tone="progress" variant={urgent ? "solid" : "soft"}>
-          {item.label}
-        </StatusBadge>
-      </Link>
-    </li>
-  );
-};
+      </span>
+      <StatusBadge icon={false} className="px-2.25 py-0.75" tone="progress" variant="soft">
+        דורש טיפול
+      </StatusBadge>
+    </Link>
+  </li>
+);
 
-/* The board's one dark block: what waits on the reader across the open board, each row
-   the way to where it is done. It reads the whole open board itself - the same question
+/* The board's one dark block: what blocks the reader across the board, each row the
+   way to the step that resolves it. It reads the whole board itself - the same question
    the unnarrowed board asks, so the two share one cached answer - because a slice chosen
    below must not hide what is waiting from the panel that exists to say so.
 
@@ -68,7 +52,7 @@ const HubRow = ({ hidden, item }: { hidden: string | undefined; item: HubItem })
 export const ApplicationAttentionSummary = () => {
   const headingId = useId();
   const [expanded, setExpanded] = useState(false);
-  const hubQuery = useQuery(applicationListQueryOptions({ activity: "open", sort: "updated", limit: BOARD_LIMIT }));
+  const hubQuery = useQuery(applicationListQueryOptions({ sort: "updated", limit: BOARD_LIMIT }));
   const items = attentionHubItems(hubQuery.data?.items ?? []);
 
   if (items.length === 0) {

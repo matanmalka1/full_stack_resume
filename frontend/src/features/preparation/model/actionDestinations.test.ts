@@ -107,7 +107,6 @@ describe("actionDestination covers the backend action vocabulary", () => {
   });
 
   it("keeps what is done with a Ready document on the ready step", () => {
-    expect(actionDestination("submit", "app-1")).toBe("/applications/app-1/ready");
     expect(actionDestination("download_pdf", "app-1")).toBe("/applications/app-1/ready");
   });
 });

@@ -17,7 +17,7 @@ import type { ApplicationPreset, ApplicationSort } from "@/api/contracts";
    arbitrary value in the URL must not become an arbitrary request, so every field is read
    back through the closed sets below and anything unrecognised falls to the default. */
 
-/* The board draws every open Application at once - the design has no pager - so it asks
+/* The board draws every Application at once - the design has no pager - so it asks
    for the endpoint's largest page. A board past it is far beyond the product's scale; the
    cut is the server's own bound rather than a second one invented here. */
 export const BOARD_LIMIT = 200;
@@ -35,19 +35,15 @@ const sorts: Record<ApplicationSort, true> = {
 const presets: Record<ApplicationPreset, true> = {
   needs_attention: true,
   ready_to_send: true,
-  active_interviews: true,
 };
 
 const known = <T extends string>(table: Record<T, true>, value: string | null): T | undefined =>
   value !== null && Object.hasOwn(table, value) ? (value as T) : undefined;
 
-/* The board is live work: a finished process stays stored and is found through the quick
-   search, but it is not what this screen is asking about. */
 export const queryFromParams = (params: URLSearchParams): ApplicationListQuery => {
   const preset = known(presets, params.get("preset"));
 
   return {
-    activity: "open",
     sort: known(sorts, params.get("sort")) ?? "updated",
     limit: BOARD_LIMIT,
     ...(preset === undefined ? {} : { preset }),
