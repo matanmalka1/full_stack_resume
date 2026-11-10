@@ -76,7 +76,7 @@ it("applies the server theme even when local storage is blocked", () => {
   expect(document.documentElement).toHaveAttribute("data-theme", "dark");
 });
 
-it("gives every route the brand, the new-job command, the quick switcher, the areas and sign-out", () => {
+it("gives every route the brand, the new-job command, the areas and sign-out", () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(settingsQueryKey, { settings: settings(), etag: '"settings-1"' });
   render(
@@ -93,10 +93,6 @@ it("gives every route the brand, the new-job command, the quick switcher, the ar
 
   expect(screen.getByRole("link", { name: "סביבת קורות החיים" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "קליטת משרה חדשה" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "מעבר מהיר למועמדות" })).toHaveAttribute(
-    "aria-keyshortcuts",
-    "Meta+K Control+K",
-  );
   const navigation = screen.getByRole("navigation", { name: "ניווט ראשי" });
   expect(navigation).toContainElement(screen.getByRole("link", { name: "לוח המועמדויות" }));
   expect(screen.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute("aria-current", "page");

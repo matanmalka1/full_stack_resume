@@ -49,7 +49,7 @@ export const routes: RouteObject[] = [
         /* A pathless route whose only job is to own the boundary for every screen below
            it. A screen that throws used to take the whole shell down with it - the
            boundary sat on the route that renders `AppLayout`, so replacing it removed the
-           masthead, the primary navigation and the search palette along with the screen,
+           masthead and the primary navigation along with the screen,
            and a reader who hit a 500 was left with a red card and the browser's own back
            button. Owned here, the boundary replaces the `Outlet` and the shell stays. */
         errorElement: <RouteErrorBoundary />,

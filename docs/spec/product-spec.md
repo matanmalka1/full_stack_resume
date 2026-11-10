@@ -95,9 +95,8 @@ without a provider.
   to Profile sections; create a fact from a claim; `Confirm and use`. A pending fact
   drafted from a gap question is edited in place on the analysis step. *Not built:*
   editing a canonical fact in place (§17).
-- Dashboard with presets, an action hub, and sorting; quick search (⌘K) for finding an
-  Application or fact by name; Application Detail with preparation state, blockers,
-  notes, and soft delete.
+- Dashboard with presets, an action hub, and sorting; Application Detail with
+  preparation state, blockers, notes, and soft delete.
 - Recruiter PDF download and a provenance Markdown export.
 - Cancellable, retryable Operations for AI work and rendering.
 - Settings (§15), a health endpoint, and operator maintenance commands (§16).

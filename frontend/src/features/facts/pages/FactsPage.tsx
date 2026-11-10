@@ -46,7 +46,7 @@ const factHref = (factId: string): string => `${routePaths.facts}?fact=${encodeU
 
 /* The pool and one fact are two pages of one route, chosen by the address: a `fact` in
    it shows that fact, none shows the pool - at every width, as the design draws them. A
-   link from anywhere else (the search palette, a draft's claim) opens the same page. */
+   link from anywhere else (a draft's claim) opens the same page. */
 export const FactsPage = () => {
   const [filters, setFilters] = useState(emptyFactFilters);
   const [creating, setCreating] = useState(false);

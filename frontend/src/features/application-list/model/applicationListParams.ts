@@ -9,8 +9,8 @@ import type { ApplicationPreset, ApplicationSort } from "@/api/contracts";
    button - narrowing and then going back is the gesture people already know.
 
    The board asks two things of the reader: which named slice (`preset`) and in what
-   order (`sort`). Finding one record by name is the quick search's, not the board's, so
-   there is no search box, stage menu or pager here and nothing of theirs in the URL.
+   order (`sort`). There is no search box, stage menu or pager here and nothing of
+   theirs in the URL.
 
    The parameter names are the API's, so what is in the address bar is the question that
    was asked. It is deliberately not passed through to `fetch` as an opaque string: an

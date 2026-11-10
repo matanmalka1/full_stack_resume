@@ -92,13 +92,11 @@ state's dashed frame), and `pill` for chips and badges.
 
 On desktop the application uses a 248px white sidebar on the RTL inline-start edge,
 top to bottom: the brand (an accent square with a page mark, then "סביבת קורות החיים"),
-the full-width "משרה חדשה" command, the quick switcher drawn as a search field that
-names ⌘K, the three areas, and sign-out pinned to the foot. A nav row is icon then label;
+the full-width "משרה חדשה" command, the three areas, and sign-out pinned to the foot. A nav row is icon then label;
 the active one is a flat background step, a bold label and a 2px edge indicator. The
 sidebar does not fold: the design has no rail, so there is no collapse control.
 
-Below the large breakpoint the sidebar becomes a top bar of the brand and a round
-search button. The three destinations move to a tab bar pinned to the bottom of the
+Below the large breakpoint the sidebar becomes a top bar of the brand. The three destinations move to a tab bar pinned to the bottom of the
 viewport: icon over a short visible label, the active one marked by a pill behind its
 icon and a bold label. The new-job command becomes a
 floating button over the board, above the bottom bar; sign-out moves to the account
@@ -168,8 +166,8 @@ name a test or a screen reader finds:
   is unsaved. The one place the account commands are drawn twice is Settings: the wide
   account card holds them under the email, a phone lists them last, and CSS shows one;
   only the hidden copy is out of the accessibility tree, but a component test sees both.
-  A filter used often becomes chips (`FilterChip`); the board has no other filter -
-  finding a record by name is the quick search's. A list and its record are two views
+  A filter used often becomes chips (`FilterChip`); the board has no other filter.
+  A list and its record are two views
   chosen by the URL, and the
   record's one command is pinned above the bottom bar.
   The facts pool is one `<table>` at every width: each knowledge file is a `tbody`
@@ -185,7 +183,7 @@ name a test or a screen reader finds:
   centred `rounded-dialog` card with 28px padding and no dividers; an alert keeps its
   icon tile and draws no X there either. A footer
   splits its commands into halves or stacks them (`footerLayout`). A record menu becomes
-  an action sheet, and the quick switcher is full screen.
+  an action sheet.
 - `CommitBar` and a sticky `ActionBar` run edge to edge on the bottom bar with 48px
   commands; `CommitBar` takes a `secondary` beside its primary and can drop `back`.
   Folded reference material is a `Disclosure variant="card"` row with a 56px summary.

@@ -10,7 +10,7 @@ interface ApplicationPresetTabsProps {
 }
 
 /* The board's named slices, drawn as one row of quick filters - the only narrowing the
-   board offers. Finding one record by name is the quick search's.
+   board offers.
 
    "דורש טיפול" is the one slice that asks for the reader rather than describing the board:
    its count is a filled disc and its edge stronger, while it holds anything.

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -66,10 +66,6 @@ describe("workflow shell", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("button", { name: "מעבר מהיר למועמדות" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "קליטת משרה חדשה" })).toBeInTheDocument();
-
-    fireEvent.keyDown(window, { key: "k", metaKey: true });
-    expect(screen.getByRole("dialog", { name: "מעבר מהיר למועמדות" })).toBeInTheDocument();
   });
 });

@@ -6,7 +6,7 @@ const sizeClasses = {
 } as const;
 
 /* The first letter of a record's name on a soft square - an employer on a board card or
-   a search result. Decorative: the name itself is always written beside it. */
+   an Application's details. Decorative: the name itself is always written beside it. */
 export const initialOf = (name: string): string => name.trim().charAt(0).toLocaleUpperCase("he") || "?";
 
 export const InitialTile = ({

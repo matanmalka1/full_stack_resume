@@ -17,8 +17,7 @@ export const emptyFactFilters: FactFilters = {
 };
 
 /* Everything a fact is found by, as one lowercased string: its meaning, every rendering,
-   knowledge source and tags. The facts screen and the global search palette
-   both search with this, so the same words find the same facts in either. */
+   knowledge source and tags. */
 export const factSearchText = (fact: Fact): string =>
   [fact.meaning, ...Object.values(fact.renderings), fact.source, ...fact.tags].join(" ").toLocaleLowerCase();
 

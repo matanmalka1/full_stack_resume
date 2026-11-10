@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 
 import { cx } from "@/ui/cx";
 import { SignOutButton } from "@/features/auth";
-import { GlobalSearch } from "../search/GlobalSearch";
 import { boardPath } from "@/navigation/boardReturn";
 import { routePaths } from "@/navigation/routePaths";
 import { AppNavigation } from "./AppNavigation";
@@ -43,9 +42,8 @@ const Brand = () => (
 );
 
 /* One element, two shapes. From the large breakpoint it is the sidebar, top to bottom:
-   the brand, the new-job command, the quick switcher, the areas, and sign-out pinned to
-   the foot. Below it, it is a top bar of the brand and a round search button, with the
-   areas as a tab bar pinned to the bottom of the viewport (`AppNavigation`); the new-job
+   the brand, the new-job command, the areas, and sign-out pinned to the foot. Below it,
+   it is a top bar of the brand, with the areas as a tab bar pinned to the bottom of the viewport (`AppNavigation`); the new-job
    command moves to the board's floating button and sign-out to Settings.
 
    `hiddenOnPhone` drops the whole header - top bar and tab bar, which lives inside it -
@@ -74,8 +72,6 @@ export const AppHeader = ({ hiddenOnPhone = false }: { hiddenOnPhone?: boolean }
             <span>משרה חדשה</span>
           </Link>
         </span>
-
-        <GlobalSearch />
 
         <AppNavigation />
 

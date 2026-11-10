@@ -116,44 +116,6 @@ test.describe("dialogs", () => {
     await expect(invoker).toBeFocused();
   });
 
-  test("opens the search palette on the shortcut with focus in its field", async ({ page }) => {
-    await page.goto("/applications/app-1");
-    const palette = page.getByRole("dialog", { name: "מעבר מהיר למועמדות" });
-    /* The shortcut is the shell's listener; pressing before the screen has drawn races it. */
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(palette).toBeHidden();
-
-    await page.keyboard.press("ControlOrMeta+k");
-
-    await expect(palette).toBeVisible();
-    await expect(palette.getByRole("combobox")).toBeFocused();
-
-    await page.keyboard.press("Shift+Tab");
-    await expect(palette.locator(":focus")).toHaveCount(1);
-    await page.keyboard.press("Tab");
-    await expect(palette.getByRole("combobox")).toBeFocused();
-
-    await page.keyboard.press("Escape");
-    await expect(palette).toBeHidden();
-  });
-
-  /* Where focus lands on close is wherever it came from, which is the trigger only when
-     the trigger is what opened the palette. Opening on the shortcut from an unfocused page
-     restores focus to the body, and that is correct rather than a lost trigger. */
-  test("returns focus to the palette trigger that opened it", async ({ page }) => {
-    await page.goto("/applications/app-1");
-    const trigger = page.getByRole("button", { name: "מעבר מהיר למועמדות" });
-    const palette = page.getByRole("dialog", { name: "מעבר מהיר למועמדות" });
-
-    await trigger.click();
-    await expect(palette).toBeVisible();
-
-    await page.keyboard.press("Escape");
-
-    await expect(palette).toBeHidden();
-    await expect(trigger).toBeFocused();
-  });
-
   /* Work in flight on a step that stays on screen - the draft editor's regeneration - sits
      beside the page. Hiding it with Escape hands focus to the chip that reopens it - not to
      whatever held focus when the screen opened the overlay by itself - and the report the

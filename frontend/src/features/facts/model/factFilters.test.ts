@@ -45,7 +45,7 @@ describe("filterFactEntries", () => {
     );
   });
 
-  it("finds a fact by its knowledge source, as the global search does", () => {
+  it("finds a fact by its knowledge source", () => {
     expect(
       filterFactEntries(entries, { ...emptyFactFilters, query: "SALES.JSON" }).map(({ fact }) => fact.fact_id),
     ).toEqual(["fact.sales"]);

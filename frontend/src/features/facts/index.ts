@@ -14,5 +14,4 @@ export {
   FactTagsField,
 } from "./components/FactFormFieldset";
 export { emptyFactForm, parseFactTags, type FactFormFields } from "./model/factForm";
-export { factSearchText } from "./model/factFilters";
 export { factLabel, factLabelInLanguage, factSourceLabel, factStatusLabel } from "./model/factLabels";
