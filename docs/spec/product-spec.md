@@ -95,7 +95,7 @@ without a provider.
   to Profile sections; create a fact from a claim; `Confirm and use`. A pending fact
   drafted from a gap question is edited in place on the analysis step. *Not built:*
   editing a canonical fact in place (§17).
-- Dashboard with presets, an action hub, and sorting; Application Detail with
+- CV library (in preparation and Ready, with preview and search); Application Detail with
   preparation state, blockers, notes, and soft delete.
 - Recruiter PDF download and a provenance Markdown export.
 - Cancellable, retryable Operations for AI work and rendering.
@@ -482,19 +482,19 @@ reasons, warnings, Operations, document ID/hash/analysis pin, available and bloc
 actions with reasons, and a recommended action (state-and-use-cases.md §9). The backend
 owns action policy; React does not duplicate it.
 
-## 14. Dashboard and Application Detail
+## 14. CV Library and Application Detail
 
-The Dashboard shows every Application at once, narrowed only by presets (needs
-attention, ready to send) with their counts, and sorted. An action hub lists what waits
-on the user: blockers and Ready documents. Finding an Application by name is the quick
-search's. The list endpoint itself still takes search and stage filters, and paging.
+The CV library (`/`) is the home screen. It lists every Application in two groups, in
+preparation and Ready, newest first, and a search field narrows them by employer or role.
+The chosen one sits beside the list: a Ready CV shows a preview of its document and its
+PDF download; one in preparation shows its step, what waits on the user if anything, and
+the way on to that step. The chosen Application is in the address (`?application=`), and
+every way back from an Application lands on it there. The preview is composed from the
+stored content on request (`/document/preview`), so it needs no stored file. The list
+endpoint itself still takes presets, search and stage filters, and paging.
 
 Application Detail shows preparation progress and the document's PDF, with notes and the
 record's delete one command away. Blockers are shown on the preparation step they block.
-
-All CVs (`/resumes`) lists every Ready document beside a preview of the chosen one, with
-its PDF download. A search field narrows the list by employer or role. The preview is composed from the stored content on request
-(`/document/preview`), so it needs no stored file.
 
 Applications can be soft-deleted; there is no hard delete.
 

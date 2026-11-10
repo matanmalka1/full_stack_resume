@@ -84,7 +84,7 @@ one of these roles. Raw spacing remains appropriate for local optical adjustment
 From the inside out: `item` 8px (a row in a list, a segment in a switch), `control-sm`
 10px (the quick-search field, a switch's track, a compact button), `control` 12px (a
 full-size button or field), `control-lg` 14px (a sheet's or an empty state's large
-command), `surface` 16px (a card), `fab` 18px (the board's floating button), `dialog`
+command), `surface` 16px (a card), `fab` 18px (the CV library's floating button), `dialog`
 22px (a centred dialog), `sheet` 24px (a bottom sheet's top corners and an empty
 state's dashed frame), and `pill` for chips and badges.
 
@@ -99,10 +99,8 @@ sidebar does not fold: the design has no rail, so there is no collapse control.
 Below the large breakpoint the sidebar becomes a top bar of the brand. The three destinations move to a tab bar pinned to the bottom of the
 viewport: icon over a short visible label, the active one marked by a pill behind its
 icon and a bold label. The new-job command becomes a
-floating button over the board, above the bottom bar; sign-out moves to the account
-list at the end of Settings. The board's action hub is a dark accent frame around a light
-list at every width: above the cards on a phone, a column beside them from the large
-breakpoint. The bar's
+floating button over the CV library, above the bottom bar; sign-out moves to the account
+list at the end of Settings. The bar's
 height is `--cv-bottom-nav-height` (zero at the large breakpoint), and every other
 bottom-pinned surface - `CommitBar`, a sticky `ActionBar`, the Settings save row, the
 page's own bottom padding and scroll padding - stands on top of it by that height.
@@ -159,14 +157,14 @@ The mobile design draws its own rules below the large breakpoint, all on the sam
 components through `max-lg:` utilities - never a second tree, which would double every
 name a test or a screen reader finds:
 
-- List screens (the board, the facts pool, Settings) draw their groups as rounded
+- List screens (the CV library, the facts pool, Settings) draw their groups as rounded
   white cards on the canvas under plain labels. A wide Settings puts each area's name
   and a line about it in a column beside its card, with a rule between areas; a setting
   is a row whose control sits at its end, and the save row appears only while something
   is unsaved. The one place the account commands are drawn twice is Settings: the wide
   account card holds them under the email, a phone lists them last, and CSS shows one;
   only the hidden copy is out of the accessibility tree, but a component test sees both.
-  A filter used often becomes chips (`FilterChip`); the board has no other filter.
+  A filter used often becomes chips (`FilterChip`).
   A list and its record are two views
   chosen by the URL, and the
   record's one command is pinned above the bottom bar.
@@ -190,7 +188,7 @@ name a test or a screen reader finds:
 - A run that is a step's whole body (`OperationOverlay`'s `screen`) is the screen at
   every width: a turning ring round the AI mark, the run's heading as the route
   heading, its four phases (sent, queued, running, done) stacked in a card on a phone
-  and in columns on a wide screen, and the way back to the board and cancel - in the
+  and in columns on a wide screen, and the way back to the CV library and cancel - in the
   phone's bottom bar, under the card wide, where the run is one centred card. A run
   that ended without a result is reported in the same place: warning mark, the
   catalogue's title, what happened, that the prior state was kept, the phases with the
