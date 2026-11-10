@@ -8,11 +8,10 @@ Section numbers are cited from code and tests; keep them stable.
 כלי שמתאים קורות חיים למשרה מתוך העובדות של המועמד ומפיק PDF קריא לאדם ול־ATS. כל
 משתמש הוא מועמד אחד ורואה רק את המידע שלו (§22).
 
-`Create -> Analyze -> Draft -> Edit -> Check -> Approve -> Render -> Ready -> Submit`
+`Create -> Analyze -> Draft -> Edit -> Check -> Approve -> Render -> Ready`
 
 ניתוח וכתיבה דורשים ספק AI; כל השאר עובד בלעדיו. לכל Application יש מסמך קורות חיים
-אחד שאפשר לערוך תמיד; אישור ו־Ready נגזרים מהתוכן הנוכחי. Submission מתעד שליחה שנעשתה
-מחוץ למערכת.
+אחד שאפשר לערוך תמיד; אישור ו־Ready נגזרים מהתוכן הנוכחי.
 
 ## 1. Documents
 
@@ -29,8 +28,8 @@ Where another document owns a mechanism, this one links to it instead of restati
 ## 2. Product goal
 
 A signed-in user can create a job application, analyze the job, get and edit a CV
-built from their facts, approve it, render an ATS-readable PDF, record what was sent,
-and track the recruitment process — through the Web client, without seeing another
+built from their facts, approve it, and render an ATS-readable PDF — through the Web
+client, without seeing another
 user's data. The UI never requires entity IDs, hashes, paths, or architecture
 knowledge; those appear only in provenance views.
 
@@ -57,8 +56,8 @@ limit is: the new draft is measured and trimmed to fit before it is written (§1
 
 There is no rules-based analysis or drafting. Without a provider, new analyses and
 drafts are unavailable and the UI offers configuration or retry; a provider failure
-never falls back silently. Editing, checking, approval, rendering, submission, export,
-and tracking all work without a provider.
+never falls back silently. Editing, checking, approval, rendering, and export all work
+without a provider.
 
 ## 3. Product boundaries
 
@@ -83,7 +82,7 @@ and tracking all work without a provider.
 - Job intake: company, role, pasted text, optional URL, `.txt` file read in the
   browser, and a browser-local recovery copy of the unsent form.
 - Duplicate warnings with explicit acknowledgement (§8).
-- Editable job text, locked by the first Submission (§8).
+- Editable job text (§8).
 - AI job analysis with requirements, coverage, gaps, Fit, and issues; a form to change
   Track, Profile, language, and Emphasis.
 - Gap questions: one AI question per unmet requirement, answered in the user's own
@@ -96,11 +95,9 @@ and tracking all work without a provider.
   to Profile sections; create a fact from a claim; `Confirm and use`. A pending fact
   drafted from a gap question is edited in place on the analysis step. *Not built:*
   editing a canonical fact in place (§17).
-- Dashboard with presets, an action hub, sorting, and a cards or recruitment-stage view;
-  quick search (⌘K) for finding an Application or fact by name; Application Detail with
-  preparation state, blockers, next action, notes, timeline, and submissions.
-- Recruitment status, corrections, one next action with overdue warning, internal and
-  external submissions, close, soft delete.
+- Dashboard with presets, an action hub, and sorting; quick search (⌘K) for finding an
+  Application or fact by name; Application Detail with preparation state, blockers,
+  notes, and soft delete.
 - Recruiter PDF download and a provenance Markdown export.
 - Cancellable, retryable Operations for AI work and rendering.
 - Settings (§15), a health endpoint, and operator maintenance commands (§16).
@@ -120,8 +117,8 @@ and tracking all work without a provider.
 - Web editing of Profiles, policies, prompts, or rules.
 - Archive or retirement states for facts.
 - WYSIWYG editing, section reordering, drag-and-drop.
-- CV revision history or version comparison (Submissions are the history of what was
-  sent).
+- CV revision history or version comparison.
+- Recording sends or tracking the recruitment process (status, next action, timeline).
 - Mobile-first flows, notifications, calendar, charts, analytics, CSV export,
   WebSocket/SSE progress, automatic updates, built-in backup.
 
@@ -131,9 +128,8 @@ and tracking all work without a provider.
 2. Every record belongs to exactly one user, directly or through its Application.
    Another user's record behaves exactly like a missing one (§22).
 3. Each Application has exactly one `CVDocument`, created with its first analysis.
-4. JobAnalysis, AI call records, Submissions, recruitment/audit/fact events, gap
-   questions and their answers, and finished Operations are immutable, and job text is
-   locked once submitted. Database triggers enforce this.
+4. JobAnalysis, AI call records, audit/fact events, gap questions and their answers,
+   and finished Operations are immutable. Database triggers enforce this.
 5. Editing an approved or Ready document is always allowed and returns it to draft.
 6. Approval and Ready are derived on read by comparing `approved_basis` with the current
    `basis` and `rendered_basis` with the current `render_basis` (state-and-use-cases.md
@@ -150,11 +146,11 @@ and tracking all work without a provider.
     wording and is reported.
 13. Provider, cancelled, or stale output becomes state only through a successful commit
     against its original preconditions. Every provider call is logged either way.
-14. Preparation and recruitment are independent lifecycles.
-15. Recruitment history is append-only; corrections add events.
-16. A Submission's content and files are never overwritten, moved, or deleted.
+14. *(removed)*
+15. *(removed)*
+16. *(removed)*
 17. No mutable content has two sources of truth.
-18. Nothing deletes an immutable payload.
+18. *(removed)*
 19. Queries never expose a partially committed mutation.
 20. `delete_application` and `delete_fact` are soft deletes. A deleted item leaves
     default listings but stays reachable by ID with its records preserved.
@@ -200,8 +196,6 @@ hash; there is no version history. Earlier analyses stay on record, Analyze beco
 available, and the document reports `DOCUMENT_ON_OLDER_ANALYSIS` until the user runs
 `build_from_analysis` on a newer analysis.
 
-The first Submission, internal or external, locks the job text.
-
 ## 9. Analysis and review
 
 A JobAnalysis holds classification, requirements, coverage, and analysis issues. Fit
@@ -224,10 +218,10 @@ by the page-fit trim (§10), or by editing - is reported as `REQUIREMENT_NOT_IN_
 blocks nothing.
 
 Review reasons — a fact the document uses that is pending or deleted
-(state-and-use-cases.md §7) — block approve, render, and submit.
+(state-and-use-cases.md §7) — block approve and render.
 
 When automatic generation is on (off by default), the analysis that creates the
-document also queues `create_draft`, with the model and effort fixed at submission.
+document also queues `create_draft`, with the model and effort fixed when it is queued.
 The Web client follows it into the editor.
 
 ### 9.1 Gap questions
@@ -436,7 +430,7 @@ In the Web editor, rendering starts automatically after the user approves, and a
 template change of an approved document. No chained flow bypasses a blocker.
 
 The Ready screen shows the file's facts, PDF download, and provenance (the decision
-explanation and the chosen facts), and offers editing and submission. The content
+explanation and the chosen facts), and offers editing. The content
 report stays with the editor.
 
 ## 12. AI behavior
@@ -479,44 +473,31 @@ duplicate a processed request (architecture.md §11).
 **Untrusted input.** Job text and user content are data; instructions inside a posting
 are not followed and do not count as requirements.
 
-## 13. Preparation and recruitment
+## 13. Preparation state
 
 `preparation_state` (`needs_analysis`, `ready_to_draft`, `draft_in_progress`,
-`approved`, `ready`) and recruitment status are separate (state-and-use-cases.md §4,
-§10). Preparation commands never change recruitment status.
+`approved`, `ready`) is the one lifecycle of an Application (state-and-use-cases.md §4).
 
 Every Application projection carries preparation state, content-check state, review
 reasons, warnings, Operations, document ID/hash/analysis pin, available and blocked
 actions with reasons, and a recommended action (state-and-use-cases.md §9). The backend
 owns action policy; React does not duplicate it.
 
-## 14. Recruitment tracking
+## 14. Dashboard and Application Detail
 
-The Dashboard shows every open Application at once, as cards or in columns by recruitment
-stage, narrowed only by presets (needs attention, ready to send, active interviews) with
-their counts, and sorted. An action hub lists what waits on the user: overdue, today's and
-this week's reminders, blockers, and Ready documents. Finding an Application by name is the
-quick search's. The list endpoint itself still takes search, stage and status filters, and
-paging.
+The Dashboard shows every Application at once, narrowed only by presets (needs
+attention, ready to send) with their counts, and sorted. An action hub lists what waits
+on the user: blockers and Ready documents. Finding an Application by name is the quick
+search's. The list endpoint itself still takes search and stage filters, and paging.
 
-Application Detail shows the recruitment status, the next action, preparation progress
-and the document's PDF, with notes, the unified timeline (corrections and external
-submissions included) and the record's close and delete one command away. Blockers are
-shown on the preparation step they block.
+Application Detail shows preparation progress and the document's PDF, with notes and the
+record's delete one command away. Blockers are shown on the preparation step they block.
 
-`submit_application` records a send that already happened outside the system. It
-requires a Ready document, copies its content, HTML, and PDF (with SHA-256) into an
-immutable Submission, locks the job text, and moves `saved -> applied`. Multiple
-submissions are allowed and never change the document.
+All CVs (`/resumes`) lists every Ready document beside a preview of the chosen one, with
+its PDF download. The preview is composed from the stored content on request
+(`/document/preview`), so it needs no stored file.
 
-`record_external_submission` records a send made without the system: no content or
-files, same `saved -> applied` rule.
-
-Other status transitions follow the allowed graph; a wrong status is fixed by a
-correction event with a reason. One next action and date may be active; overdue is a
-computed warning.
-
-Applications can be closed or soft-deleted; there is no hard delete.
+Applications can be soft-deleted; there is no hard delete.
 
 Audit events record `actor_type` (`user` | `system`) and `client` (`web` | `worker`).
 
@@ -543,20 +524,14 @@ The settings read also carries `available_templates`, the template catalog.
 Storage layout: architecture.md §6. Storage keys and paths are never API inputs.
 Downloads are by ID, verify the hash, and use a friendly filename.
 
-**Submission.** Stores the document `content`, `document_hash`, `job_text_hash`, the
-HTML and PDF with SHA-256, `submitted_at`, and metadata. It does not store `facts_hash`,
-CandidateContext, or policy versions.
-
 **Document provenance.** `built_with` (Profile version) drives the `PROFILE_CHANGED`
 warning. `facts_hash` covers only the facts the document uses.
 
-**Retention.** Submissions, their files, locked job text, and the AI call log are kept
-forever. Replaced document content is not archived; superseded rendered files are
+**Retention.** Analyses, audit and fact events, and the AI call log are kept forever. Replaced document content is not archived; superseded rendered files are
 deleted.
 
-**Maintenance.** Operator CLI commands, across all users: reconciliation verifies
-payload and AI-log hashes and the fact trail and repairs nothing; orphan inspection
-lists unreferenced payloads older than one hour and deletes nothing
+**Maintenance.** An operator CLI command, across all users: reconciliation verifies
+database integrity, AI-log hashes, and the fact trail and repairs nothing
 (state-and-use-cases.md §19b). Schema upgrade is `alembic upgrade head`; backups are
 the environment's job.
 
@@ -576,7 +551,7 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
   is a new fact with `replaces`; confirming it raises `FACT_SUPERSEDED` on documents
   using the original.
 - **Delete.** Confirmed soft delete, allowed even when in use; affected documents
-  report `FACT_DELETED_REQUIRES_RESOLUTION`. Submissions are unaffected.
+  report `FACT_DELETED_REQUIRES_RESOLUTION`.
 - **Attach.** Adds a canonical fact to a Profile section's pool, optionally pinned.
 - **Confirm and use.** Confirms and attaches in one command; the next draft can use it.
 - **From a claim.** Creates a pending fact from a claim's exact text.
@@ -613,7 +588,7 @@ state-and-use-cases.md §22.
 
 ## 20. Delivery status
 
-- **Built:** the full workflow from intake through submission and tracking; AI
+- **Built:** the full workflow from intake through a Ready PDF; AI
   analysis and drafting with writer/reviewer; rejected-wording guidance; check →
   approve → render in the Web client; user accounts and per-user isolation; gap
   questions and editing their pending facts on the analysis step.

@@ -1,6 +1,6 @@
 # Multi-Track CV Engine v2
 
-Fact-safe CV generation and application tracking for Development, Sales, and Tech
+Fact-safe CV generation for Development, Sales, and Tech
 Sales. A FastAPI backend and a React frontend. Job analysis is where AI belongs; from an
 existing analysis, everything down to a Ready PDF runs with no key.
 
@@ -73,14 +73,11 @@ browser again without replacing the environment:
 
 [`render.yaml`](render.yaml) is a Render Blueprint for one web service built from the
 [`Dockerfile`](Dockerfile). [`scripts/serve.sh`](scripts/serve.sh) migrates, then runs
-the API, the worker, and the built UI in one container. PostgreSQL is Neon; immutable
-payloads go to an S3-compatible bucket (Cloudflare R2).
+the API, the worker, and the built UI in one container. PostgreSQL is Neon.
 
 - **Database:** `DATABASE_URL` is Neon's *direct* connection string (host without
   `-pooler`). The pooler's transaction mode breaks the worker's session advisory lock
   and Alembic's migration transaction.
-- **Bucket:** `CV_S3_BUCKET`, `CV_S3_ENDPOINT_URL` (the account endpoint, without the
-  bucket name), `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
 - **Origin:** `CV_PUBLIC_ORIGIN` is the service's exact `https://` URL, no trailing
   slash. Without it every mutation, sign-in included, is refused with `403`.
 - **First user:** run `create-user` and `import-knowledge` (Setup) from a checkout with
@@ -88,7 +85,7 @@ payloads go to an S3-compatible bucket (Cloudflare R2).
 
 On Render's free plan the service sleeps after about 15 idle minutes and the worker
 with it; rendered HTML/PDF live on the container's disk and are lost on every restart or
-deploy, while submitted files are safe in the bucket. One render's Chromium peaks near
+deploy. One render's Chromium peaks near
 the plan's 512 MB, which is why the Blueprint sets `CV_WORKER_CONCURRENCY=1`. Keeping
 the service awake keeps Neon's compute awake too (the worker polls every 0.25 s), which
 spends the free plan's 100 compute hours in about two weeks.
@@ -107,10 +104,7 @@ spends the free plan's 100 compute hours in about two weeks.
 - PostgreSQL stores mutable application state and immutable history, through
   SQLAlchemy Core and numbered Alembic revisions.
 - The CV document's content lives in PostgreSQL; its rendered HTML/PDF are mutable
-  working outputs under `artifacts/documents/`. Immutable payloads — the files a
-  Submission sent — live under the fixed `submissions/` key prefix, whose layout is frozen in
-  `docs/spec/architecture.md` section 6.2 so a
-  row reads the same under local storage and under an S3-compatible bucket.
+  working outputs under `artifacts/documents/`.
 - `base/` and `profiles/` hold the canonical source facts used directly by the
   application, so they are live input rather than archive.
 
@@ -149,8 +143,8 @@ are defined in [`docs/spec/product-spec.md`](docs/spec/product-spec.md) and
 the same application services the API exposes.
 
 **Create → analyze → draft → review → approve → render → Ready.** A job posting is
-stored as text on the Application and never fetched; it can be edited until the first
-Submission locks it. Drafting stops for review
+stored as text on the Application and never fetched, and stays editable. Drafting stops
+for review
 and never renders by default; unsupported wording is retained as `pending` rather than
 discarded, and cannot be approved. Approval stamps the current document basis after its
 content check passes, and rendering then runs the same content, claim, PDF, ATS, link,
@@ -165,19 +159,9 @@ immutable event to `fact_events`. Correcting a canonical fact means creating a
 replacement that `replaces` it via `POST /api/v1/facts` — identity is always generated,
 and a correction never mutates the fact it supersedes.
 
-## Tracking and inspection
-
-An internal submission requires the exact current Ready document hash. Ready qualification
-is checked at submission time; the content and HTML/PDF are copied into immutable
-Submission storage with their checksums. An external submission records what is known
-without inventing internal document evidence, and a field that cannot be derived stays
-null. `applied` is submission-owned: it is reached by recording a submission, never by
-asking for it. Recruitment history, corrections, audit records, and submissions are
-append-only, and a correction appends an event rather than editing the one it corrects.
-
 ## Maintenance
 
-Reconciliation checks database references, artifact hashes, and the fact lifecycle:
+Reconciliation checks database references, logged AI call hashes, and the fact lifecycle:
 
 ```bash
 python -m cv_engine.admin reconcile
@@ -186,17 +170,14 @@ python -m cv_engine.admin reconcile
 It reports and never repairs: a mismatch against an immutable record is something to be
 told about, not something maintenance may quietly fix. The command exits `0` when the
 report's `passed` field is true and `2` when reconciliation finds a problem.
-Verification goes through the configured payload store, so it reports the truth under
-local storage and under an S3 bucket alike. Maintenance is an operator CLI, not a
-user-facing HTTP surface.
+Maintenance is an operator CLI, not a user-facing HTTP surface.
 
 ## AI provider
 
 Creating a new `JobAnalysis` and drafting a document's content both require a
 configured provider, with no rules-based fallback (`docs/spec/product-spec.md` §2,
 "Semantic analysis authority"). Everything downstream of existing content — editing,
-validation, approval, rendering, Ready, export, and recruitment tracking — runs with no
-key at all.
+validation, approval, rendering, Ready, and export — runs with no key at all.
 
 A configured key enables five structured OpenAI tasks: `propose_analysis`,
 `draft_resume` (which chooses the facts and words them), `regenerate_section`,
@@ -302,14 +283,6 @@ diff in the commit message:
 cd openapi && npm ci && npm run generate
 ```
 
-Read-only storage inspection is available to the operator with
-`python -m cv_engine.admin inspect-orphans`. Its `candidates` are managed immutable
-payload references that no record references and that were stored more than an hour
-ago, so a write still on its way to registration is never listed. It excludes mutable
-working outputs and performs no deletion. Nothing in the system deletes an immutable
-payload, so orphans are reported, never removed (`docs/spec/architecture.md` section
-7.1). Local and S3 stores share this contract.
-
 ## Tests
 
 The suite truncates every table on each test, so it never runs against the configured
@@ -372,7 +345,7 @@ one origin, and launches the separate Playwright integration configuration. The 
 test drives creation, reload, list navigation, and duplicate acknowledgement with no
 provider or worker. The preparation test runs the real worker outside the API process
 and drives analysis, AI drafting, checking, approval, real PDF rendering and
-download, and submission through the UI. Only the provider transport is scripted;
+download through the UI. Only the provider transport is scripted;
 neither test intercepts API requests, and `OPENAI_API_KEY` remains unset. The preparation
 test also needs the Python renderer's Chromium (`./.venv/bin/python -m playwright install chromium`).
 Do not run other database suites concurrently against the same test database.

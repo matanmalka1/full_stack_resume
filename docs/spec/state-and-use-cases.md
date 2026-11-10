@@ -18,20 +18,17 @@ records; the worker acts for the owner of the Operation.
 
 Mutable:
 
-- the Application: recruitment status, terminal outcome, notes, next action,
-  `deleted_at`, and the job text until its first Submission (§12)
+- the Application: notes, `deleted_at`, and the job text (§12)
 - one CVDocument per Application
 - the user's Settings row
 - the user, their sessions, and their facts' current status
 
 Immutable or append-only:
 
-- the job text once the Application has a Submission
 - JobAnalysis
 - gap questions and each one's outcome (an answer and its fact, or a skip) (§13a)
-- Submission, with its content and copied files
 - the AI call log (one row per provider call attempt)
-- recruitment, status, audit, and fact lifecycle events
+- audit and fact lifecycle events
 - a terminal Operation
 
 There is no approval history and no draft history.
@@ -154,7 +151,7 @@ actions:
 | `PENDING_FACT_REQUIRES_RESOLUTION` | `confirm_and_use_fact`, `edit` |
 | `FACT_DELETED_REQUIRES_RESOLUTION` | `edit`, `regenerate_section`, `regenerate_claim` |
 
-A review reason blocks `approve`, `render`, and `submit` (412, `code` = the first
+A review reason blocks `approve` and `render` (412, `code` = the first
 reason). It does not block editing or regeneration.
 
 Analysis issues, Fit, and gaps are not review reasons and block nothing.
@@ -173,8 +170,6 @@ Warning codes:
 - `PROFILE_CHANGED`: `built_with` differs from the current Profile version.
 - `FACT_SUPERSEDED`: a canonical fact `replaces` a dependent fact. (Goes away once
   `edit_fact` ships, §17.)
-- `NEXT_ACTION_OVERDUE`: `next_action_date` is past and the status is not `accepted`,
-  `rejected`, `withdrawn`, or `closed`.
 - `REQUIREMENT_NOT_IN_DOCUMENT`: the document has content and is on the current
   analysis, and a requirement of that analysis that is `mandatory`, `matched` or
   `partial`, and lists supporting facts has none of them among the facts the content
@@ -189,8 +184,6 @@ Application detail and every list row return:
 
 ```json
 {
-  "recruitment_status": "saved",
-  "terminal_outcome": null,
   "preparation_state": "draft_in_progress",
   "content_check": "failed",
   "review_reasons": [],
@@ -211,9 +204,8 @@ Application detail and every list row return:
 ```
 
 All inputs are captured in one read. Action identifiers are command names. Detail also
-returns `allowed_recruitment_transitions` (§10), `job_posting` (text, source URL,
-`job_text_hash`, `job_text_updated_at`, `locked`), the latest analysis, and the
-timeline.
+returns `job_posting` (text, source URL, `job_text_hash`, `job_text_updated_at`) and the
+latest analysis.
 
 - `approved_at` is reported only while `approved` or `ready`.
 - `last_render_error` is reported only while its recorded hash equals `document_hash`.
@@ -239,7 +231,7 @@ result.
 | `check` | `content IS NOT NULL` and `content_check != passed` |
 | `approve` | `preparation_state = draft_in_progress` |
 | `render` | `preparation_state = approved` |
-| `submit`, `download_pdf` | `preparation_state = ready` |
+| `download_pdf` | `preparation_state = ready` |
 
 A review reason's resolution actions are allowed too (editing ones only while content
 exists).
@@ -252,7 +244,7 @@ An allowed action is available unless a blocker withholds it:
 | `MATCHING_CONTEXT_OPERATION_IN_PROGRESS` | `edit_matching_configuration`, while an `analyze_job` is queued or running |
 | `GAP_QUESTIONS_IN_PROGRESS` | `ask_gap_questions`, while an `ask_gap_questions` is the active Operation |
 | `DOCUMENT_OPERATION_IN_PROGRESS` | `build_from_analysis`, `confirm_and_use_fact`, `create_draft`, `edit`, `regenerate_section`, `regenerate_claim`, `check`, `approve`, `render`, while a `create_draft`, `regenerate_section`, `regenerate_claim`, or `render_document` is queued or running |
-| any review reason code (§7) | `approve`, `render`, `submit` |
+| any review reason code (§7) | `approve`, `render` |
 | `VALIDATION_FAILED` | `approve`, while `content_check = failed` |
 | `JOB_TEXT_CHANGED` | `create_draft`, while the document's analysis read a job text other than the current one |
 
@@ -263,38 +255,9 @@ An allowed action is available unless a blocker withholds it:
 `recommended_action`, first match, then nulled unless available: `analyze` when no
 document exists; when content is NULL, `create_draft` if the current job text has an
 analysis, else `analyze`; `check` when `content_check` is `none` or `outdated`;
-otherwise the first available of `approve`, `render`, `submit`.
+otherwise the first available of `approve`, `render`, `download_pdf`.
 
-## 10. RecruitmentStatus
-
-```text
-saved  applied  recruiter_screen  interview  assignment  final_stage  offer
-accepted  rejected  withdrawn  closed
-```
-
-Allowed transitions:
-
-```text
-saved             -> applied | withdrawn | closed
-applied           -> recruiter_screen | interview | rejected | withdrawn | closed
-recruiter_screen  -> interview | assignment | rejected | withdrawn | closed
-interview         -> assignment | final_stage | offer | rejected | withdrawn | closed
-assignment        -> interview | final_stage | offer | rejected | withdrawn | closed
-final_stage       -> offer | rejected | withdrawn | closed
-offer             -> accepted | rejected | withdrawn | closed
-accepted | rejected | withdrawn -> closed
-closed            -> (none)
-```
-
-`saved -> applied` happens only through submission (§18); the status command refuses
-`applied`.
-
-`terminal_outcome` is set on entering `accepted`/`rejected`/`withdrawn`, kept on
-entering `closed`, and cleared otherwise.
-
-A backward move is a correction (`correct_recruitment_status`), not a transition.
-
-Preparation commands never change RecruitmentStatus.
+## 10. *(removed)*
 
 ## 11. Operation lifecycle
 
@@ -341,7 +304,7 @@ safe (architecture.md §11); a browser that fails to start is started once more.
 - `PROVIDER_NOT_CONFIGURED`: no provider; nothing sent. `PROVIDER_REFUSED`: the provider
   declined.
 - `PRECONDITION_FAILED`: the document, Application, or Knowledge is not in an accepted
-  state. `INFRASTRUCTURE_FAILED`: database, payload store, or policy files failed.
+  state. `INFRASTRUCTURE_FAILED`: database, file storage, or policy files failed.
   `VALIDATION_EXECUTION_FAILED`: unexpected engine error.
 - `CLAIM_REVIEW_UNCERTAIN` / `CLAIM_REVIEW_UNSUPPORTED`: the reviewer could not
   establish support, or found the wording exceeds the facts. `INVALID_OUTPUT`: output
@@ -406,26 +369,20 @@ Calls no AI. Deleted Applications are excluded from duplicate detection.
 
 Input: new text, optional URL, `expected_job_text_hash`. Replaces the job text in place
 and appends an audit record with both hashes. A hash mismatch is 409. Unchanged input
-writes nothing. After any Submission it is refused (409), also enforced by the trigger
-`lock_submitted_job_text`. The Application hub offers it as "עריכת נוסח המשרה" in the
-record's ⋯ menu until the text is locked, opening a dialog (a sheet on a phone) with the
-current text and URL.
+writes nothing. The Application hub offers it as "עריכת נוסח המשרה" in the record's ⋯
+menu, opening a dialog (a sheet on a phone) with the current text and URL.
 
 ### `update_application_notes`
 
 Replaces notes, guarded by `expected_notes` (409 on mismatch). Appends an audit record.
 
-### `close_application`
-
-Transitions to `closed` through `transition_recruitment_status`.
-
 ### `delete_application`
 
-Soft delete: sets `deleted_at` and appends an audit event, from any status. The
+Soft delete: sets `deleted_at` and appends an audit event. The
 Application leaves the default list, counts, and duplicate detection; its records stay
 reachable by ID. No undelete. Deleting twice is 409.
 
-Every command in §13–§18 and `close_application` resolves its Application the same way:
+Every command in §13–§17 and `delete_application` resolves its Application the same way:
 404 if missing or another user's, 409 if deleted. `update_job_text` and
 `update_application_notes` check existence only. Reads (detail, document, exports,
 previews) work on deleted Applications.
@@ -686,8 +643,7 @@ are refused. Appends a `fact_edited` event; dependent documents' basis moves.
 ### `delete_fact(fact_id)`
 
 Confirmed, one-way move to `deleted` from `pending` or `canonical`. Always allowed;
-dependent documents report `FACT_DELETED_REQUIRES_RESOLUTION` (§7). Submissions are
-unaffected. A deleted fact is refused by `confirm_fact`, `attach_fact`, and
+dependent documents report `FACT_DELETED_REQUIRES_RESOLUTION` (§7). A deleted fact is refused by `confirm_fact`, `attach_fact`, and
 `confirm_and_use_fact`.
 
 ### `attach_fact(fact_id, profile, section, pin=false)`
@@ -706,39 +662,7 @@ Creates a pending fact from a claim's exact text. Meaning and tags are
 supplied; a Hebrew document also needs the English rendering. The headline cannot
 become a fact.
 
-## 18. Tracking commands
-
-### `submit_application(application_id, expected_document_hash, submitted_at, metadata)`
-
-Records a send that already happened. Requires the hash, `preparation_state = ready`
-with both files present (`DOCUMENT_NOT_READY`, 412), and no review reason. Copies the
-HTML and PDF to submission storage with SHA-256, then in one transaction re-checks the
-hash, stamps, and paths, inserts the Submission, moves `saved -> applied` if needed, and
-appends events.
-
-The Submission records content, `document_hash`, the Application's `job_text_hash`, file
-paths and SHA-256s, `submitted_at`, and metadata. Any Submission locks the job text.
-
-On an older analysis the result carries `DOCUMENT_ON_OLDER_ANALYSIS`. Multiple
-submissions are allowed; they never change the document.
-
-### `record_external_submission(application_id, submitted_at, metadata)`
-
-Records a Submission with no content or files; same `saved -> applied` rule.
-
-### `transition_recruitment_status(application_id, target_status, reason?, occurred_at?)`
-
-Applies one allowed transition (§10). `applied` and disallowed targets are 409. The
-current status is a no-op.
-
-### `correct_recruitment_status(application_id, target_status, corrects_event_id, reason)`
-
-Requires a reason and a status event of this Application (404 unknown, 409 foreign or
-wrong kind). Appends a correction and updates status and terminal outcome.
-
-### `set_next_action(application_id, next_action?, next_action_date?)`
-
-Sets or clears the next action and date, appending an event.
+## 18. *(removed)*
 
 ## 19. Operation commands
 
@@ -785,29 +709,21 @@ Operator CLI only, across all users.
 
 ### `reconcile()`
 
-`python -m cv_engine.admin reconcile`. Checks every Submission file against its SHA-256
-(`payloads_checked`), every AI call's sanitized response against its hash
-(`ai_calls_checked`), and the fact lifecycle against its event trail. Reports, never
+`python -m cv_engine.admin reconcile`. Checks database integrity (unvalidated foreign
+keys), every AI call's sanitized response against its hash (`ai_calls_checked`), and the
+fact lifecycle against its event trail. Reports, never
 repairs. `passed` is the conjunction of all parts.
-
-### `inspect_orphans()`
-
-`python -m cv_engine.admin inspect-orphans`. Lists Submission payloads in storage that
-no row references and that are older than one hour (`ORPHAN_MIN_AGE`). Deletes nothing;
-there is no reclaim command.
 
 ## 20. Queries
 
-- **Application list** (`GET /applications`): filters `activity` (`open` | `closed` |
-  `all`), `stage`, `recruitment_status`, `preset` (`needs_attention` = any review reason
-  or warning; `ready_to_send` = `ready`; `active_interviews` = `recruiter_screen`
-  through `offer`), `search`; `sort` (`updated` | `created` | `company` | `stage`);
-  `limit` (1–200), `offset`. Rows carry the §9 projection and `is_closed`. The response
-  carries `matched` and facet counts; each facet ignores its own filter. Deleted
-  Applications are excluded.
-- **Application detail**: §9 projection plus the Application, `job_posting`, latest
-  analysis, `allowed_recruitment_transitions`, and timeline. Works for deleted
-  Applications.
+- **Application list** (`GET /applications`): filters `stage`, `preset`
+  (`needs_attention` = any review reason; `ready_to_send` = `ready`),
+  `search`; `sort` (`updated` | `created` | `company` | `stage`); `limit` (1–200),
+  `offset`. Rows carry the §9 projection. The response carries `matched`, `total`,
+  `stage_counts` (before any narrowing), and `preset_counts` (every other filter
+  applied, the preset not). Deleted Applications are excluded.
+- **Application detail**: §9 projection plus the Application, `job_posting`, and latest
+  analysis. Works for deleted Applications.
 - **Duplicate check** (§12).
 - **CVDocument**: ID, analysis ID, content and outline, language, dependent facts,
   `built_with`, `document_hash`, content report and `content_check`,
@@ -843,7 +759,7 @@ Everything maps to `/api/v1`; `openapi/openapi.json` lists the routes.
 | `401` | no valid session (`AUTHENTICATION_REQUIRED`), failed sign-in (`INVALID_CREDENTIALS`), wrong current password (`REAUTHENTICATION_FAILED`) |
 | `403` | refused Origin or Host (`ORIGIN_NOT_ALLOWED`); never for another user's record |
 | `404` | unknown record (`UNKNOWN_RECORD`), including another user's record and a document not yet created |
-| `409` | state conflict: hash, notes, or settings mismatch; deleted Application; disallowed transition; job text changed or locked; idempotency-key reuse |
+| `409` | state conflict: hash, notes, or settings mismatch; deleted Application; job text changed; idempotency-key reuse |
 | `412` | precondition, blocker, review reason, intake refusal, lineage or Knowledge refusal |
 | `413` | body too large |
 | `422` | request does not match the schema (`REQUEST_VALIDATION_FAILED`) |

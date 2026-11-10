@@ -34,7 +34,7 @@ Which tests cover which area, and how the suites run. How to run them: `README.m
   PostgreSQL — the full browser run on `main` and on PRs touching `BROWSER_PATHS`, the
   default suite otherwise; OpenAPI drift check; frontend `npm run check` and stubbed
   Playwright. `OPENAI_API_KEY` is never set, so the `-m ""` run collects the live eval
-  and skips it. The live eval, the rest of the live smoke (§6), and real S3 are manual.
+  and skips it. The live eval and the rest of the live smoke (§6) are manual.
 
 ## 3. Evidence map
 
@@ -49,8 +49,8 @@ PreparationState, warnings, blockers, review reasons, and the action policy.
 ### 3.2 Commands, ownership, and concurrency
 
 Explicit source IDs; stale hashes refused before work; first analysis and document
-commit together; one document per Application; job text stored exactly, edits atomic
-and locked after submission; duplicate acknowledgement.
+commit together; one document per Application; job text stored exactly, edits atomic;
+duplicate acknowledgement; soft delete.
 
 `tests/applications/`, `tests/drafts/test_document_store.py`,
 `tests/analysis/test_analyses_api.py`, `tests/ai/test_ai_tasks.py`,
@@ -71,8 +71,7 @@ Refusal → status and code mapping; 202 and `Location`; `Idempotency-Key`; `If-
 root.
 
 `tests/platform/` (`test_api_foundation.py`, `test_settings.py`,
-`test_runtime_paths.py`), `tests/artifacts/` (`test_document_files_api.py`,
-`test_payload_store.py`).
+`test_runtime_paths.py`), `tests/artifacts/test_document_files_api.py`.
 
 ### 3.5 Operations
 
@@ -112,36 +111,33 @@ non-succeeded Operation (`tests/ai/test_draft_page_fit.py`). Service fixtures me
 with `tests/fake_renderer.py` (`PageCountingRenderer`), which counts lines instead of
 starting Chromium; everything else it renders is the real renderer.
 
-### 3.8 Rendering, artifacts, Ready, and Submission
+### 3.8 Rendering, artifacts, and Ready
 
 Render refuses an edited document; PDF 1–2 pages, geometry, text extraction,
 direction, filename (browser-marked); a role that cleans to no filename is refused by
-the Profile; failed render keeps approval; immutable payload
-keys; local and S3 stores agree; no deletion; orphan inspection read-only; Submission
-rechecks Ready under lock and copies with checksums.
+the Profile; failed render keeps approval; Ready is derived from the current basis and
+the rendered files.
 
 `tests/artifacts/`, `tests/operations/test_operation_runner.py`,
 `tests/e2e/test_golden.py`.
 
-### 3.9 Recruitment
+### 3.9 Application list
 
-Forward transitions; `applied` only via submission; corrections append; terminal
-outcome survives `closed`; multiple submissions; list ordering, filters, facets,
-paging.
+List ordering, stage and preset filters, search, facet counts, paging.
 
-`tests/applications/`, `tests/artifacts/test_ready_integrity.py`.
+`tests/applications/`.
 
 ### 3.10 Frontend
 
 `frontend/src/` tests cover the RTL shell, intake, analysis decisions, the editor
 (autosave, history, conflicts), validation, approval, Operation progress, Ready,
-recruitment, the list, facts, settings, and routing. `frontend/e2e/` covers focus,
+the list, facts, settings, and routing. `frontend/e2e/` covers focus,
 dialogs, search palette, theme, and axe scans; `accessibility.spec.ts` scans
 the main screens. Every new screen gets an axe scan.
 
 `frontend/e2e/integration/intake.spec.ts`: intake through the real API, no provider or
 worker. `frontend/e2e/integration/preparation.spec.ts`: analysis → draft → check →
-approve → render → Ready → submission through the real API and worker, with a scripted
+approve → render → Ready → PDF download through the real API and worker, with a scripted
 provider transport and a real PDF.
 
 ### 3.11 Accounts and isolation
@@ -191,7 +187,7 @@ move is stated in the commit.
 ### 5.1 Happy path
 
 ```text
-Create → Analyze → Draft → Edit → Check → Approve → Render → Ready → Submit
+Create → Analyze → Draft → Edit → Check → Approve → Render → Ready
 ```
 
 Over HTTP with real API, worker, and PostgreSQL: `tests/e2e/test_api_journey.py`.
@@ -214,8 +210,7 @@ retry is a new Operation. `tests/operations/test_operation_runner.py`,
 
 ### 5.5 Ready, then a newer analysis
 
-The document is unchanged and warns `DOCUMENT_ON_OLDER_ANALYSIS`; submission still
-works; `build_from_analysis` clears content and stamps. `tests/drafts/test_state_projection.py`,
+The document is unchanged and warns `DOCUMENT_ON_OLDER_ANALYSIS`; it stays Ready; `build_from_analysis` clears content and stamps. `tests/drafts/test_state_projection.py`,
 `tests/analysis/test_analyses_api.py`.
 
 ### 5.6 Approval boundaries
@@ -227,12 +222,12 @@ their frozen hash. `tests/drafts/test_approval_chain.py`,
 ### 5.7 Pipeline scenario
 
 ```text
-ingest → analyze → draft → check → approve → render → ready → submit → reconcile
+ingest → analyze → draft → check → approve → render → ready → reconcile
 ```
 
 `tests/e2e/test_pipeline_end_to_end.py`: services against a fresh database,
 `OPENAI_API_KEY` unset, analysis pre-seeded, `create_draft` over the scripted
-transport. Reconcile must pass with no orphans. Run it when a change affects stored
+transport. Reconcile must pass. Run it when a change affects stored
 values, public signatures, or projection fields.
 
 ## 6. AI tests
@@ -367,4 +362,3 @@ Chromium only, for UI tests and PDF rendering. Release run on macOS.
 1. Live AI quality is measured only structurally, and only when someone runs the paid
    eval (§6.1); wording quality and the refusal path stay manual, and there is no LLM
    judge.
-2. Real S3 is checked only manually.

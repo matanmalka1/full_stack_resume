@@ -28,7 +28,7 @@ container (`CLAUDE_CODE_REMOTE=true`), run `./scripts/cloud-db.sh` first.
 
 - **User isolation.** Every query and command is scoped to the signed-in user. A record
   reachable by another user is a bug of the highest severity.
-- **Don't destroy history.** Submissions, their files, and the AI call log are records
+- **Don't destroy history.** Audit records, fact events, and the AI call log are records
   of what happened. Don't rewrite or delete them.
 - **React talks to the backend only through the FastAPI API.** Logic lives in the
   application layer, not in routers.

@@ -28,7 +28,6 @@ Backend:
 - PostgreSQL 17 through SQLAlchemy 2.0 Core (no ORM) and psycopg 3; Alembic
 - Jinja2 for resume HTML; Playwright Chromium for rendering; `pypdf` and `pdfminer.six` for PDF checks
 - `argon2-cffi` for passwords
-- `boto3` only in the optional `s3` extra, imported inside the S3 adapter
 - Tooling: pytest, ruff, pyright (`basic`)
 
 Frontend:
@@ -46,7 +45,7 @@ Not used: Redux, Celery, Redis, WebSockets, SSE, a DI framework, `python-dotenv`
 cv_engine/
   domain/           entities, value objects, validation, draft frame, lifecycle rules
   application/      commands, queries, ports, services, action policy, Operation runner
-  infrastructure/   persistence adapters, object stores, Knowledge, provider, renderer
+  infrastructure/   persistence adapters, document files, Knowledge, provider, renderer
   api/              routers, schemas, middleware
   runtime/          composition root, config, paths, ASGI app, worker pool
   worker/           `python -m cv_engine.worker`
@@ -68,7 +67,7 @@ Commands, queries, services, ports, transaction boundaries, action policy, state
 projections, optimistic commit checks, and turning validated Proposals into domain
 state. Services are synchronous and grouped by kind of work (intake and queries,
 analysis, gap questions, AI authoring, editing, check and approval, history export,
-rendering, recruitment and submission, knowledge, Operations, maintenance, settings).
+rendering, knowledge, Operations, maintenance, settings).
 A gap answer's pending fact is written by the fact lifecycle's in-scope write
 (`FactLifecycleService.add_fact_in`) inside the Operation's activation, so the fact
 and the record that the question was answered commit together. They return
@@ -80,7 +79,7 @@ Services live in `services/`, their ports in `ports/`. Top-level modules under
 
 ### 3.3 Infrastructure
 
-Implements the ports: SQLAlchemy Core persistence, transaction scopes, object stores,
+Implements the ports: SQLAlchemy Core persistence, transaction scopes, rendered files,
 Knowledge (user rows plus policy files), the OpenAI provider, rendering, logging.
 
 Ports follow consumer and trust boundaries, not tables. The API's Operation port and
@@ -138,9 +137,8 @@ analysis is `SOURCE_CHANGED`.
 
 ### 6.1 PostgreSQL
 
-Holds Applications (with job text, locked after submission by trigger
-`lock_submitted_job_text`), recruitment and audit history, JobAnalyses, `cv_documents`
-(fields: state-and-use-cases.md §3), `ai_calls` (§11), Submissions, Operations, fact
+Holds Applications (with job text), audit history, JobAnalyses, `cv_documents`
+(fields: state-and-use-cases.md §3), `ai_calls` (§11), Operations, fact
 events, users, sessions, facts, CandidateContexts, Profile bindings (§18.2), settings,
 rate-limit buckets, and gap questions with their outcomes (`gap_questions`,
 `gap_answers`: immutable children of an Application; a composite foreign key keeps a
@@ -157,34 +155,20 @@ fails the test.
 Alembic owns the schema: one head, applied explicitly with `alembic upgrade head`,
 never on startup.
 
-### 6.2 Object storage
+### 6.2 File storage
 
-Submission files sit behind `ObjectStore` (keys and bytes). `LocalObjectStore`
-(default) writes under `{artifacts_root}`; `S3ObjectStore` writes to an S3-compatible
-bucket (`CV_S3_ENDPOINT_URL` for R2/MinIO). Chosen by `CV_OBJECT_STORE`.
+The only files the system writes are render output:
+`{artifacts_root}/documents/{application_id}/{attempt_id}/`, mutable working files that
+the next render supersedes. The database stores them as project-relative strings; the
+file store refuses traversal, absolute paths, empty segments, backslashes, and drive
+prefixes.
 
-```text
-{artifacts_root}/ or {bucket}/{prefix}/
-  submissions/{application_id}/{submission_id}/resume.html
-  submissions/{application_id}/{submission_id}/resume.pdf
-```
-
-Database path fields store project-relative strings such as
-`artifacts/submissions/{app}/{id}/resume.pdf`; the object key is the same without
-`artifacts/`. Rows are identical under either backend. Both stores refuse traversal,
-absolute paths, empty segments, backslashes, and drive prefixes.
-
-Not in the object store:
+Not on disk:
 
 - document content (inline in `cv_documents.content`);
 - job text (inline in `applications.job_text`);
-- render output: `{artifacts_root}/documents/{application_id}/{attempt_id}/`, mutable
-  working files;
 - policy files (version-controlled);
 - provider responses (in `ai_calls`).
-
-A Submission copies the document's HTML and PDF into its own keys with SHA-256. On S3
-the copy is staged under `{temp_root}` and removed after upload.
 
 ### 6.3 Knowledge files
 
@@ -205,7 +189,7 @@ never touch connections directly.
 
 The Operation runner owns verification and activation scopes; handlers receive tokens.
 
-AI, network, browser, filesystem, and object-store I/O run outside database scopes
+AI, network, browser, and filesystem I/O run outside database scopes
 (`assert_external_io_allowed()`).
 
 Action-policy reads (state-and-use-cases.md §9) capture database and Knowledge state in
@@ -213,20 +197,10 @@ one read scope; Ready file verification runs after it.
 
 State tables are the current truth; event tables are audit. Not event-sourced.
 
-### 7.1 Immutable payload commit and orphan inspection
+### 7.1 Reconciliation
 
-`validate bytes -> conditional store -> register`
-
-The write never replaces an existing payload (`O_EXCL` locally, `IfNoneMatch: "*"` on
-S3/R2) and returns the digest of what it stored. Every key includes a fresh Submission
-ID, so retries never overwrite.
-
-Nothing deletes an immutable payload; the stores have no delete operation. A failed
-registration leaves an orphan, which `inspect_orphans` reports (older than
-`ORPHAN_MIN_AGE`, one hour; age from file mtime or S3 `LastModified`) and never deletes.
-
-Reconciliation verifies every payload hash, every AI-call response hash, and the fact
-lifecycle.
+Reconciliation verifies database integrity, every AI-call response hash, and the fact
+lifecycle. It reports and repairs nothing.
 
 ### 7.2 Knowledge mutations
 
@@ -239,9 +213,7 @@ version read, so a concurrent mutation gets `StateConflict`.
 
 Commands take explicit source IDs; only queries resolve "latest".
 
-`CVDocument` records its `analysis_id` and has no revision history. A Submission
-records `content`, `document_hash`, `job_text_hash`, and the copied files with SHA-256
-— not `facts_hash`, CandidateContext version, or policy versions.
+`CVDocument` records its `analysis_id` and has no revision history.
 
 `fact_store_version` is coarse audit; `facts_hash` is the document's exact dependency
 hash, computed on read. Ready is computed, never stored (state-and-use-cases.md §3–§6).
@@ -401,8 +373,7 @@ Rotating JSON logs under `logs_root`: `server.jsonl` (API) and `operations.jsonl
 `process environment > project .env > project cv.config.json > default`
 
 Only the repository-root `.env` is read (`KEY=value`; malformed lines skipped).
-`database_url` is secret. `OPENAI_API_KEY` is secret and environment-only. AWS
-credentials come from boto3's ambient config. Secrets display as `***`. `.env*` is
+`database_url` is secret. `OPENAI_API_KEY` is secret and environment-only. Secrets display as `***`. `.env*` is
 Git-ignored.
 
 ## 16. Database lifecycle and upgrade
@@ -431,8 +402,7 @@ Mutable: `users`, `user_sessions`, `rate_limit_buckets`, `user_settings`.
 - `user_sessions`: `id`, `user_id`, `token_hash` (`UNIQUE`), `created_at`,
   `expires_at`, `revoked_at`; indexed by `user_id`.
 - `user_settings`: `user_id` primary key.
-- `applications.user_id NOT NULL`, indexed with `created_at`, `current_status`,
-  `updated_at`.
+- `applications.user_id NOT NULL`, indexed with `created_at` and `updated_at`.
 
 Only aggregate roots carry `user_id`; everything else reaches its user through its
 Application.
@@ -458,7 +428,7 @@ Application.
   `binding_version`. Written by `import-knowledge`, `attach_fact`, and
   `confirm_and_use_fact`.
 
-Each fact mutation increments `fact_store_version`. Documents and Submissions reference
+Each fact mutation increments `fact_store_version`. Documents reference
 facts by `fact_id`, always resolved as `(application.user_id, fact_id)`.
 
 ### 18.3 Ownership in the application layer
@@ -535,4 +505,4 @@ from a non-echoing prompt (entered twice) or `--password-stdin`, never an argume
   (facts by source file, the candidate context, each Profile whole, and the policy
   files), into a directory that does not exist yet. Verifies by loading the files back.
   This is how a user's Knowledge reaches another installation.
-- `reconcile`, `inspect-orphans` (state-and-use-cases.md §19b).
+- `reconcile` (state-and-use-cases.md §19b).
